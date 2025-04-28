@@ -12,3 +12,5 @@ Like https://github.com/jmegner/KillDoctorLuckyGame but a web app instead of CLI
 - Do a `npm run dev` to build the TypeScript stuff and run for dev purposes, not prod purposes.
 - Open a browser to http://localhost:5173 .
 - For debugging non-tests with vscode, be sure to do `npm run dev` before launching the debugger.
+
+TODO: convert Board class
