@@ -30,7 +30,7 @@ jobs:
       #- uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions/checkout@v4
       - run: npm ci
-      - run: npm run build
+      - run: npm run build:gh
         env:
           CI: false
       - run: git config user.name github-actions
