@@ -6,7 +6,7 @@ function App() {
       <h1>Kill Doctor Lucky</h1>
       <div>
         <img
-          src="/BoardAltDown.jpg"
+          src={`${import.meta.env.BASE_URL}BoardAltDown.jpg`}
           useMap="#BoardAltDownMap"
           alt="Kill Doctor Lucky Board Alternate Downstairs"
         />
