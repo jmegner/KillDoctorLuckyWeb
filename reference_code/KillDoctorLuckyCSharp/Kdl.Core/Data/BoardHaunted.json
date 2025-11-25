@@ -1,0 +1,166 @@
+{
+    "Name": "haunted",
+    // choose first that is open room
+    "PlayerStartRoomIds": [1, 24],
+    "DoctorStartRoomIds": [11, 3],
+    "CatStartRoomIds": [22, 17],
+    "DogStartRoomIds": [7, 14],
+    "Wings":
+    [
+        {
+            "Name": "down",
+            "RoomIds": [1,2,3,4,5,6,7,8,9,22,23]
+        },
+        {
+            "Name": "up",
+            "RoomIds": [10,11,12,13,14,15,16,17,18,19,20,21,24]
+        }
+    ],
+    "Rooms":
+    [
+        {
+            "Id": "1",
+            "Name": "foyer",
+            "Adjacent": [2,8,23,24],
+            "Visible": [2,8,23,24]
+        },
+        {
+            "Id": "2",
+            "Name": "piazza",
+            "Adjacent": [1,3,5,7],
+            "Visible": [1,3,5,7]
+        },
+        {
+            "Id": "3",
+            "Name": "wine cellar",
+            "Adjacent": [2,4,22,23],
+            "Visible": [2,4,22,23]
+        },
+        {
+            "Id": "4",
+            "Name": "green house",
+            "Adjacent": [3,5],
+            "Visible": [3,5]
+        },
+        {
+            "Id": "5",
+            "Name": "hedge maze",
+            "Adjacent": [2,4,6],
+            "Visible": [2,4,6]
+        },
+        {
+            "Id": "6",
+            "Name": "servants quarters",
+            "Adjacent": [5,7,14],
+            "Visible": [5,7]
+        },
+        {
+            "Id": "7",
+            "Name": "winter garden",
+            "Adjacent": [2,6,8,9],
+            "Visible": [2,6,8,9]
+        },
+        {
+            "Id": "8",
+            "Name": "sitting room",
+            "Adjacent": [1,7,9,16,24],
+            "Visible": [1,7,9,24]
+        },
+        {
+            "Id": "9",
+            "Name": "carriage house",
+            "Adjacent": [7,8,10],
+            "Visible": [7,8,10]
+        },
+        {
+            "Id": "10",
+            "Name": "trophy room",
+            "Adjacent": [9,11,24],
+            "Visible": [9,11,24]
+        },
+        {
+            "Id": "11",
+            "Name": "master suite",
+            "Adjacent": [10,12,18,19,22],
+            "Visible": [10,12,18,19]
+        },
+        {
+            "Id": "12",
+            "Name": "white room",
+            "Adjacent": [11,13],
+            "Visible": [11,13]
+        },
+        {
+            "Id": "13",
+            "Name": "lilac room",
+            "Adjacent": [12,14,18],
+            "Visible": [12,14,18]
+        },
+        {
+            "Id": "14",
+            "Name": "armory",
+            "Adjacent": [6,13,15,18],
+            "Visible": [13,15,18]
+        },
+        {
+            "Id": "15",
+            "Name": "lancaster room",
+            "Adjacent": [14,16,17],
+            "Visible": [14,16,17]
+        },
+        {
+            "Id": "16",
+            "Name": "parlor",
+            "Adjacent": [8,15,17],
+            "Visible": [15,17]
+        },
+        {
+            "Id": "17",
+            "Name": "nursery",
+            "Adjacent": [15,16,18,20],
+            "Visible": [15,16,18,20]
+        },
+        {
+            "Id": "18",
+            "Name": "library",
+            "Adjacent": [11,13,14,17,19],
+            "Visible": [11,13,14,17,19]
+        },
+        {
+            "Id": "19",
+            "Name": "gallery",
+            "Adjacent": [11,18,20,24],
+            "Visible": [11,18,20,24]
+        },
+        {
+            "Id": "20",
+            "Name": "tennessee room",
+            "Adjacent": [17,19,21],
+            "Visible": [17,19,21]
+        },
+        {
+            "Id": "21",
+            "Name": "billiard room",
+            "Adjacent": [20,22,24],
+            "Visible": [20,22,24]
+        },
+        {
+            "Id": "22",
+            "Name": "kitchen",
+            "Adjacent": [3,11,21,23],
+            "Visible": [3,21,23]
+        },
+        {
+            "Id": "23",
+            "Name": "drawing room",
+            "Adjacent": [1,3,22,24],
+            "Visible": [1,3,22,24]
+        },
+        {
+            "Id": "24",
+            "Name": "dining hall",
+            "Adjacent": [1,8,10,19,21,23],
+            "Visible": [1,8,10,19,21,23]
+        }
+    ]
+}

@@ -1,0 +1,89 @@
+{
+    "Name": "lairnorth",
+    "PlayerStartRoomIds": [13],
+    "DoctorStartRoomIds": [2],
+    "CatStartRoomIds": [12],
+    "DogStartRoomIds": [4],
+    "Wings": [],
+    "Rooms":
+    [
+        {
+            "Id": "1",
+            "Name": "wine cellar",
+            "Adjacent": [2,3,5,8,13],
+            "Visible": [2]
+        },
+        {
+            "Id": "2",
+            "Name": "master suite",
+            "Adjacent": [1,3,4,6,11],
+            "Visible": [1,3,4,6,11]
+        },
+        {
+            "Id": "3",
+            "Name": "gallery",
+            "Adjacent": [1,2,4,5,8,13],
+            "Visible": [2,4,5]
+        },
+        {
+            "Id": "4",
+            "Name": "dining hall",
+            "Adjacent": [2,3,5],
+            "Visible": [2,3,5]
+        },
+        {
+            "Id": "5",
+            "Name": "library",
+            "Adjacent": [1,3,4,6,8,13],
+            "Visible": [3,4,6,7]
+        },
+        {
+            "Id": "6",
+            "Name": "armory",
+            "Adjacent": [2,5,7],
+            "Visible": [2,5,7]
+        },
+        {
+            "Id": "7",
+            "Name": "tennessee room",
+            "Adjacent": [6,8,10],
+            "Visible": [5,6,8,10]
+        },
+        {
+            "Id": "8",
+            "Name": "hedge maze",
+            "Adjacent": [1,3,5,7,9,13],
+            "Visible": [7,9,12,13]
+        },
+        {
+            "Id": "9",
+            "Name": "lancaster room",
+            "Adjacent": [8,10,12],
+            "Visible": [8,10,12,13]
+        },
+        {
+            "Id": "10",
+            "Name": "nursery",
+            "Adjacent": [7,9,11],
+            "Visible": [7,9,11]
+        },
+        {
+            "Id": "11",
+            "Name": "trophy room",
+            "Adjacent": [2,10,12,13],
+            "Visible": [2,10,12,13]
+        },
+        {
+            "Id": "12",
+            "Name": "kitchen",
+            "Adjacent": [9,11,13],
+            "Visible": [8,9,11,13]
+        },
+        {
+            "Id": "13",
+            "Name": "billiard room",
+            "Adjacent": [1,3,5,8,11,12],
+            "Visible": [8,9,11,12]
+        }
+    ]
+}

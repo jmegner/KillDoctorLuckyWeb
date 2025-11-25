@@ -1,0 +1,650 @@
+[
+    {
+        "Type": "weapon",
+        "Name": "civil war cannon",
+        "RoomName": "armory",
+        "Clover": 0,
+        "Move": 0,
+        "Attack": 3,
+        "SpecialAttack": 6
+    },
+    {
+        "Type": "weapon",
+        "Name": "chain saw",
+        "RoomName": "hedge maze",
+        "Clover": 0,
+        "Move": 0,
+        "Attack": 3,
+        "SpecialAttack": 6
+    },
+    {
+        "Type": "weapon",
+        "Name": "rat poison",
+        "RoomName": "green house",
+        "Clover": 0,
+        "Move": 0,
+        "Attack": 3,
+        "SpecialAttack": 5
+    },
+    {
+        "Type": "weapon",
+        "Name": "killing joke",
+        "RoomName": "drawing room",
+        "Clover": 0,
+        "Move": 0,
+        "Attack": 3,
+        "SpecialAttack": 6
+    },
+    {
+        "Type": "weapon",
+        "Name": "monkey hand",
+        "RoomName": "foyer",
+        "Clover": 0,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 6
+    },
+    {
+        "Type": "weapon",
+        "Name": "pinking shears",
+        "RoomName": "lilac room",
+        "Clover": 0,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 4
+    },
+    {
+        "Type": "weapon",
+        "Name": "runcible spoon",
+        "RoomName": "dining hall",
+        "Clover": 0,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 5
+    },
+    {
+        "Type": "weapon",
+        "Name": "piece of rope",
+        "RoomName": "gallery",
+        "Clover": 0,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 6
+    },
+    {
+        "Type": "weapon",
+        "Name": "hard candy",
+        "RoomName": "nursery",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 5
+    },
+    {
+        "Type": "weapon",
+        "Name": "trowel",
+        "RoomName": "wine cellar",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 5
+    },
+    {
+        "Type": "weapon",
+        "Name": "silken cord",
+        "RoomName": "master suite",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 5
+    },
+    {
+        "Type": "weapon",
+        "Name": "duck decoy",
+        "RoomName": "trophy room",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 5
+    },
+    {
+        "Type": "weapon",
+        "Name": "poison pen",
+        "RoomName": "white room",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 4
+    },
+    {
+        "Type": "weapon",
+        "Name": "stiff drink",
+        "RoomName": "tennessee room",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 6
+    },
+    {
+        "Type": "weapon",
+        "Name": "loud noise",
+        "RoomName": "carriage house",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 5
+    },
+    {
+        "Type": "weapon",
+        "Name": "billiard cue",
+        "RoomName": "billiard room",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 3,
+        "SpecialAttack": 5
+    },
+    {
+        "Type": "weapon",
+        "Name": "letter opener",
+        "RoomName": "library",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 4
+    },
+    {
+        "Type": "weapon",
+        "Name": "tight hat",
+        "RoomName": "winter garden",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 4
+    },
+    {
+        "Type": "weapon",
+        "Name": "broom stick",
+        "RoomName": "servants quarters",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 4
+    },
+    {
+        "Type": "weapon",
+        "Name": "crepe pan",
+        "RoomName": "kitchen",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 4
+    },
+    {
+        "Type": "weapon",
+        "Name": "bad cream",
+        "RoomName": "sitting room",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 4
+    },
+    {
+        "Type": "weapon",
+        "Name": "shoe horn",
+        "RoomName": "lancaster room",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 4
+    },
+    {
+        "Type": "weapon",
+        "Name": "choking hazard",
+        "RoomName": "parlor",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 4
+    },
+    {
+        "Type": "weapon",
+        "Name": "frozen fish",
+        "RoomName": "piazza",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 2,
+        "SpecialAttack": 4
+    },
+    {
+        "Type": "move",
+        "Name": "lancaster room",
+        "RoomName": "lancaster room",
+        "Clover": 0,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "winter garden",
+        "RoomName": "winter garden",
+        "Clover": 0,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "lilac room",
+        "RoomName": "lilac room",
+        "Clover": 0,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "armory",
+        "RoomName": "armory",
+        "Clover": 0,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "hedge maze",
+        "RoomName": "hedge maze",
+        "Clover": 0,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "sitting room",
+        "RoomName": "sitting room",
+        "Clover": 0,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "parlor",
+        "RoomName": "parlor",
+        "Clover": 0,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "library",
+        "RoomName": "library",
+        "Clover": 1,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "nursery",
+        "RoomName": "nursery",
+        "Clover": 1,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "servants quarters",
+        "RoomName": "servants quarters",
+        "Clover": 1,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "kitchen",
+        "RoomName": "kitchen",
+        "Clover": 1,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "gallery",
+        "RoomName": "gallery",
+        "Clover": 2,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "foyer",
+        "RoomName": "foyer",
+        "Clover": 2,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "wine cellar",
+        "RoomName": "wine cellar",
+        "Clover": 2,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "white room",
+        "RoomName": "white room",
+        "Clover": 2,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "billiard room",
+        "RoomName": "billiard room",
+        "Clover": 2,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "trophy room",
+        "RoomName": "trophy room",
+        "Clover": 2,
+        "Move": 1,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "piazza",
+        "RoomName": "piazza",
+        "Clover": 0,
+        "Move": 2,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "drawing room",
+        "RoomName": "drawing room",
+        "Clover": 1,
+        "Move": 2,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "green house",
+        "RoomName": "green house",
+        "Clover": 1,
+        "Move": 2,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "dining hall",
+        "RoomName": "dining hall",
+        "Clover": 1,
+        "Move": 2,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "carriage house",
+        "RoomName": "carriage house",
+        "Clover": 1,
+        "Move": 2,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "master suite",
+        "RoomName": "master suite",
+        "Clover": 2,
+        "Move": 2,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "move",
+        "Name": "tennessee room",
+        "RoomName": "tennessee room",
+        "Clover": 2,
+        "Move": 2,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "sweet music",
+        "RoomName": "",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "regret",
+        "RoomName": "",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "ennui",
+        "RoomName": "",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "i say good sir",
+        "RoomName": "",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "hi ya",
+        "RoomName": "",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "like unto mist",
+        "RoomName": "",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "trick of the light",
+        "RoomName": "",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "bats",
+        "RoomName": "",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "lost in thought",
+        "RoomName": "",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "poof",
+        "RoomName": "",
+        "Clover": 1,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "tumbler",
+        "RoomName": "",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "oops",
+        "RoomName": "",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "inexplicable",
+        "RoomName": "",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "self doubt",
+        "RoomName": "",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "umm",
+        "RoomName": "",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "turnabout",
+        "RoomName": "",
+        "Clover": 2,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "immunity",
+        "RoomName": "",
+        "Clover": 3,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "accursed feline",
+        "RoomName": "",
+        "Clover": 3,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "the pledge",
+        "RoomName": "",
+        "Clover": 3,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "cross referenced",
+        "RoomName": "",
+        "Clover": 3,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "the prestige",
+        "RoomName": "",
+        "Clover": 4,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "blocked",
+        "RoomName": "",
+        "Clover": 4,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "classic blunder",
+        "RoomName": "",
+        "Clover": 4,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    },
+    {
+        "Type": "failure",
+        "Name": "shadows",
+        "RoomName": "",
+        "Clover": 4,
+        "Move": 0,
+        "Attack": 0,
+        "SpecialAttack": 0
+    }
+]

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Images\BoardAlt.jpg" />
+    <None Remove="Images\BoardAltDown.jpg" />
+    <None Remove="Images\BoardHaunted.jpg" />
+    <None Remove="Images\BoardLair.jpg" />
+    <None Remove="Images\BoardMain.jpg" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Images\BoardAlt.jpg" />
+    <EmbeddedResource Include="Images\BoardAltDown.jpg" />
+    <EmbeddedResource Include="Images\BoardHaunted.jpg" />
+    <EmbeddedResource Include="Images\BoardLair.jpg" />
+    <EmbeddedResource Include="Images\BoardMain.jpg" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Util\Util.csproj" />
+  </ItemGroup>
+
+</Project>
