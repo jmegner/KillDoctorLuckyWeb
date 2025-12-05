@@ -8,7 +8,7 @@
     "build": "npm run build:wasm && npm run build:react",
     "build:wasm": "cd src/KillDoctorLuckyRust && wasm-pack build --target web",
     "build:react": "tsc -b && vite build",
-    "build:gh": "curl https://sh.rustup.rs -sSf | sh -s -- -y && source $HOME/.cargo/env && npm run build:wasm && tsc -b && vite build --base=/KillDoctorLuckyWeb/",
+    "build:gh": "curl https://sh.rustup.rs -sSf | sh -s -- -y && . $HOME/.cargo/env && npm run build:wasm && tsc -b && vite build --base=/KillDoctorLuckyWeb/",
     "lint": "eslint .",
     "preview": "vite preview"
   },
