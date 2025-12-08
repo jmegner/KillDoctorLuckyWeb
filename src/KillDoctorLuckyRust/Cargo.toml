@@ -1,5 +1,5 @@
 [package]
-name = "KillDoctorLuckyRust"
+name = "kill_doctor_lucky_rust"
 version = "0.0.0"
 edition = "2024"
 authors = ["Jacob Egner <JacobEgner@example.com>"]

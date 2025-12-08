@@ -10,7 +10,8 @@ pub fn greet() {
     alert("Hello from KillDoctorLuckyRust.");
 }
 
-#[wasm_bindgen]
+//#[wasm_bindgen] // with no renaming
+#[wasm_bindgen(js_name = "getANumber")]
 pub fn get_a_number() -> i32 {
     7
 }

@@ -3,18 +3,6 @@
 version = 4
 
 [[package]]
-name = "KillDoctorLuckyRust"
-version = "0.0.0"
-dependencies = [
- "js-sys",
- "num",
- "serde",
- "tsify",
- "wasm-bindgen",
- "wasm-bindgen-test",
-]
-
-[[package]]
 name = "async-trait"
 version = "0.1.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -92,6 +80,18 @@ checksum = "464a3709c7f55f1f721e5389aa6ea4e3bc6aba669353300af094b29ffbdde1d8"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "kill_doctor_lucky_rust"
+version = "0.0.0"
+dependencies = [
+ "js-sys",
+ "num",
+ "serde",
+ "tsify",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
