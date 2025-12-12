@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build:wasm && npm run build:react",
-    "build:wasm": "cd src/KillDoctorLuckyRust && wasm-pack build --target web",
+    "build:wasm": "cd src/KdlRust && wasm-pack build --target web",
     "build:react": "tsc -b && vite build",
     "build:gh": "npm run build:wasm && tsc -b && vite build --base=/KillDoctorLuckyWeb/",
     "build:cf": "curl https://sh.rustup.rs -sSf | sh -s -- -y && . $HOME/.cargo/env && npm run build",
