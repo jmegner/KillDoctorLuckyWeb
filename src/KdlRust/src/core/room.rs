@@ -1,13 +1,7 @@
-use std::{collections::HashSet, fmt};
+use std::fmt;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RoomId(pub i32);
-
-impl From<i32> for RoomId {
-    fn from(value: i32) -> Self {
-        RoomId(value)
-    }
-}
 
 impl From<RoomId> for i32 {
     fn from(room_id: RoomId) -> Self {
@@ -22,6 +16,7 @@ impl fmt::Display for RoomId {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[readonly::make]
 pub struct Room {
     pub id: RoomId,
     pub name: String,
@@ -30,48 +25,34 @@ pub struct Room {
 }
 
 impl Room {
-    pub fn new<I, A, B, C, D>(id: I, name: impl Into<String>, adjacent: A, visible: B) -> Self
-    where
-        I: Into<RoomId>,
-        A: IntoIterator<Item = C>,
-        B: IntoIterator<Item = D>,
-        C: Into<RoomId>,
-        D: Into<RoomId>,
-    {
+    pub fn new(
+        id: RoomId,
+        name: impl Into<String>,
+        adjacent: impl IntoIterator<Item = RoomId>,
+        visible: impl IntoIterator<Item = RoomId>,
+    ) -> Self {
         Self {
-            id: id.into(),
+            id,
             name: name.into(),
-            adjacent: adjacent.into_iter().map(Into::into).collect(),
-            visible: visible.into_iter().map(Into::into).collect(),
+            adjacent: adjacent.into_iter().collect(),
+            visible: visible.into_iter().collect(),
         }
     }
 
-    pub fn without_closed<I>(&self, closed_room_ids: I) -> Self
-    where
-        I: IntoIterator<Item = RoomId>,
-    {
-        let closed: HashSet<RoomId> = closed_room_ids.into_iter().collect();
-
-        let adjacent = self
+    pub fn without_closed(&self, closed_room_ids: &[RoomId]) -> Self {
+        let adjacent: Vec<RoomId> = self
             .adjacent
             .iter()
+            .filter(|room_id| !closed_room_ids.contains(room_id))
             .copied()
-            .filter(|room_id| !closed.contains(room_id))
             .collect();
-
-        let visible = self
+        let visible: Vec<RoomId> = self
             .visible
             .iter()
+            .filter(|room_id| !closed_room_ids.contains(room_id))
             .copied()
-            .filter(|room_id| !closed.contains(room_id))
             .collect();
-
-        Room {
-            id: self.id,
-            name: self.name.clone(),
-            adjacent,
-            visible,
-        }
+        Room::new(self.id, self.name.clone(), adjacent, visible)
     }
 }
 
@@ -128,7 +109,7 @@ mod tests {
             visible: vec![RoomId(3), RoomId(4), RoomId(5)],
         };
 
-        let filtered = room.without_closed([RoomId(2), RoomId(4)]);
+        let filtered = room.without_closed(&[RoomId(2), RoomId(4)]);
 
         assert_eq!(filtered.id, RoomId(7));
         assert_eq!(filtered.name, "Parlor");
@@ -140,13 +121,13 @@ mod tests {
     fn room_ids_iterates_over_rooms() {
         let rooms = vec![
             Room::new(
-                10,
+                RoomId(10),
                 "A".to_string(),
                 Vec::<RoomId>::new(),
                 Vec::<RoomId>::new(),
             ),
             Room::new(
-                11,
+                RoomId(11),
                 "B".to_string(),
                 Vec::<RoomId>::new(),
                 Vec::<RoomId>::new(),
