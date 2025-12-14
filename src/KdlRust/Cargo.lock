@@ -90,6 +90,7 @@ dependencies = [
  "num",
  "readonly",
  "serde",
+ "serde_json",
  "tsify",
  "wasm-bindgen",
  "wasm-bindgen-test",
