@@ -1,7 +1,9 @@
 use crate::core::room::RoomId;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
 #[readonly::make]
 pub struct Wing {
     pub name: String,

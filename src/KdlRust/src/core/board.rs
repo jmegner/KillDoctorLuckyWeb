@@ -9,7 +9,8 @@ use std::{
     path::Path,
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 #[readonly::make]
 pub struct BoardSpecification {
     pub name: String,
@@ -23,39 +24,7 @@ pub struct BoardSpecification {
 
 impl BoardSpecification {
     pub fn from_json_str(json: &str) -> Result<Self, serde_json::Error> {
-        let input: BoardSpecInput = serde_json::from_str(json)?;
-        Ok(Self::from_input(input))
-    }
-
-    fn from_input(input: BoardSpecInput) -> Self {
-        let wings = input
-            .wings
-            .into_iter()
-            .map(|wing| Wing::new(wing.name, wing.room_ids.into_iter().map(RoomId)))
-            .collect();
-
-        let rooms = input
-            .rooms
-            .into_iter()
-            .map(|room| {
-                Room::new(
-                    RoomId(room.id),
-                    room.name,
-                    room.adjacent.into_iter().map(RoomId),
-                    room.visible.into_iter().map(RoomId),
-                )
-            })
-            .collect();
-
-        BoardSpecification {
-            name: input.name,
-            player_start_room_ids: input.player_start_room_ids.into_iter().map(RoomId).collect(),
-            doctor_start_room_ids: input.doctor_start_room_ids.into_iter().map(RoomId).collect(),
-            cat_start_room_ids: input.cat_start_room_ids.into_iter().map(RoomId).collect(),
-            dog_start_room_ids: input.dog_start_room_ids.into_iter().map(RoomId).collect(),
-            wings,
-            rooms,
-        }
+        serde_json::from_str(json)
     }
 }
 
@@ -343,34 +312,6 @@ impl From<serde_json::Error> for BoardLoadError {
     fn from(err: serde_json::Error) -> Self {
         BoardLoadError::Json(err)
     }
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct BoardSpecInput {
-    name: String,
-    player_start_room_ids: Vec<i32>,
-    doctor_start_room_ids: Vec<i32>,
-    cat_start_room_ids: Vec<i32>,
-    dog_start_room_ids: Vec<i32>,
-    wings: Vec<WingInput>,
-    rooms: Vec<RoomInput>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct WingInput {
-    name: String,
-    room_ids: Vec<i32>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct RoomInput {
-    id: i32,
-    name: String,
-    adjacent: Vec<i32>,
-    visible: Vec<i32>,
 }
 
 fn distance_to_stranger_loop_info(
