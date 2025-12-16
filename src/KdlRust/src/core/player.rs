@@ -2,6 +2,22 @@ use crate::core::room::RoomId;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct PlayerId(pub i32);
+
+impl From<PlayerId> for i32 {
+    fn from(player_id: PlayerId) -> Self {
+        player_id.0
+    }
+}
+
+impl fmt::Display for PlayerId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum PlayerAction {
     None,
@@ -19,12 +35,12 @@ pub enum PlayerType {
 #[serde(rename_all = "PascalCase")]
 #[readonly::make]
 pub struct PlayerMove {
-    pub player_id: i32,
+    pub player_id: PlayerId,
     pub dest_room_id: RoomId,
 }
 
 impl PlayerMove {
-    pub fn new(player_id: i32, dest_room_id: RoomId) -> Self {
+    pub fn new(player_id: PlayerId, dest_room_id: RoomId) -> Self {
         Self {
             player_id,
             dest_room_id,
@@ -34,7 +50,12 @@ impl PlayerMove {
 
 impl fmt::Display for PlayerMove {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{}", self.player_id + 1, self.dest_room_id)
+        write!(
+            f,
+            "{}@{}",
+            i32::from(self.player_id) + 1,
+            self.dest_room_id
+        )
     }
 }
 
@@ -48,7 +69,7 @@ pub fn player_moves_to_nice_string(moves: impl IntoIterator<Item = PlayerMove>) 
 }
 
 pub trait AppraisalState<TTurn> {
-    fn heuristic_score(&self, analysis_player_id: i32) -> f64;
+    fn heuristic_score(&self, analysis_player_id: PlayerId) -> f64;
     fn prev_turn(&self) -> Option<TTurn>;
 }
 
@@ -67,7 +88,7 @@ impl<TTurn, TGameState> AppraisedPlayerTurn<TTurn, TGameState> {
         }
     }
 
-    pub fn from_state(analysis_player_id: i32, state: TGameState) -> Self
+    pub fn from_state(analysis_player_id: PlayerId, state: TGameState) -> Self
     where
         TGameState: AppraisalState<TTurn>,
     {
@@ -117,13 +138,16 @@ mod tests {
 
     #[test]
     fn player_move_display_matches_csharp() {
-        let player_move = PlayerMove::new(0, RoomId(7));
+        let player_move = PlayerMove::new(PlayerId(0), RoomId(7));
         assert_eq!(player_move.to_string(), "1@7");
     }
 
     #[test]
     fn player_moves_to_nice_string_matches_extension_method() {
-        let moves = vec![PlayerMove::new(0, RoomId(4)), PlayerMove::new(2, RoomId(9))];
+        let moves = vec![
+            PlayerMove::new(PlayerId(0), RoomId(4)),
+            PlayerMove::new(PlayerId(2), RoomId(9)),
+        ];
         assert_eq!(player_moves_to_nice_string(moves), "1@4 3@9;");
     }
 
@@ -134,8 +158,8 @@ mod tests {
     }
 
     impl AppraisalState<PlayerMove> for DummyState {
-        fn heuristic_score(&self, analysis_player_id: i32) -> f64 {
-            self.score + analysis_player_id as f64
+        fn heuristic_score(&self, analysis_player_id: PlayerId) -> f64 {
+            self.score + f64::from(analysis_player_id.0)
         }
 
         fn prev_turn(&self) -> Option<PlayerMove> {
@@ -147,13 +171,16 @@ mod tests {
     fn appraised_player_turn_from_state_uses_state_data() {
         let state = DummyState {
             score: 1.5,
-            turn: Some(PlayerMove::new(1, RoomId(5))),
+            turn: Some(PlayerMove::new(PlayerId(1), RoomId(5))),
         };
 
-        let appraised = AppraisedPlayerTurn::from_state(2, state);
+        let appraised = AppraisedPlayerTurn::from_state(PlayerId(2), state);
 
         assert_eq!(appraised.appraisal, 3.5);
-        assert_eq!(appraised.turn, Some(PlayerMove::new(1, RoomId(5))));
+        assert_eq!(
+            appraised.turn,
+            Some(PlayerMove::new(PlayerId(1), RoomId(5)))
+        );
         let ending_state = appraised
             .ending_state
             .expect("ending state should be present");
