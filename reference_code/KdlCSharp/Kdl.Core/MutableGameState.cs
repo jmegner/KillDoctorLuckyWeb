@@ -157,7 +157,7 @@ namespace Kdl.Core
                         if(pid != attackingSide)
                         {
                             clovers
-                                += PlayerFailures[pid] * RuleHelper.Simple.CloversPerWeapon
+                                += PlayerFailures[pid] * RuleHelper.Simple.CloversPerFailure
                                 + PlayerWeapons[pid] * RuleHelper.Simple.CloversPerWeapon
                                 + PlayerMoveCards[pid] * RuleHelper.Simple.CloversPerMoveCard;
                         }
