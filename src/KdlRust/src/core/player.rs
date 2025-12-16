@@ -6,6 +6,8 @@ use std::fmt;
 #[serde(transparent)]
 pub struct PlayerId(pub i32);
 
+pub const INVALID_PLAYER_ID: PlayerId = PlayerId(-1);
+
 impl From<PlayerId> for i32 {
     fn from(player_id: PlayerId) -> Self {
         player_id.0
