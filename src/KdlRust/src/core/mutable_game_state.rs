@@ -1,0 +1,1234 @@
+use crate::core::{
+    board::Board,
+    common_game_state::CommonGameState,
+    player::{PlayerAction, PlayerId, PlayerMove, PlayerType},
+    room::RoomId,
+    rule_helper,
+    simple_turn::SimpleTurn,
+};
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
+
+#[derive(Clone, Debug)]
+pub struct MutableGameState {
+    pub common: CommonGameState,
+    pub turn_id: i32,
+    pub current_player_id: PlayerId,
+    pub doctor_room_id: RoomId,
+    pub player_room_ids: Vec<RoomId>,
+    pub player_move_cards: Vec<f64>,
+    pub player_weapons: Vec<f64>,
+    pub player_failures: Vec<f64>,
+    pub player_strengths: Vec<i32>,
+    pub attacker_hist: Vec<PlayerId>,
+    pub winner: PlayerId,
+    pub prev_turn: SimpleTurn,
+    pub prev_state: Option<Rc<MutableGameState>>,
+}
+
+impl MutableGameState {
+    pub fn at_start(common: CommonGameState) -> Self {
+        let num_players = common.num_all_players as usize;
+        let player_start_room_id = common.board.player_start_room_id;
+        let doctor_room_id = common.board.doctor_start_room_id;
+        let player_room_ids = vec![player_start_room_id; num_players];
+        let player_move_cards = vec![rule_helper::simple::PLAYER_STARTING_MOVE_CARDS; num_players];
+        let player_weapons = vec![rule_helper::simple::PLAYER_STARTING_WEAPONS; num_players];
+        let player_failures = vec![rule_helper::simple::PLAYER_STARTING_FAILURES; num_players];
+        let player_strengths = vec![rule_helper::PLAYER_STARTING_STRENGTH; num_players];
+
+        MutableGameState {
+            common,
+            turn_id: 1,
+            current_player_id: PlayerId(0),
+            doctor_room_id,
+            player_room_ids,
+            player_move_cards,
+            player_weapons,
+            player_failures,
+            player_strengths,
+            attacker_hist: Vec::new(),
+            winner: rule_helper::INVALID_PLAYER_ID,
+            prev_turn: SimpleTurn::invalid_default(),
+            prev_state: None,
+        }
+    }
+
+    pub fn copy_state(&self) -> Self {
+        Self {
+            common: self.common.clone(),
+            turn_id: self.turn_id,
+            current_player_id: self.current_player_id,
+            doctor_room_id: self.doctor_room_id,
+            player_room_ids: self.player_room_ids.clone(),
+            player_move_cards: self.player_move_cards.clone(),
+            player_weapons: self.player_weapons.clone(),
+            player_failures: self.player_failures.clone(),
+            player_strengths: self.player_strengths.clone(),
+            attacker_hist: self.attacker_hist.clone(),
+            winner: self.winner,
+            prev_turn: self.prev_turn.clone(),
+            prev_state: self.prev_state.clone(),
+        }
+    }
+
+    pub fn is_mutable(&self) -> bool {
+        true
+    }
+
+    pub fn num_players(&self) -> i32 {
+        self.common.num_normal_players
+    }
+
+    pub fn has_winner(&self) -> bool {
+        self.winner != rule_helper::INVALID_PLAYER_ID
+    }
+
+    pub fn is_normal_turn(&self) -> bool {
+        self.common.get_player_type(self.current_player_id) == PlayerType::Normal
+    }
+
+    pub fn ply(&self) -> i32 {
+        let mut ply = 0;
+        let mut state = self.prev_state.as_deref();
+
+        while let Some(prev) = state {
+            if prev.is_normal_turn() {
+                ply += 1;
+            }
+
+            state = prev.prev_state.as_deref();
+        }
+
+        ply
+    }
+
+    pub fn current_player_type(&self) -> PlayerType {
+        self.common.get_player_type(self.current_player_id)
+    }
+
+    pub fn player_text(&self) -> String {
+        self.player_text_for(self.current_player_id)
+    }
+
+    pub fn player_text_for(&self, player_id: PlayerId) -> String {
+        self.common.player_text(player_id)
+    }
+
+    pub fn player_text_long(&self, player_id: PlayerId) -> String {
+        let idx = self.player_idx(player_id);
+        let room_text = format!("{:02}", self.player_room_ids[idx].0);
+        let mut text = format!(
+            "{}(R{room_text},S{}",
+            self.player_text_for(player_id),
+            self.player_strengths[idx]
+        );
+
+        if self.common.get_player_type(player_id) == PlayerType::Normal {
+            text.push_str(&format!(
+                ",M{:.1},W{:.1},F{:.1}",
+                self.player_move_cards[idx], self.player_weapons[idx], self.player_failures[idx]
+            ));
+        }
+
+        text.push(')');
+        text
+    }
+
+    pub fn player_sees_player(&self, player_id1: PlayerId, player_id2: PlayerId) -> bool {
+        let room1 = self.player_room_ids[self.player_idx(player_id1)];
+        let room2 = self.player_room_ids[self.player_idx(player_id2)];
+        self.common.board.sight[room1.0 as usize][room2.0 as usize]
+    }
+
+    pub fn num_defensive_clovers(&self) -> f64 {
+        let mut clovers = 0.0;
+        let attacking_side = rule_helper::to_normal_player_id(
+            self.current_player_id,
+            self.common.num_normal_players,
+        );
+
+        for pid in 0..self.common.num_normal_players {
+            let pid = PlayerId(pid);
+            if pid != self.current_player_id {
+                if self.common.get_player_type(pid) == PlayerType::Normal {
+                    if pid != attacking_side {
+                        clovers += self.player_failures[self.player_idx(pid)]
+                            * rule_helper::simple::CLOVERS_PER_FAILURE
+                            + self.player_weapons[self.player_idx(pid)]
+                                * rule_helper::simple::CLOVERS_PER_WEAPON
+                            + self.player_move_cards[self.player_idx(pid)]
+                                * rule_helper::simple::CLOVERS_PER_MOVE_CARD;
+                    }
+                } else {
+                    clovers += 1.0; // think about removing this for shorter games
+                }
+            }
+        }
+
+        clovers
+    }
+
+    pub fn summary(&self, indentation_level: usize) -> String {
+        self.state_summary(&" ".repeat(indentation_level))
+    }
+
+    pub fn state_summary(&self, leading_text: &str) -> String {
+        let mut sb = String::new();
+        sb.push_str(&format!(
+            "{leading_text}Turn {}, {}, HeuScore={:.2}",
+            self.turn_id,
+            self.player_text(),
+            self.heuristic_score(self.current_player_id)
+        ));
+
+        let attacker_hist = self
+            .attacker_hist
+            .iter()
+            .map(|player_id| CommonGameState::to_player_display_num(*player_id))
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        sb.push_str(&format!("\n{leading_text}  AttackHist={{{attacker_hist}}}"));
+        sb.push_str(&format!("\n{leading_text}  Dr@R{}", self.doctor_room_id.0));
+
+        let players_who_can_see_doctor = self
+            .common
+            .player_ids()
+            .zip(self.player_room_ids.iter().copied())
+            .filter(|(_, room_id)| {
+                self.common.board.sight[room_id.0 as usize][self.doctor_room_id.0 as usize]
+            })
+            .map(|(pid, _)| CommonGameState::to_player_display_num(pid))
+            .collect::<Vec<_>>();
+
+        if players_who_can_see_doctor.is_empty() {
+            sb.push_str(", unseen by players");
+        } else {
+            let text = players_who_can_see_doctor
+                .iter()
+                .map(|id| id.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            sb.push_str(&format!(", seen by players{{{text}}}"));
+        }
+
+        for player_id in self.common.player_ids() {
+            sb.push_str(&format!(
+                "\n{leading_text}  {}",
+                self.player_text_long(player_id)
+            ));
+
+            if player_id == self.current_player_id {
+                sb.push_str(" *");
+            }
+
+            if self.player_room_ids[self.player_idx(player_id)] == self.doctor_room_id {
+                sb.push_str(" D");
+            }
+        }
+
+        sb
+    }
+
+    pub fn check_normal_turn(&self, turn: &SimpleTurn) -> Result<(), String> {
+        for mv in &turn.moves {
+            if mv.player_id.0 >= self.common.num_all_players {
+                return Err(format!(
+                    "invalid playerId {} (displayed {})",
+                    mv.player_id.0,
+                    self.player_text_for(mv.player_id)
+                ));
+            } else if !self.common.board.room_ids.contains(&mv.dest_room_id) {
+                return Err(format!("invalid roomId {}", mv.dest_room_id.0));
+            }
+        }
+
+        let total_dist: i32 = turn
+            .moves
+            .iter()
+            .map(|mv| {
+                self.common.board.distance
+                    [self.room_idx(self.player_room_ids[self.player_idx(mv.player_id)])]
+                    [self.room_idx(mv.dest_room_id)]
+            })
+            .sum();
+
+        if self.player_move_cards[self.player_idx(self.current_player_id)]
+            < (total_dist - 1).max(0) as f64
+        {
+            return Err(format!(
+                "player {} used too many move points ({total_dist})",
+                self.player_text()
+            ));
+        }
+
+        for mv in &turn.moves {
+            if mv.player_id.0 >= self.player_room_ids.len() as i32 {
+                return Err(format!(
+                    "invalid player ({}) in move",
+                    self.player_text_for(mv.player_id)
+                ));
+            }
+
+            if mv.player_id != self.current_player_id
+                && self.common.get_player_type(mv.player_id) != PlayerType::Stranger
+            {
+                return Err(format!(
+                    "player {} tried to move non-stranger {}",
+                    self.player_text(),
+                    self.player_text_for(mv.player_id)
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn after_turn(
+        &mut self,
+        turn: SimpleTurn,
+        must_return_new_object: bool,
+    ) -> MutableGameState {
+        if must_return_new_object {
+            let mut new_state = self.copy_state();
+            new_state.after_normal_turn(turn, false);
+            new_state
+        } else {
+            self.after_normal_turn(turn, false);
+            self.clone()
+        }
+    }
+
+    pub fn after_normal_turn(&mut self, turn: SimpleTurn, want_log: bool) -> &mut Self {
+        if want_log {
+            self.prev_state = Some(Rc::new(self.copy_state()));
+        }
+
+        self.prev_turn = turn.clone();
+
+        let total_dist: i32 = turn
+            .moves
+            .iter()
+            .map(|mv| {
+                self.common.board.distance
+                    [self.room_idx(self.player_room_ids[self.player_idx(mv.player_id)])]
+                    [self.room_idx(mv.dest_room_id)]
+            })
+            .sum();
+        let move_cards_used = (total_dist - 1).max(0) as f64;
+        let current_idx = self.player_idx(self.current_player_id);
+        self.player_move_cards[current_idx] -= move_cards_used;
+
+        let mut moved_stranger_that_saw_doctor = false;
+
+        for mv in &turn.moves {
+            let player_idx = self.player_idx(mv.player_id);
+            let room_id = self.player_room_ids[player_idx];
+            if mv.player_id != self.current_player_id
+                && self.common.board.sight[self.room_idx(room_id)]
+                    [self.room_idx(self.doctor_room_id)]
+            {
+                moved_stranger_that_saw_doctor = true;
+            }
+
+            self.player_room_ids[player_idx] = mv.dest_room_id;
+        }
+
+        let action = self.best_action_allowed(moved_stranger_that_saw_doctor);
+
+        if action == PlayerAction::Attack {
+            if self.process_attack() {
+                self.winner = self.current_player_id;
+            }
+        } else if action == PlayerAction::Loot {
+            self.player_move_cards[current_idx] += rule_helper::simple::MOVE_CARDS_PER_LOOT;
+            self.player_weapons[current_idx] += rule_helper::simple::WEAPONS_PER_LOOT;
+            self.player_failures[current_idx] += rule_helper::simple::FAILURES_PER_LOOT;
+        }
+
+        if !self.has_winner() {
+            self.do_doctor_phase();
+        }
+
+        self.turn_id += 1;
+
+        if want_log {
+            println!("{}", self.prev_turn_summary(true));
+        }
+
+        if !self.has_winner() && !self.is_normal_turn() {
+            return self.after_stranger_turn(want_log);
+        }
+
+        self
+    }
+
+    pub fn after_stranger_turn(&mut self, want_log: bool) -> &mut Self {
+        if want_log {
+            self.prev_state = Some(Rc::new(self.copy_state()));
+        }
+
+        let mut best_action = self.best_action_allowed(false);
+
+        let current_player_idx = self.player_idx(self.current_player_id);
+        let current_room = self.player_room_ids[current_player_idx];
+        let new_room_id = if best_action == PlayerAction::Attack {
+            current_room
+        } else {
+            Board::next_room_id(current_room, -1, &self.common.board.room_ids)
+        };
+        self.player_room_ids[current_player_idx] = new_room_id;
+
+        if best_action != PlayerAction::Attack {
+            best_action = self.best_action_allowed(false);
+        }
+
+        if best_action == PlayerAction::Attack {
+            if self.process_attack() {
+                self.current_player_id = rule_helper::to_normal_player_id(
+                    self.current_player_id,
+                    self.common.num_normal_players,
+                );
+                self.winner = self.current_player_id;
+            }
+        }
+
+        if !self.has_winner() {
+            self.do_doctor_phase();
+        }
+
+        self.turn_id += 1;
+
+        if want_log {
+            println!("{}", self.prev_turn_summary(true));
+        }
+
+        if !self.has_winner() && !self.is_normal_turn() {
+            return self.after_stranger_turn(want_log);
+        }
+
+        self
+    }
+
+    pub fn best_action_allowed(&self, moved_stranger_that_saw_doctor: bool) -> PlayerAction {
+        let mut seen_by_other_players = false;
+        let current_room_id = self.player_room_ids[self.player_idx(self.current_player_id)];
+
+        for player_id in self.common.player_ids() {
+            if player_id != self.current_player_id
+                && self.common.board.sight[self.room_idx(current_room_id)]
+                    [self.room_idx(self.player_room_ids[self.player_idx(player_id)])]
+            {
+                seen_by_other_players = true;
+                break;
+            }
+        }
+
+        if seen_by_other_players {
+            return PlayerAction::None;
+        }
+
+        if current_room_id == self.doctor_room_id
+            && (!rule_helper::simple::STRANGERS_ARE_NOSY || !moved_stranger_that_saw_doctor)
+        {
+            return PlayerAction::Attack;
+        }
+
+        if self.common.board.sight[self.room_idx(current_room_id)]
+            [self.room_idx(self.doctor_room_id)]
+        {
+            PlayerAction::None
+        } else {
+            PlayerAction::Loot
+        }
+    }
+
+    pub fn normal_turn_hist(&self) -> String {
+        let mut states = Vec::new();
+        let mut state_for_traversal = Some(self);
+
+        while let Some(state) = state_for_traversal {
+            states.push(state);
+            state_for_traversal = state.prev_state.as_deref();
+        }
+
+        states.reverse();
+        let mut text = String::new();
+
+        for state in states.iter().skip(1) {
+            if let Some(prev_state) = state.prev_state.as_deref() {
+                if !prev_state.is_normal_turn() {
+                    continue;
+                }
+            }
+
+            text.push_str(&state.prev_turn_summary(false));
+            text.push(' ');
+        }
+
+        text
+    }
+}
+
+impl MutableGameState {
+    pub fn heuristic_score(&self, analysis_player_id: PlayerId) -> f64 {
+        if self.has_winner() {
+            return if analysis_player_id
+                == rule_helper::to_normal_player_id(self.winner, self.common.num_normal_players)
+            {
+                rule_helper::HEURISTIC_SCORE_WIN
+            } else {
+                rule_helper::HEURISTIC_SCORE_LOSS
+            };
+        }
+
+        let misc_score = |player_id: PlayerId,
+                          allied_strength: i32,
+                          is_allied_turn: bool,
+                          allied_doctor_advantage: f64|
+         -> f64 {
+            let allied_strength = allied_strength as f64;
+            allied_strength
+                + 0.5
+                    * allied_strength
+                    * (self.player_move_cards[self.player_idx(player_id)]
+                        + if is_allied_turn { 0.95 } else { 0.0 }
+                        + allied_doctor_advantage * 0.9)
+                + 0.5 * self.player_weapons[self.player_idx(player_id)]
+                + 0.125 * self.player_failures[self.player_idx(player_id)]
+        };
+
+        if self.common.has_strangers() {
+            let stranger_ally = rule_helper::allied_stranger(analysis_player_id);
+            let normal_opponent = rule_helper::opposing_normal_player(analysis_player_id);
+            let stranger_opponent = rule_helper::allied_stranger(normal_opponent);
+            let allied_strength = self.player_strengths[self.player_idx(analysis_player_id)]
+                + self.player_strengths[self.player_idx(stranger_ally)];
+            let opponent_strength = self.player_strengths[self.player_idx(normal_opponent)]
+                + self.player_strengths[self.player_idx(stranger_opponent)];
+            let is_my_turn = analysis_player_id == self.current_player_id;
+            let allied_doctor_advantage = self.doctor_score_with_rooms(
+                self.player_room_ids[self.player_idx(if is_my_turn {
+                    analysis_player_id
+                } else {
+                    normal_opponent
+                })],
+                self.player_room_ids[self.player_idx(if is_my_turn {
+                    stranger_ally
+                } else {
+                    stranger_opponent
+                })],
+                self.player_room_ids[self.player_idx(if is_my_turn {
+                    normal_opponent
+                } else {
+                    analysis_player_id
+                })],
+                self.player_room_ids[self.player_idx(if is_my_turn {
+                    stranger_opponent
+                } else {
+                    stranger_ally
+                })],
+            ) * if is_my_turn { 1.0 } else { -1.0 };
+
+            misc_score(
+                analysis_player_id,
+                allied_strength,
+                is_my_turn,
+                allied_doctor_advantage,
+            ) - misc_score(
+                normal_opponent,
+                opponent_strength,
+                !is_my_turn,
+                -allied_doctor_advantage,
+            )
+        } else {
+            let mut score = 0.0;
+            for pid in 0..self.common.num_all_players {
+                let pid = PlayerId(pid);
+                let weight =
+                    if rule_helper::to_normal_player_id(pid, self.common.num_normal_players)
+                        == analysis_player_id
+                    {
+                        1.0
+                    } else {
+                        -1.0 / ((self.common.num_normal_players - 1) as f64)
+                    };
+                score += weight
+                    * misc_score(
+                        pid,
+                        self.player_strengths[self.player_idx(pid)],
+                        pid == self.current_player_id,
+                        0.0,
+                    );
+            }
+            score
+        }
+    }
+
+    pub fn doctor_score(&self) -> f64 {
+        self.doctor_score_with_rooms(
+            self.player_room_ids[self.player_idx(self.current_player_id)],
+            self.player_room_ids
+                [self.player_idx(rule_helper::allied_stranger(self.current_player_id))],
+            self.player_room_ids
+                [self.player_idx(rule_helper::opposing_normal_player(self.current_player_id))],
+            self.player_room_ids
+                [self.player_idx(rule_helper::opposing_stranger(self.current_player_id))],
+        )
+    }
+
+    pub fn doctor_score_with_rooms(
+        &self,
+        my_room: RoomId,
+        stranger_ally_room: RoomId,
+        normal_enemy_room: RoomId,
+        stranger_enemy_room: RoomId,
+    ) -> f64 {
+        const DECAY_FACTOR_NORMAL: f64 = 0.9;
+        const DECAY_FACTOR_STRANGER: f64 = 0.5;
+
+        let num_players_not_had_turn = self.common.num_all_players - self.turn_id;
+        let doctor_delta_for_activation = (num_players_not_had_turn + 1).max(1);
+        let next_doctor_room_id = Board::next_room_id(
+            self.doctor_room_id,
+            doctor_delta_for_activation,
+            &self.common.board.room_ids,
+        );
+
+        let mut doctor_rooms = self
+            .common
+            .board
+            .room_ids_in_doctor_visit_order(next_doctor_room_id);
+        doctor_rooms.insert(0, self.doctor_room_id);
+
+        let my_starting_search_idx = if num_players_not_had_turn > 0 { 1 } else { 0 };
+        let mut my_doctor_dist = 999;
+
+        for i in my_starting_search_idx..doctor_rooms.len() {
+            if doctor_rooms[i] == my_room {
+                my_doctor_dist = i as i32;
+                break;
+            } else if i > 0
+                && self.common.board.distance[self.room_idx(my_room)]
+                    [self.room_idx(doctor_rooms[i])]
+                    <= 1
+            {
+                my_doctor_dist = i as i32;
+                break;
+            }
+        }
+
+        let stranger_ally_doctor_dist =
+            find_index_from(&doctor_rooms, stranger_ally_room, 1).unwrap_or(-1) as f64;
+        let normal_enemy_doctor_dist =
+            find_index_from(&doctor_rooms, normal_enemy_room, 1).unwrap_or(-1) as f64;
+        let stranger_enemy_doctor_dist =
+            find_index_from(&doctor_rooms, stranger_enemy_room, 1).unwrap_or(-1) as f64;
+
+        DECAY_FACTOR_NORMAL.powi(my_doctor_dist)
+            + DECAY_FACTOR_STRANGER.powf(stranger_ally_doctor_dist)
+            - DECAY_FACTOR_NORMAL.powf(normal_enemy_doctor_dist)
+            - DECAY_FACTOR_STRANGER.powf(stranger_enemy_doctor_dist)
+    }
+
+    pub fn possible_turns(&self) -> Vec<SimpleTurn> {
+        if self.has_winner() {
+            return Vec::new();
+        }
+
+        let mut subsets: Vec<Vec<PlayerId>> = vec![vec![self.current_player_id]];
+
+        if self.common.has_strangers() {
+            let allied_stranger = rule_helper::allied_stranger(self.current_player_id);
+            let opposing_stranger = rule_helper::opposing_stranger(self.current_player_id);
+
+            subsets.push(vec![allied_stranger]);
+            subsets.push(vec![opposing_stranger]);
+
+            if self.player_move_cards[self.player_idx(self.current_player_id)] > 0.0 {
+                subsets.push(vec![self.current_player_id, allied_stranger]);
+                subsets.push(vec![self.current_player_id, opposing_stranger]);
+                subsets.push(vec![allied_stranger, opposing_stranger]);
+            }
+        }
+
+        let mut turns = Vec::new();
+        let dist_allowed =
+            self.player_move_cards[self.player_idx(self.current_player_id)] as i32 + 1;
+
+        for subset in subsets {
+            if subset.len() == 1 {
+                turns.extend(self.possible_turns_single(dist_allowed, subset[0]));
+            } else if subset.len() == 2 {
+                turns.extend(self.possible_turns_dual(dist_allowed, subset[0], subset[1]));
+            }
+        }
+
+        turns
+    }
+
+    pub fn prev_player_heuristic_score(&self) -> f64 {
+        let prev_player_id = self.prev_player_id();
+        if prev_player_id == rule_helper::INVALID_PLAYER_ID {
+            f64::NAN
+        } else {
+            self.heuristic_score(prev_player_id)
+        }
+    }
+
+    pub fn prev_player_id(&self) -> PlayerId {
+        let mut state = self.prev_state.as_deref();
+
+        while let Some(prev) = state {
+            if prev.is_normal_turn() {
+                return prev.current_player_id;
+            }
+            state = prev.prev_state.as_deref();
+        }
+
+        rule_helper::INVALID_PLAYER_ID
+    }
+
+    fn possible_turns_single(
+        &self,
+        dist_allowed: i32,
+        movable_player: PlayerId,
+    ) -> Vec<SimpleTurn> {
+        let movable_room = self.player_room_ids[self.player_idx(movable_player)];
+        let mut turns = Vec::new();
+
+        for dest_room in &self.common.board.room_ids {
+            if self.common.board.distance[self.room_idx(movable_room)][self.room_idx(*dest_room)]
+                <= dist_allowed
+            {
+                turns.push(SimpleTurn::single(movable_player, *dest_room));
+            }
+        }
+
+        turns
+    }
+
+    fn possible_turns_dual(
+        &self,
+        dist_allowed: i32,
+        movable_player_a: PlayerId,
+        movable_player_b: PlayerId,
+    ) -> Vec<SimpleTurn> {
+        let src_room_a = self.player_room_ids[self.player_idx(movable_player_a)];
+        let src_room_b = self.player_room_ids[self.player_idx(movable_player_b)];
+        let mut turns = Vec::new();
+
+        for dst_room_a in &self.common.board.room_ids {
+            let dist_remaining = dist_allowed
+                - self.common.board.distance[self.room_idx(src_room_a)][self.room_idx(*dst_room_a)];
+
+            if dist_remaining <= 0 || src_room_a == *dst_room_a {
+                continue;
+            }
+
+            let move_a = PlayerMove::new(movable_player_a, *dst_room_a);
+
+            for dst_room_b in &self.common.board.room_ids {
+                if self.common.board.distance[self.room_idx(src_room_b)][self.room_idx(*dst_room_b)]
+                    > dist_remaining
+                    || src_room_b == *dst_room_b
+                {
+                    continue;
+                }
+
+                let move_b = PlayerMove::new(movable_player_b, *dst_room_b);
+                turns.push(SimpleTurn::new([move_a, move_b]));
+            }
+        }
+
+        turns
+    }
+
+    fn process_attack(&mut self) -> bool {
+        let current_idx = self.player_idx(self.current_player_id);
+        let mut attack_strength = self.player_strengths[current_idx] as f64;
+        self.player_strengths[current_idx] += 1;
+        self.attacker_hist.push(self.current_player_id);
+
+        if self.common.has_strangers() {
+            let stranger_clovers = 1.0;
+            attack_strength -= stranger_clovers;
+
+            if attack_strength < 0.0 {
+                return false;
+            }
+
+            if self.is_normal_turn() {
+                use_weapon(&mut self.player_weapons, current_idx, &mut attack_strength);
+            }
+
+            let defender = rule_helper::opposing_normal_player(self.current_player_id);
+            let defender_idx = self.player_idx(defender);
+
+            defend_with_card_type(
+                defender_idx,
+                &mut attack_strength,
+                &mut self.player_failures,
+                rule_helper::simple::CLOVERS_PER_FAILURE,
+            );
+            defend_with_card_type(
+                defender_idx,
+                &mut attack_strength,
+                &mut self.player_weapons,
+                rule_helper::simple::CLOVERS_PER_WEAPON,
+            );
+            defend_with_card_type(
+                defender_idx,
+                &mut attack_strength,
+                &mut self.player_move_cards,
+                rule_helper::simple::CLOVERS_PER_MOVE_CARD,
+            );
+
+            attack_strength > 0.0
+        } else {
+            let num_defensive_clovers = self.num_defensive_clovers();
+
+            if num_defensive_clovers <= 2.0 * attack_strength {
+                use_weapon(&mut self.player_weapons, current_idx, &mut attack_strength);
+            }
+
+            if num_defensive_clovers < attack_strength {
+                return true;
+            }
+
+            let mut defender = self.current_player_id;
+
+            while attack_strength > 0.0 {
+                defender = PlayerId(positive_remainder(
+                    defender.0 - 1,
+                    self.common.num_all_players as usize,
+                ) as i32);
+
+                if defender == self.current_player_id {
+                    return true;
+                }
+
+                let defender_idx = self.player_idx(defender);
+                defend_with_card_type(
+                    defender_idx,
+                    &mut attack_strength,
+                    &mut self.player_failures,
+                    rule_helper::simple::CLOVERS_PER_FAILURE,
+                );
+                defend_with_card_type(
+                    defender_idx,
+                    &mut attack_strength,
+                    &mut self.player_weapons,
+                    rule_helper::simple::CLOVERS_PER_WEAPON,
+                );
+                defend_with_card_type(
+                    defender_idx,
+                    &mut attack_strength,
+                    &mut self.player_move_cards,
+                    rule_helper::simple::CLOVERS_PER_MOVE_CARD,
+                );
+            }
+
+            false
+        }
+    }
+
+    fn do_doctor_phase(&mut self) {
+        self.doctor_room_id =
+            Board::next_room_id(self.doctor_room_id, 1, &self.common.board.room_ids);
+
+        self.current_player_id =
+            PlayerId((self.current_player_id.0 + 1).rem_euclid(self.common.num_all_players));
+
+        if self.turn_id >= self.common.num_all_players {
+            for player_offset in 0..self.common.num_all_players {
+                let player_id = PlayerId(
+                    (self.current_player_id.0 + player_offset)
+                        .rem_euclid(self.common.num_all_players),
+                );
+                if self.player_room_ids[self.player_idx(player_id)] == self.doctor_room_id {
+                    self.current_player_id = player_id;
+                    break;
+                }
+            }
+        }
+    }
+
+    fn prev_turn_summary(&self, verbose: bool) -> String {
+        let Some(prev_state) = self.prev_state.as_deref() else {
+            return "PrevStateNull".to_string();
+        };
+
+        let prev_player = prev_state.current_player_id;
+        let mut verbose_move_texts = Vec::new();
+        let mut short_move_texts = Vec::new();
+        let mut total_dist = 0;
+
+        for player_id in self.common.player_ids() {
+            let prev_room_id = prev_state.player_room_ids[self.player_idx(player_id)];
+            let room_id = self.player_room_ids[self.player_idx(player_id)];
+
+            if prev_room_id != room_id {
+                let dist =
+                    self.common.board.distance[self.room_idx(prev_room_id)][self.room_idx(room_id)];
+                let dist_text = if dist == 0 {
+                    String::new()
+                } else {
+                    format!(" ({dist}mp)")
+                };
+
+                total_dist += dist;
+                short_move_texts.push(format!(
+                    "{}@{}({})",
+                    CommonGameState::to_player_display_num(player_id),
+                    room_id.0,
+                    prev_room_id.0
+                ));
+                verbose_move_texts.push(format!(
+                    "    MOVE {}: R{} to R{}{}",
+                    self.player_text_for(player_id),
+                    prev_room_id.0,
+                    room_id.0,
+                    dist_text
+                ));
+            }
+        }
+
+        if short_move_texts.is_empty() {
+            let room_id = self.player_room_ids[self.player_idx(prev_player)];
+            short_move_texts.push(format!(
+                "{}@{}({})",
+                CommonGameState::to_player_display_num(prev_player),
+                room_id.0,
+                room_id.0
+            ));
+            verbose_move_texts.push(format!(
+                "    MOVE {}: stayed at R{}",
+                self.player_text_for(prev_player),
+                room_id.0
+            ));
+        }
+
+        let action = if prev_state.attacker_hist.len() != self.attacker_hist.len() {
+            PlayerAction::Attack
+        } else if prev_state.player_move_cards[self.player_idx(prev_player)] % 1.0
+            != self.player_move_cards[self.player_idx(prev_player)] % 1.0
+        {
+            PlayerAction::Loot
+        } else {
+            PlayerAction::None
+        };
+
+        let move_signifier = if prev_state.is_normal_turn() {
+            "M".repeat((total_dist - 1).max(0) as usize)
+        } else {
+            String::new()
+        };
+        let action_signifier = match action {
+            PlayerAction::Attack => "A",
+            PlayerAction::Loot => "L",
+            PlayerAction::None => "",
+        };
+        let win_text = if self.has_winner() {
+            format!("({} won)", self.player_text_for(self.winner))
+        } else {
+            String::new()
+        };
+
+        let short_summary = format!(
+            "({}{}{action_signifier}){}{win_text};",
+            self.player_text_for(prev_player),
+            move_signifier,
+            short_move_texts.join(" ")
+        );
+
+        if !verbose {
+            return short_summary;
+        }
+
+        let mut sb = String::new();
+        let ply_text = if prev_state.is_normal_turn() {
+            format!("/{}", prev_state.ply())
+        } else {
+            String::new()
+        };
+        sb.push_str(&format!(
+            "  Turn{}{}, {}",
+            prev_state.turn_id, ply_text, short_summary
+        ));
+
+        for text in verbose_move_texts {
+            sb.push('\n');
+            sb.push_str(&text);
+        }
+
+        match action {
+            PlayerAction::Loot => {
+                sb.push('\n');
+                sb.push_str(&format!(
+                    "    LOOT {}: now {}",
+                    self.player_text_for(prev_player),
+                    self.player_text_long(prev_player)
+                ));
+            }
+            PlayerAction::Attack => {
+                let weapon_bonus = if prev_state.player_weapons[self.player_idx(prev_player)]
+                    == self.player_weapons[self.player_idx(prev_player)]
+                {
+                    0.0
+                } else {
+                    rule_helper::simple::STRENGTH_PER_WEAPON
+                };
+                let attack_strength =
+                    prev_state.player_strengths[self.player_idx(prev_player)] as f64 + weapon_bonus;
+                let hist_text = self
+                    .attacker_hist
+                    .iter()
+                    .map(|player_id| CommonGameState::to_player_display_num(*player_id))
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                sb.push('\n');
+                sb.push_str(&format!(
+                    "    ATTACK: strength={attack_strength:.1} hist={hist_text}"
+                ));
+            }
+            PlayerAction::None => {}
+        }
+
+        if self.has_winner() {
+            sb.push('\n');
+            sb.push_str(&format!(
+                "    WINNER: {}",
+                self.player_text_for(self.winner)
+            ));
+        } else {
+            sb.push('\n');
+            sb.push_str(&format!(
+                "    DR MOVE: R{} to R{}",
+                prev_state.doctor_room_id.0, self.doctor_room_id.0
+            ));
+
+            if self.doctor_room_id == self.player_room_ids[self.player_idx(self.current_player_id)]
+            {
+                let other_players_in_room = self
+                    .common
+                    .player_ids()
+                    .filter(|pid| *pid != self.current_player_id)
+                    .filter(|pid| {
+                        self.player_room_ids[self.player_idx(*pid)] == self.doctor_room_id
+                    })
+                    .map(CommonGameState::to_player_display_num)
+                    .collect::<Vec<_>>();
+
+                let unactivated_players_text = if other_players_in_room.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        ", unactivated players{{{}}}",
+                        other_players_in_room
+                            .iter()
+                            .map(|id| id.to_string())
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    )
+                };
+
+                sb.push('\n');
+                sb.push_str(&format!(
+                    "    DR ACTIVATE: {}{}",
+                    self.player_text(),
+                    unactivated_players_text
+                ));
+            }
+
+            sb.push('\n');
+            sb.push_str("    start of next turn...\n");
+            sb.push_str(&self.state_summary("   "));
+        }
+
+        sb
+    }
+
+    fn player_idx(&self, player_id: PlayerId) -> usize {
+        player_id.0 as usize
+    }
+
+    fn room_idx(&self, room_id: RoomId) -> usize {
+        room_id.0 as usize
+    }
+}
+
+fn use_weapon(player_weapons: &mut [f64], idx: usize, attack_strength: &mut f64) {
+    if player_weapons[idx] >= 1.0 {
+        *attack_strength += rule_helper::simple::STRENGTH_PER_WEAPON;
+        player_weapons[idx] -= 1.0;
+    }
+}
+
+fn defend_with_card_type(
+    idx: usize,
+    attack_strength: &mut f64,
+    player_cards: &mut [f64],
+    clovers_per_card: f64,
+) {
+    if *attack_strength > 0.0 && player_cards[idx] > 0.0 {
+        let num_used_cards = player_cards[idx].min(*attack_strength / clovers_per_card);
+        player_cards[idx] -= num_used_cards;
+        *attack_strength -= num_used_cards * clovers_per_card;
+    }
+}
+
+impl PartialEq for MutableGameState {
+    fn eq(&self, other: &Self) -> bool {
+        self.common == other.common
+            && self.current_player_id == other.current_player_id
+            && self.doctor_room_id == other.doctor_room_id
+            && self.player_room_ids == other.player_room_ids
+            && self.player_move_cards == other.player_move_cards
+            && self.player_weapons == other.player_weapons
+            && self.player_failures == other.player_failures
+            && self.player_strengths == other.player_strengths
+            && self.winner == other.winner
+    }
+}
+
+impl Eq for MutableGameState {}
+
+impl fmt::Display for MutableGameState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let rooms_text = self
+            .player_room_ids
+            .iter()
+            .map(|room_id| room_id.0.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        write!(
+            f,
+            "T{},{},[{},{}],{}",
+            self.turn_id,
+            self.player_text(),
+            self.doctor_room_id.0,
+            rooms_text,
+            self.prev_turn
+        )
+    }
+}
+
+impl Hash for MutableGameState {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.common.hash(state);
+        self.current_player_id.hash(state);
+        (self.doctor_room_id.0 << 3).hash(state);
+        (self.winner.0 << 8).hash(state);
+        self.player_room_ids.hash(state);
+    }
+}
+
+fn positive_remainder(x: i32, modulus: usize) -> usize {
+    let modulus = modulus as i32;
+    let remainder = x % modulus;
+    if remainder >= 0 {
+        remainder as usize
+    } else {
+        (remainder + modulus) as usize
+    }
+}
+
+fn find_index_from(room_ids: &[RoomId], target: RoomId, start: usize) -> Option<i32> {
+    room_ids
+        .iter()
+        .enumerate()
+        .skip(start)
+        .find_map(|(idx, room_id)| {
+            if *room_id == target {
+                Some(idx as i32)
+            } else {
+                None
+            }
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::room::Room;
+
+    fn sample_board() -> Board {
+        let rooms = vec![
+            Room::new(RoomId(1), "A", [RoomId(2)], [RoomId(2)]),
+            Room::new(RoomId(2), "B", [RoomId(1), RoomId(3)], [RoomId(1)]),
+            Room::new(RoomId(3), "C", [RoomId(2)], [RoomId(2)]),
+        ];
+
+        Board::new(
+            "tiny",
+            rooms,
+            RoomId(1),
+            RoomId(1),
+            RoomId(1),
+            RoomId(1),
+            None,
+        )
+    }
+
+    fn sample_game_state() -> MutableGameState {
+        let common = CommonGameState::from_num_normal_players(true, sample_board(), 3);
+        MutableGameState::at_start(common)
+    }
+
+    #[test]
+    fn at_start_initializes_arrays() {
+        let game = sample_game_state();
+        assert_eq!(game.turn_id, 1);
+        assert_eq!(game.current_player_id, PlayerId(0));
+        assert_eq!(
+            game.player_room_ids.len(),
+            game.common.num_all_players as usize
+        );
+        assert!(game.attacker_hist.is_empty());
+        assert_eq!(game.winner, rule_helper::INVALID_PLAYER_ID);
+        assert_eq!(
+            game.player_move_cards,
+            vec![rule_helper::simple::PLAYER_STARTING_MOVE_CARDS; 3]
+        );
+    }
+
+    #[test]
+    fn check_normal_turn_catches_invalid_ids() {
+        let game = sample_game_state();
+        let invalid_player_turn = SimpleTurn::single(PlayerId(4), RoomId(2));
+        assert!(game.check_normal_turn(&invalid_player_turn).is_err());
+
+        let invalid_room_turn = SimpleTurn::single(PlayerId(0), RoomId(99));
+        assert!(game.check_normal_turn(&invalid_room_turn).is_err());
+    }
+
+    #[test]
+    fn after_normal_turn_loots_when_doctor_unseen() {
+        let mut game = sample_game_state();
+        game.doctor_room_id = RoomId(3);
+        game.player_room_ids = vec![RoomId(1), RoomId(3), RoomId(3)];
+        let turn = SimpleTurn::single(PlayerId(0), RoomId(2));
+        let starting_move_cards = game.player_move_cards[0];
+        game.after_normal_turn(turn.clone(), false);
+
+        assert_eq!(game.player_room_ids[0], RoomId(2));
+        assert!(
+            game.player_move_cards[0] > starting_move_cards,
+            "player should have looted and gained move cards"
+        );
+        assert_eq!(game.prev_turn, turn);
+    }
+
+    #[test]
+    fn best_action_detects_being_seen() {
+        let mut game = sample_game_state();
+        game.player_room_ids[1] = RoomId(2);
+        game.current_player_id = PlayerId(1);
+        let action = game.best_action_allowed(false);
+        assert_eq!(action, PlayerAction::None);
+    }
+}
