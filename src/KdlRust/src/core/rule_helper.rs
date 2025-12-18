@@ -94,11 +94,17 @@ mod tests {
     #[test]
     fn to_normal_player_id_maps_strangers_to_allies() {
         assert_eq!(
-            to_normal_player_id(STRANGER_PLAYER_ID_FIRST, NUM_NORMAL_PLAYERS_WHEN_HAVE_STRANGERS),
+            to_normal_player_id(
+                STRANGER_PLAYER_ID_FIRST,
+                NUM_NORMAL_PLAYERS_WHEN_HAVE_STRANGERS
+            ),
             SIDE_B_NORMAL_PLAYER_ID
         );
         assert_eq!(
-            to_normal_player_id(STRANGER_PLAYER_ID_SECOND, NUM_NORMAL_PLAYERS_WHEN_HAVE_STRANGERS),
+            to_normal_player_id(
+                STRANGER_PLAYER_ID_SECOND,
+                NUM_NORMAL_PLAYERS_WHEN_HAVE_STRANGERS
+            ),
             SIDE_A_NORMAL_PLAYER_ID
         );
         assert_eq!(
@@ -109,8 +115,14 @@ mod tests {
 
     #[test]
     fn allied_and_opposing_player_helpers_match_switch_logic() {
-        assert_eq!(allied_stranger(SIDE_A_NORMAL_PLAYER_ID), SIDE_A_STRANGER_PLAYER_ID);
-        assert_eq!(allied_stranger(SIDE_B_NORMAL_PLAYER_ID), SIDE_B_STRANGER_PLAYER_ID);
+        assert_eq!(
+            allied_stranger(SIDE_A_NORMAL_PLAYER_ID),
+            SIDE_A_STRANGER_PLAYER_ID
+        );
+        assert_eq!(
+            allied_stranger(SIDE_B_NORMAL_PLAYER_ID),
+            SIDE_B_STRANGER_PLAYER_ID
+        );
         assert_eq!(
             opposing_normal_player(SIDE_A_NORMAL_PLAYER_ID),
             SIDE_B_NORMAL_PLAYER_ID

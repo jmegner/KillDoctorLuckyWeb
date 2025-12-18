@@ -3,13 +3,7 @@ use std::fmt;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(transparent)]
-pub struct RoomId(pub i32);
-
-impl From<RoomId> for i32 {
-    fn from(room_id: RoomId) -> Self {
-        room_id.0
-    }
-}
+pub struct RoomId(pub usize);
 
 impl fmt::Display for RoomId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -1,7 +1,8 @@
 use crate::core::{
-    room::{room_ids, Room, RoomId},
+    room::{Room, RoomId, room_ids},
     wing::Wing,
 };
+use itertools::Itertools;
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -32,12 +33,12 @@ impl BoardSpecification {
 #[readonly::make]
 pub struct Board {
     pub name: String,
-    pub rooms: HashMap<RoomId, Room>,          // key is room id
-    pub room_ids: Vec<RoomId>,                 // sorted
-    pub adjacency: Vec<Vec<bool>>,             // double-indexed by room id
-    pub sight: Vec<Vec<bool>>,                 // double-indexed by room id
-    pub distance: Vec<Vec<i32>>,               // double-indexed by room id
-    pub adjacency_count: Vec<usize>,           // indexed by room id
+    pub rooms: HashMap<RoomId, Room>, // key is room id
+    pub room_ids: Vec<RoomId>,        // sorted
+    pub adjacency: Vec<Vec<bool>>,    // double-indexed by room id
+    pub sight: Vec<Vec<bool>>,        // double-indexed by room id
+    pub distance: Vec<Vec<i32>>,      // double-indexed by room id
+    pub adjacency_count: Vec<usize>,  // indexed by room id
     pub stranger_loop_room_ids: HashMap<RoomId, HashSet<RoomId>>, // enemy room id -> allied stranger room ids
     pub player_start_room_id: RoomId,
     pub doctor_start_room_id: RoomId,
@@ -58,10 +59,8 @@ impl Board {
         spec: Option<BoardSpecification>,
     ) -> Self {
         let rooms_vec: Vec<Room> = rooms.into_iter().collect();
-        let rooms: HashMap<RoomId, Room> = rooms_vec
-            .into_iter()
-            .map(|room| (room.id, room))
-            .collect();
+        let rooms: HashMap<RoomId, Room> =
+            rooms_vec.into_iter().map(|room| (room.id, room)).collect();
 
         let mut room_ids: Vec<RoomId> = rooms.keys().copied().collect();
         room_ids.sort_by_key(|room_id| room_id.0);
@@ -71,32 +70,30 @@ impl Board {
             .map(|room_id| room_id.0)
             .max()
             .unwrap_or(0)
-            .saturating_add(1) as usize;
+            .saturating_add(1);
 
         let mut adjacency = vec![vec![false; matrix_dim]; matrix_dim];
         let mut sight = vec![vec![false; matrix_dim]; matrix_dim];
         let mut adjacency_count = vec![0usize; matrix_dim];
 
         for room in rooms.values() {
-            let id = room.id.0 as usize;
+            let id = room.id.0;
             adjacency[id][id] = true;
             sight[id][id] = true;
             adjacency_count[id] = room.adjacent.len();
 
             for adjacent_room_id in &room.adjacent {
-                let idx = adjacent_room_id.0 as usize;
-                adjacency[id][idx] = true;
+                adjacency[id][adjacent_room_id.0] = true;
             }
 
             for visible_room_id in &room.visible {
-                let idx = visible_room_id.0 as usize;
+                let idx = visible_room_id.0;
                 sight[id][idx] = true;
             }
         }
 
         let distance = adjacency_to_distance(&adjacency);
-        let stranger_loop_room_ids =
-            distance_to_stranger_loop_info(&room_ids, &distance, &sight);
+        let stranger_loop_room_ids = distance_to_stranger_loop_info(&room_ids, &distance, &sight);
 
         Board {
             name: name.into(),
@@ -164,15 +161,14 @@ impl Board {
 
         let open_room_id_set: HashSet<RoomId> = room_ids(&open_rooms).collect();
 
-        let choose_first_open = |desired_room_ids: &[RoomId],
-                                 role: &'static str|
-         -> Result<RoomId, BoardLoadError> {
-            desired_room_ids
-                .iter()
-                .copied()
-                .find(|room_id| open_room_id_set.contains(room_id))
-                .ok_or(BoardLoadError::MissingStartRoom { role })
-        };
+        let choose_first_open =
+            |desired_room_ids: &[RoomId], role: &'static str| -> Result<RoomId, BoardLoadError> {
+                desired_room_ids
+                    .iter()
+                    .copied()
+                    .find(|room_id| open_room_id_set.contains(room_id))
+                    .ok_or(BoardLoadError::MissingStartRoom { role })
+            };
 
         let board = Board::new(
             format!("{}{}", spec.name, board_name_suffix),
@@ -198,6 +194,8 @@ impl Board {
             mistakes.push("bad start room id".to_string());
         }
 
+        let all_rooms: HashSet<_> = self.rooms.keys().copied().collect();
+
         for room in self.rooms.values() {
             if room.adjacent.contains(&room.id) {
                 mistakes.push(format!("room {} is in own adjacent list", room.id.0));
@@ -206,39 +204,23 @@ impl Board {
                 mistakes.push(format!("room {} is in own visible list", room.id.0));
             }
 
-            let nonexistent_adjacent: Vec<i32> = room
-                .adjacent
-                .iter()
-                .map(|room_id| room_id.0)
-                .filter(|room_id| !self.room_ids.iter().any(|id| id.0 == *room_id))
-                .collect();
+            let adjacent: HashSet<_> = room.adjacent.iter().copied().collect();
+            let nonexistent_adjacent = &adjacent - &all_rooms;
             if !nonexistent_adjacent.is_empty() {
                 mistakes.push(format!(
                     "room {} lists nonexistent adjacent rooms {}",
                     room.id.0,
-                    nonexistent_adjacent
-                        .iter()
-                        .map(|id| id.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    nonexistent_adjacent.iter().join(", ")
                 ));
             }
 
-            let nonexistent_visible: Vec<i32> = room
-                .visible
-                .iter()
-                .map(|room_id| room_id.0)
-                .filter(|room_id| !self.room_ids.iter().any(|id| id.0 == *room_id))
-                .collect();
+            let visible: HashSet<_> = room.visible.iter().copied().collect();
+            let nonexistent_visible: HashSet<_> = &visible - &all_rooms;
             if !nonexistent_visible.is_empty() {
                 mistakes.push(format!(
                     "room {} lists nonexistent adjacent rooms {}",
                     room.id.0,
-                    nonexistent_visible
-                        .iter()
-                        .map(|id| id.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    nonexistent_visible.iter().join(", ")
                 ));
             }
         }
@@ -269,7 +251,7 @@ impl Board {
     ) -> bool {
         rooms_with_other_people
             .into_iter()
-            .any(|room_id| self.sight[room_of_concern.0 as usize][room_id.0 as usize])
+            .any(|room_id| self.sight[room_of_concern.0][room_id.0])
     }
 
     pub fn next_room_id(room_id: RoomId, delta: i32, room_ids: &[RoomId]) -> RoomId {
@@ -277,8 +259,7 @@ impl Board {
             .iter()
             .position(|room| *room == room_id)
             .expect("room id not found in room_ids");
-        let modulus = room_ids.len() as i32;
-        let next_idx = positive_remainder(idx as i32 + delta, modulus as usize);
+        let next_idx = positive_remainder(idx as i32 + delta, room_ids.len());
         room_ids[next_idx]
     }
 
@@ -327,13 +308,11 @@ fn distance_to_stranger_loop_info(
         let plus2 = Board::next_room_id(*room_id, 2, room_ids);
         let plus3 = Board::next_room_id(*room_id, 3, room_ids);
 
-        if dist[room_id.0 as usize][plus2.0 as usize] <= 1 {
+        if dist[room_id.0][plus2.0] <= 1 {
             enemy_rooms.insert(plus1);
         }
 
-        if dist[room_id.0 as usize][plus3.0 as usize] <= 1
-            && !sight[plus1.0 as usize][plus3.0 as usize]
-        {
+        if dist[room_id.0][plus3.0] <= 1 && !sight[plus1.0][plus3.0] {
             ally_rooms.insert(plus1);
         }
     }
@@ -346,8 +325,8 @@ fn distance_to_stranger_loop_info(
         let mut working_ally_rooms = HashSet::new();
 
         for ally_room in &ally_rooms {
-            if !sight[ally_room.0 as usize][enemy_room.0 as usize]
-                && !sight[ally_room.0 as usize][enemy_minus1.0 as usize]
+            if !sight[ally_room.0][enemy_room.0]
+                && !sight[ally_room.0][enemy_minus1.0]
                 && *ally_room != enemy_minus2
             {
                 working_ally_rooms.insert(*ally_room);
@@ -422,12 +401,7 @@ mod tests {
 
     fn sample_rooms() -> Vec<Room> {
         vec![
-            Room::new(
-                RoomId(1),
-                "A",
-                [RoomId(2)],
-                [RoomId(2)],
-            ),
+            Room::new(RoomId(1), "A", [RoomId(2)], [RoomId(2)]),
             Room::new(
                 RoomId(2),
                 "B",
@@ -440,12 +414,7 @@ mod tests {
                 [RoomId(2), RoomId(4)],
                 [RoomId(2), RoomId(4)],
             ),
-            Room::new(
-                RoomId(4),
-                "D",
-                [RoomId(3)],
-                [RoomId(3)],
-            ),
+            Room::new(RoomId(4), "D", [RoomId(3)], [RoomId(3)]),
         ]
     }
 

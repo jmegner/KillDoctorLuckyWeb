@@ -139,7 +139,7 @@ impl MutableGameState {
     pub fn player_sees_player(&self, player_id1: PlayerId, player_id2: PlayerId) -> bool {
         let room1 = self.player_room_ids[self.player_idx(player_id1)];
         let room2 = self.player_room_ids[self.player_idx(player_id2)];
-        self.common.board.sight[room1.0 as usize][room2.0 as usize]
+        self.common.board.sight[room1.0][room2.0]
     }
 
     pub fn num_defensive_clovers(&self) -> f64 {
@@ -197,9 +197,7 @@ impl MutableGameState {
             .common
             .player_ids()
             .zip(self.player_room_ids.iter().copied())
-            .filter(|(_, room_id)| {
-                self.common.board.sight[room_id.0 as usize][self.doctor_room_id.0 as usize]
-            })
+            .filter(|(_, room_id)| self.common.board.sight[room_id.0][self.doctor_room_id.0])
             .map(|(pid, _)| CommonGameState::to_player_display_num(pid))
             .collect::<Vec<_>>();
 
@@ -249,9 +247,8 @@ impl MutableGameState {
             .moves
             .iter()
             .map(|mv| {
-                self.common.board.distance
-                    [self.room_idx(self.player_room_ids[self.player_idx(mv.player_id)])]
-                    [self.room_idx(mv.dest_room_id)]
+                self.common.board.distance[self.player_room_ids[self.player_idx(mv.player_id)].0]
+                    [mv.dest_room_id.0]
             })
             .sum();
 
@@ -312,9 +309,8 @@ impl MutableGameState {
             .moves
             .iter()
             .map(|mv| {
-                self.common.board.distance
-                    [self.room_idx(self.player_room_ids[self.player_idx(mv.player_id)])]
-                    [self.room_idx(mv.dest_room_id)]
+                self.common.board.distance[self.player_room_ids[self.player_idx(mv.player_id)].0]
+                    [mv.dest_room_id.0]
             })
             .sum();
         let move_cards_used = (total_dist - 1).max(0) as f64;
@@ -327,8 +323,7 @@ impl MutableGameState {
             let player_idx = self.player_idx(mv.player_id);
             let room_id = self.player_room_ids[player_idx];
             if mv.player_id != self.current_player_id
-                && self.common.board.sight[self.room_idx(room_id)]
-                    [self.room_idx(self.doctor_room_id)]
+                && self.common.board.sight[room_id.0][self.doctor_room_id.0]
             {
                 moved_stranger_that_saw_doctor = true;
             }
@@ -418,8 +413,8 @@ impl MutableGameState {
 
         for player_id in self.common.player_ids() {
             if player_id != self.current_player_id
-                && self.common.board.sight[self.room_idx(current_room_id)]
-                    [self.room_idx(self.player_room_ids[self.player_idx(player_id)])]
+                && self.common.board.sight[current_room_id.0]
+                    [self.player_room_ids[self.player_idx(player_id)].0]
             {
                 seen_by_other_players = true;
                 break;
@@ -436,9 +431,7 @@ impl MutableGameState {
             return PlayerAction::Attack;
         }
 
-        if self.common.board.sight[self.room_idx(current_room_id)]
-            [self.room_idx(self.doctor_room_id)]
-        {
+        if self.common.board.sight[current_room_id.0][self.doctor_room_id.0] {
             PlayerAction::None
         } else {
             PlayerAction::Loot
@@ -610,11 +603,7 @@ impl MutableGameState {
             if doctor_rooms[i] == my_room {
                 my_doctor_dist = i as i32;
                 break;
-            } else if i > 0
-                && self.common.board.distance[self.room_idx(my_room)]
-                    [self.room_idx(doctor_rooms[i])]
-                    <= 1
-            {
+            } else if i > 0 && self.common.board.distance[my_room.0][doctor_rooms[i].0] <= 1 {
                 my_doctor_dist = i as i32;
                 break;
             }
@@ -700,9 +689,7 @@ impl MutableGameState {
         let mut turns = Vec::new();
 
         for dest_room in &self.common.board.room_ids {
-            if self.common.board.distance[self.room_idx(movable_room)][self.room_idx(*dest_room)]
-                <= dist_allowed
-            {
+            if self.common.board.distance[movable_room.0][dest_room.0] <= dist_allowed {
                 turns.push(SimpleTurn::single(movable_player, *dest_room));
             }
         }
@@ -721,8 +708,8 @@ impl MutableGameState {
         let mut turns = Vec::new();
 
         for dst_room_a in &self.common.board.room_ids {
-            let dist_remaining = dist_allowed
-                - self.common.board.distance[self.room_idx(src_room_a)][self.room_idx(*dst_room_a)];
+            let dist_remaining =
+                dist_allowed - self.common.board.distance[src_room_a.0][dst_room_a.0];
 
             if dist_remaining <= 0 || src_room_a == *dst_room_a {
                 continue;
@@ -731,8 +718,7 @@ impl MutableGameState {
             let move_a = PlayerMove::new(movable_player_a, *dst_room_a);
 
             for dst_room_b in &self.common.board.room_ids {
-                if self.common.board.distance[self.room_idx(src_room_b)][self.room_idx(*dst_room_b)]
-                    > dist_remaining
+                if self.common.board.distance[src_room_b.0][dst_room_b.0] > dist_remaining
                     || src_room_b == *dst_room_b
                 {
                     continue;
@@ -871,8 +857,7 @@ impl MutableGameState {
             let room_id = self.player_room_ids[self.player_idx(player_id)];
 
             if prev_room_id != room_id {
-                let dist =
-                    self.common.board.distance[self.room_idx(prev_room_id)][self.room_idx(room_id)];
+                let dist = self.common.board.distance[prev_room_id.0][room_id.0];
                 let dist_text = if dist == 0 {
                     String::new()
                 } else {
@@ -1054,10 +1039,6 @@ impl MutableGameState {
 
     fn player_idx(&self, player_id: PlayerId) -> usize {
         player_id.0 as usize
-    }
-
-    fn room_idx(&self, room_id: RoomId) -> usize {
-        room_id.0 as usize
     }
 }
 

@@ -35,12 +35,7 @@ impl CommonGameState {
         num_normal_players: i32,
     ) -> Self {
         let num_all_players = rule_helper::num_all_players(num_normal_players);
-        Self::new(
-            is_log_enabled,
-            board,
-            num_normal_players,
-            num_all_players,
-        )
+        Self::new(is_log_enabled, board, num_normal_players, num_all_players)
     }
 
     pub fn has_strangers(&self) -> bool {
@@ -111,7 +106,15 @@ mod tests {
             Room::new(RoomId(2), "B", [RoomId(1)], [RoomId(1)]),
         ];
 
-        Board::new("tiny", rooms, RoomId(1), RoomId(1), RoomId(1), RoomId(1), None)
+        Board::new(
+            "tiny",
+            rooms,
+            RoomId(1),
+            RoomId(1),
+            RoomId(1),
+            RoomId(1),
+            None,
+        )
     }
 
     #[test]
@@ -127,7 +130,10 @@ mod tests {
         let game_state = CommonGameState::from_num_normal_players(true, sample_board(), 2);
         assert!(game_state.has_strangers());
         assert_eq!(game_state.get_player_type(PlayerId(0)), PlayerType::Normal);
-        assert_eq!(game_state.get_player_type(PlayerId(1)), PlayerType::Stranger);
+        assert_eq!(
+            game_state.get_player_type(PlayerId(1)),
+            PlayerType::Stranger
+        );
 
         let no_strangers_state = CommonGameState::new(true, sample_board(), 3, 3);
         assert!(!no_strangers_state.has_strangers());
