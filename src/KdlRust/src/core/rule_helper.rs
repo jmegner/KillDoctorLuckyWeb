@@ -22,11 +22,9 @@ pub mod simple {
 }
 
 pub const PLAYER_STARTING_STRENGTH: i32 = 1;
-pub const NORMAL_PLAYER_NUM_STARTING_CARDS: i32 = 6;
-pub const NUM_NORMAL_PLAYERS_WHEN_HAVE_STRANGERS: i32 = 2;
-pub const NUM_ALL_PLAYERS_WHEN_HAVE_STRANGERS: i32 = 4;
-
-pub const INVALID_PLAYER_ID: PlayerId = PlayerId(-1);
+pub const NORMAL_PLAYER_NUM_STARTING_CARDS: usize = 6;
+pub const NUM_NORMAL_PLAYERS_WHEN_HAVE_STRANGERS: usize = 2;
+pub const NUM_ALL_PLAYERS_WHEN_HAVE_STRANGERS: usize = 4;
 
 pub const NORMAL_PLAYER_ID_FIRST: PlayerId = PlayerId(0);
 pub const STRANGER_PLAYER_ID_FIRST: PlayerId = PlayerId(1);
@@ -41,7 +39,7 @@ pub const SIDE_A_STRANGER_PLAYER_ID: PlayerId = PlayerId(3);
 pub const HEURISTIC_SCORE_WIN: f64 = f64::MAX;
 pub const HEURISTIC_SCORE_LOSS: f64 = f64::MIN;
 
-pub fn num_all_players(num_normal_players: i32) -> i32 {
+pub fn num_all_players(num_normal_players: usize) -> usize {
     if num_normal_players == NUM_NORMAL_PLAYERS_WHEN_HAVE_STRANGERS {
         NUM_ALL_PLAYERS_WHEN_HAVE_STRANGERS
     } else {
@@ -49,7 +47,7 @@ pub fn num_all_players(num_normal_players: i32) -> i32 {
     }
 }
 
-pub fn to_normal_player_id(player_id: PlayerId, num_normal_players: i32) -> PlayerId {
+pub fn to_normal_player_id(player_id: PlayerId, num_normal_players: usize) -> PlayerId {
     if num_normal_players != NUM_NORMAL_PLAYERS_WHEN_HAVE_STRANGERS {
         return player_id;
     }
@@ -65,7 +63,7 @@ pub fn allied_stranger(player_id: PlayerId) -> PlayerId {
     match player_id {
         SIDE_A_NORMAL_PLAYER_ID | SIDE_A_STRANGER_PLAYER_ID => SIDE_A_STRANGER_PLAYER_ID,
         SIDE_B_NORMAL_PLAYER_ID | SIDE_B_STRANGER_PLAYER_ID => SIDE_B_STRANGER_PLAYER_ID,
-        _ => INVALID_PLAYER_ID,
+        _ => PlayerId::INVALID,
     }
 }
 

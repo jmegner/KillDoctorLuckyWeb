@@ -1,5 +1,5 @@
 use crate::core::{
-    player::{player_moves_to_nice_string, PlayerId, PlayerMove, INVALID_PLAYER_ID},
+    player::{PlayerId, PlayerMove, player_moves_to_nice_string},
     room::RoomId,
 };
 use serde::{Deserialize, Serialize};
@@ -28,7 +28,7 @@ impl SimpleTurn {
     }
 
     pub fn invalid_default() -> Self {
-        Self::new([PlayerMove::new(INVALID_PLAYER_ID, RoomId(0))])
+        Self::new([PlayerMove::new(PlayerId::INVALID, RoomId(0))])
     }
 }
 
@@ -63,17 +63,14 @@ mod tests {
         let default_turn = SimpleTurn::default();
         assert_eq!(
             default_turn.moves,
-            vec![PlayerMove::new(INVALID_PLAYER_ID, RoomId(0))]
+            vec![PlayerMove::new(PlayerId::INVALID, RoomId(0))]
         );
     }
 
     #[test]
     fn single_constructor_creates_one_move() {
         let turn = SimpleTurn::single(PlayerId(2), RoomId(5));
-        assert_eq!(
-            turn.moves,
-            vec![PlayerMove::new(PlayerId(2), RoomId(5))]
-        );
+        assert_eq!(turn.moves, vec![PlayerMove::new(PlayerId(2), RoomId(5))]);
     }
 
     #[test]

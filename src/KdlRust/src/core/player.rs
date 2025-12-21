@@ -4,14 +4,10 @@ use std::fmt;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(transparent)]
-pub struct PlayerId(pub i32);
+pub struct PlayerId(pub usize);
 
-pub const INVALID_PLAYER_ID: PlayerId = PlayerId(-1);
-
-impl From<PlayerId> for i32 {
-    fn from(player_id: PlayerId) -> Self {
-        player_id.0
-    }
+impl PlayerId {
+    pub const INVALID: Self = Self(999);
 }
 
 impl fmt::Display for PlayerId {
@@ -52,12 +48,7 @@ impl PlayerMove {
 
 impl fmt::Display for PlayerMove {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}@{}",
-            i32::from(self.player_id) + 1,
-            self.dest_room_id
-        )
+        write!(f, "{}@{}", self.player_id.0 + 1, self.dest_room_id)
     }
 }
 
@@ -161,7 +152,7 @@ mod tests {
 
     impl AppraisalState<PlayerMove> for DummyState {
         fn heuristic_score(&self, analysis_player_id: PlayerId) -> f64 {
-            self.score + f64::from(analysis_player_id.0)
+            self.score + analysis_player_id.0 as f64
         }
 
         fn prev_turn(&self) -> Option<PlayerMove> {

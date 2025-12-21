@@ -10,16 +10,16 @@ use std::hash::{Hash, Hasher};
 pub struct CommonGameState {
     pub is_log_enabled: bool,
     pub board: Board,
-    pub num_normal_players: i32,
-    pub num_all_players: i32,
+    pub num_normal_players: usize,
+    pub num_all_players: usize,
 }
 
 impl CommonGameState {
     pub fn new(
         is_log_enabled: bool,
         board: Board,
-        num_normal_players: i32,
-        num_all_players: i32,
+        num_normal_players: usize,
+        num_all_players: usize,
     ) -> Self {
         Self {
             is_log_enabled,
@@ -32,7 +32,7 @@ impl CommonGameState {
     pub fn from_num_normal_players(
         is_log_enabled: bool,
         board: Board,
-        num_normal_players: i32,
+        num_normal_players: usize,
     ) -> Self {
         let num_all_players = rule_helper::num_all_players(num_normal_players);
         Self::new(is_log_enabled, board, num_normal_players, num_all_players)
@@ -50,11 +50,11 @@ impl CommonGameState {
         }
     }
 
-    pub fn to_player_id(player_display_num: i32) -> PlayerId {
+    pub fn to_player_id(player_display_num: usize) -> PlayerId {
         PlayerId(player_display_num - 1)
     }
 
-    pub fn to_player_display_num(player_id: PlayerId) -> i32 {
+    pub fn to_player_display_num(player_id: PlayerId) -> usize {
         player_id.0 + 1
     }
 
