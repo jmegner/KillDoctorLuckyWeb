@@ -117,12 +117,12 @@ impl MutableGameState {
     }
 
     pub fn player_text_long(&self, player_id: PlayerId) -> String {
-        let idx = player_id.0 as usize;
-        let room_text = format!("{:02}", self.player_room_ids[idx].0);
+        let idx = player_id.0;
         let mut text = format!(
-            "{}(R{room_text},S{}",
+            "{}(R{:02}),S{}",
             self.player_text_for(player_id),
-            self.player_strengths[idx]
+            self.player_room_ids[idx].0,
+            self.player_strengths[idx],
         );
 
         if self.common.get_player_type(player_id) == PlayerType::Normal {

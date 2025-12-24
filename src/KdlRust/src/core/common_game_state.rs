@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn player_ids_iterate_over_all_players() {
         let game_state = CommonGameState::from_num_normal_players(true, sample_board(), 2);
-        let ids: Vec<PlayerId> = game_state.player_ids().collect();
+        let ids = game_state.player_ids().collect::<Vec<_>>();
         assert_eq!(
             ids,
             vec![PlayerId(0), PlayerId(1), PlayerId(2), PlayerId(3)]

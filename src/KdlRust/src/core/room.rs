@@ -37,18 +37,18 @@ impl Room {
     }
 
     pub fn without_closed(&self, closed_room_ids: &[RoomId]) -> Self {
-        let adjacent: Vec<RoomId> = self
+        let adjacent = self
             .adjacent
             .iter()
             .filter(|room_id| !closed_room_ids.contains(room_id))
             .copied()
-            .collect();
-        let visible: Vec<RoomId> = self
+            .collect::<Vec<_>>();
+        let visible = self
             .visible
             .iter()
             .filter(|room_id| !closed_room_ids.contains(room_id))
             .copied()
-            .collect();
+            .collect::<Vec<_>>();
         Room::new(self.id, self.name.clone(), adjacent, visible)
     }
 }
@@ -131,8 +131,7 @@ mod tests {
             ),
         ];
 
-        let ids: Vec<RoomId> = room_ids(&rooms).collect();
-
+        let ids = room_ids(&rooms).collect::<Vec<_>>();
         assert_eq!(ids, vec![RoomId(10), RoomId(11)]);
     }
 }

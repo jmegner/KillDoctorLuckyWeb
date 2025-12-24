@@ -7,6 +7,7 @@ use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
     fs,
+    hash::Hash,
     path::Path,
 };
 
@@ -58,11 +59,13 @@ impl Board {
         dog_start_room_id: RoomId,
         spec: Option<BoardSpecification>,
     ) -> Self {
-        let rooms_vec: Vec<Room> = rooms.into_iter().collect();
-        let rooms: HashMap<RoomId, Room> =
-            rooms_vec.into_iter().map(|room| (room.id, room)).collect();
+        let rooms_vec = rooms.into_iter().collect::<Vec<_>>();
+        let rooms = rooms_vec
+            .into_iter()
+            .map(|room| (room.id, room))
+            .collect::<HashMap<_, _>>();
 
-        let mut room_ids: Vec<RoomId> = rooms.keys().copied().collect();
+        let mut room_ids = rooms.keys().copied().collect::<Vec<_>>();
         room_ids.sort_by_key(|room_id| room_id.0);
 
         let matrix_dim = rooms
@@ -138,28 +141,28 @@ impl Board {
     where
         S: AsRef<str>,
     {
-        let closed_wing_name_set: HashSet<String> = closed_wing_names
+        let closed_wing_name_set = closed_wing_names
             .into_iter()
             .map(|name| name.as_ref().to_lowercase())
-            .collect();
+            .collect::<HashSet<_>>();
 
-        let closed_room_ids: HashSet<RoomId> = spec
+        let closed_room_ids = spec
             .wings
             .iter()
             .filter(|wing| closed_wing_name_set.contains(&wing.name.to_lowercase()))
             .flat_map(|wing| wing.room_ids.iter().copied())
-            .collect();
+            .collect::<HashSet<_>>();
 
-        let closed_room_ids_vec: Vec<RoomId> = closed_room_ids.iter().copied().collect();
+        let closed_room_ids_vec = closed_room_ids.iter().copied().collect::<Vec<_>>();
 
-        let open_rooms: Vec<Room> = spec
+        let open_rooms = spec
             .rooms
             .iter()
             .filter(|room| !closed_room_ids.contains(&room.id))
             .map(|room| room.without_closed(&closed_room_ids_vec))
-            .collect();
+            .collect::<Vec<_>>();
 
-        let open_room_id_set: HashSet<RoomId> = room_ids(&open_rooms).collect();
+        let open_room_id_set = room_ids(&open_rooms).collect::<HashSet<_>>();
 
         let choose_first_open =
             |desired_room_ids: &[RoomId], role: &'static str| -> Result<RoomId, BoardLoadError> {
@@ -194,7 +197,7 @@ impl Board {
             mistakes.push("bad start room id".to_string());
         }
 
-        let all_rooms: HashSet<_> = self.rooms.keys().copied().collect();
+        let all_rooms = self.rooms.keys().copied().collect::<HashSet<_>>();
 
         for room in self.rooms.values() {
             if room.adjacent.contains(&room.id) {
@@ -204,7 +207,7 @@ impl Board {
                 mistakes.push(format!("room {} is in own visible list", room.id.0));
             }
 
-            let adjacent: HashSet<_> = room.adjacent.iter().copied().collect();
+            let adjacent = room.adjacent.iter().copied().collect::<HashSet<_>>();
             let nonexistent_adjacent = &adjacent - &all_rooms;
             if !nonexistent_adjacent.is_empty() {
                 mistakes.push(format!(
@@ -214,11 +217,11 @@ impl Board {
                 ));
             }
 
-            let visible: HashSet<_> = room.visible.iter().copied().collect();
-            let nonexistent_visible: HashSet<_> = &visible - &all_rooms;
+            let visible = room.visible.iter().copied().collect::<HashSet<_>>();
+            let nonexistent_visible = &visible - &all_rooms;
             if !nonexistent_visible.is_empty() {
                 mistakes.push(format!(
-                    "room {} lists nonexistent adjacent rooms {}",
+                    "room {} lists nonexistent visible rooms {}",
                     room.id.0,
                     nonexistent_visible.iter().join(", ")
                 ));
