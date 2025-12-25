@@ -7,7 +7,6 @@ use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    hash::Hash,
     path::Path,
 };
 
