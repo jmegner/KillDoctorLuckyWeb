@@ -6,3 +6,4 @@ pub mod simple_turn;
 pub mod rule_helper;
 pub mod common_game_state;
 pub mod mutable_game_state;
+pub mod tree_search;
