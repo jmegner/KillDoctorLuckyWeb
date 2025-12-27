@@ -1,6 +1,7 @@
 use wasm_bindgen::prelude::*;
 
 pub mod core;
+pub mod util;
 
 #[wasm_bindgen]
 extern "C" {

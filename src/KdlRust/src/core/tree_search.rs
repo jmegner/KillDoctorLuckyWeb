@@ -2,47 +2,13 @@ use crate::core::mutable_game_state::MutableGameState;
 use crate::core::player::{AppraisalState, AppraisedPlayerTurn, PlayerId};
 use crate::core::rule_helper;
 use crate::core::simple_turn::SimpleTurn;
+use crate::util::cancellation::CancellationToken;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-pub trait CancellationToken {
-    fn is_cancellation_requested(&self) -> bool;
-}
-
-pub struct NeverCancelToken;
-
-impl CancellationToken for NeverCancelToken {
-    fn is_cancellation_requested(&self) -> bool {
-        false
-    }
-}
-
-pub struct AtomicCancellationToken {
-    cancelled: AtomicBool,
-}
-
-impl AtomicCancellationToken {
-    pub fn new() -> Self {
-        Self {
-            cancelled: AtomicBool::new(false),
-        }
-    }
-
-    pub fn cancel(&self) {
-        self.cancelled.store(true, AtomicOrdering::SeqCst);
-    }
-}
-
-impl CancellationToken for AtomicCancellationToken {
-    fn is_cancellation_requested(&self) -> bool {
-        self.cancelled.load(AtomicOrdering::SeqCst)
-    }
-}
 
 pub trait GameState<TTurn>: AppraisalState<TTurn> + Clone {
     fn current_player_id(&self) -> PlayerId;
