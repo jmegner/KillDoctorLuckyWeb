@@ -1,19 +1,9 @@
-use crate::core::mutable_game_state::MutableGameState;
-use crate::core::player::{AppraisalState, AppraisedPlayerTurn, PlayerId};
+use crate::core::game_state::GameState;
+use crate::core::player::{AppraisedPlayerTurn, PlayerId};
 use crate::core::rule_helper;
-use crate::core::simple_turn::SimpleTurn;
 use crate::util::cancellation::CancellationToken;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
-
-pub trait GameState<TTurn>: AppraisalState<TTurn> + Clone {
-    fn current_player_id(&self) -> PlayerId;
-    fn num_players(&self) -> usize;
-    fn has_winner(&self) -> bool;
-    fn winner(&self) -> PlayerId;
-    fn possible_turns(&self) -> Vec<TTurn>;
-    fn after_turn(&self, turn: TTurn, must_return_new_object: bool) -> Self;
-}
 
 pub struct TreeSearch<TTurn, TGameState> {
     _phantom: PhantomData<(TTurn, TGameState)>,
@@ -199,41 +189,3 @@ fn compare_f64(a: f64, b: f64) -> Ordering {
     a.partial_cmp(&b).unwrap_or(Ordering::Equal)
 }
 
-impl AppraisalState<SimpleTurn> for MutableGameState {
-    fn heuristic_score(&self, analysis_player_id: PlayerId) -> f64 {
-        MutableGameState::heuristic_score(self, analysis_player_id)
-    }
-
-    fn prev_turn(&self) -> Option<SimpleTurn> {
-        Some(self.prev_turn.clone())
-    }
-}
-
-impl GameState<SimpleTurn> for MutableGameState {
-    fn current_player_id(&self) -> PlayerId {
-        self.current_player_id
-    }
-
-    fn num_players(&self) -> usize {
-        MutableGameState::num_players(self)
-    }
-
-    fn has_winner(&self) -> bool {
-        MutableGameState::has_winner(self)
-    }
-
-    fn winner(&self) -> PlayerId {
-        self.winner
-    }
-
-    fn possible_turns(&self) -> Vec<SimpleTurn> {
-        MutableGameState::possible_turns(self)
-    }
-
-    fn after_turn(&self, turn: SimpleTurn, must_return_new_object: bool) -> Self {
-        let mut new_state = self.clone();
-        let _ = must_return_new_object;
-        new_state.after_normal_turn(turn, false);
-        new_state
-    }
-}
