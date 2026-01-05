@@ -1,0 +1,13 @@
+{
+  "configurations": [
+    {
+      "name": "Debug executable 'kdl_cli'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["run", "--bin=kdl_cli"]
+      },
+      "args": []
+    }
+  ]
+}
