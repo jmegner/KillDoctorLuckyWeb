@@ -6,6 +6,7 @@ When writing Rust code...
 - Prefer `let x = something.collect::<Vec<_>>();` over `let x: Vec<_> = something.collect();`, and not just for Vec, but anything you can `collect` into.
 - It is okay to use and add crates like itertools, readonly, serde, and others. If you are doing something generic, take the time to ponder and search for a crate that would help.
 - When asked to port Something.cs to something.rs, it is okay to make more rs files for further concepts you needed to bring over.
+- You can build the cli with `npm run build:cli` and run the cli with `npm run cli`. Notice that the cli is a local executable. KdlRust\core gets compiled to wasm for the web app and gets compiled differently for the KdlRust\cli executable.
 
 When doing almost anything...
 
