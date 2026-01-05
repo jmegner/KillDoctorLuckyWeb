@@ -7,7 +7,7 @@ use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -127,15 +127,25 @@ impl Board {
         P: AsRef<Path>,
         S: AsRef<str>,
     {
-        let board_text = fs::read_to_string(board_path)?;
-        let spec = BoardSpecification::from_json_str(&board_text)?;
-        Self::from_spec(spec, closed_wing_names, board_name_suffix)
+        let board_path = board_path.as_ref().to_path_buf();
+        let board_text = fs::read_to_string(&board_path).map_err(|err| BoardLoadError::Io {
+            board_path: board_path.clone(),
+            source: err,
+        })?;
+        let spec = BoardSpecification::from_json_str(&board_text).map_err(|err| {
+            BoardLoadError::Json {
+                board_path: board_path.clone(),
+                source: err,
+            }
+        })?;
+        Self::from_spec(spec, closed_wing_names, board_name_suffix, board_path)
     }
 
     fn from_spec<S>(
         spec: BoardSpecification,
         closed_wing_names: impl IntoIterator<Item = S>,
         board_name_suffix: &str,
+        board_path: PathBuf,
     ) -> Result<Self, BoardLoadError>
     where
         S: AsRef<str>,
@@ -169,7 +179,10 @@ impl Board {
                     .iter()
                     .copied()
                     .find(|room_id| open_room_id_set.contains(room_id))
-                    .ok_or(BoardLoadError::MissingStartRoom { role })
+                    .ok_or(BoardLoadError::MissingStartRoom {
+                        board_path: board_path.clone(),
+                        role,
+                    })
             };
 
         let board = Board::new(
@@ -280,20 +293,52 @@ impl Board {
 
 #[derive(Debug)]
 pub enum BoardLoadError {
-    Io(std::io::Error),
-    Json(serde_json::Error),
-    MissingStartRoom { role: &'static str },
+    Io {
+        board_path: PathBuf,
+        source: std::io::Error,
+    },
+    Json {
+        board_path: PathBuf,
+        source: serde_json::Error,
+    },
+    MissingStartRoom {
+        board_path: PathBuf,
+        role: &'static str,
+    },
 }
 
-impl From<std::io::Error> for BoardLoadError {
-    fn from(err: std::io::Error) -> Self {
-        BoardLoadError::Io(err)
+impl std::fmt::Display for BoardLoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BoardLoadError::Io { board_path, source } => write!(
+                f,
+                "board load failed for '{}': {}",
+                board_path.display(),
+                source
+            ),
+            BoardLoadError::Json { board_path, source } => write!(
+                f,
+                "board parse failed for '{}': {}",
+                board_path.display(),
+                source
+            ),
+            BoardLoadError::MissingStartRoom { board_path, role } => write!(
+                f,
+                "board '{}' missing start room for {}",
+                board_path.display(),
+                role
+            ),
+        }
     }
 }
 
-impl From<serde_json::Error> for BoardLoadError {
-    fn from(err: serde_json::Error) -> Self {
-        BoardLoadError::Json(err)
+impl std::error::Error for BoardLoadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            BoardLoadError::Io { source, .. } => Some(source),
+            BoardLoadError::Json { source, .. } => Some(source),
+            BoardLoadError::MissingStartRoom { .. } => None,
+        }
     }
 }
 
