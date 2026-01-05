@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 
 [[bin]]
 name = "kdl_cli"
-path = "cli/main.rs"
+path = "src/cli/main.rs"
 
 #[features]
 #default = ["console_error_panic_hook"]

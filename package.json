@@ -7,14 +7,14 @@
     "dev": "vite",
     "build": "npm run build:wasm && npm run build:react",
     "build:wasm": "cd src/KdlRust && wasm-pack build --target web",
-    "build:cli": "cd src/KdlRust && cargo build --bin kdl_cli --release --target x86_64-pc-windows-msvc",
+    "build:cli": "cd src/KdlRust && cargo build --bin kdl_cli --release --target x86_64-pc-windows-msvc --manifest-path Cargo.toml",
     "build:react": "tsc -b && vite build",
     "build:gh": "npm run build:wasm && tsc -b && vite build --base=/KillDoctorLuckyWeb/",
     "build:cf": "curl https://sh.rustup.rs -sSf | sh -s -- -y && . $HOME/.cargo/env && npm run build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test:wasm": "cd src/KdlRust && cargo test",
-    "cli": "cd src/KdlRust && cargo run --bin kdl_cli --release --target x86_64-pc-windows-msvc --"
+    "cli": "cd src/KdlRust && cargo run --bin kdl_cli --release --target x86_64-pc-windows-msvc --manifest-path Cargo.toml --"
   },
   "dependencies": {
     "react": "^19.2.0",
