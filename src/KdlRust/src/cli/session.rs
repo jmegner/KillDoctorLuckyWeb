@@ -35,7 +35,7 @@ impl Session {
             num_normal_players_old: 0,
             deck_name: "DeckStandard".to_string(),
             deck_name_old: String::new(),
-            board_name: "BoardAltDown".to_string(),
+            board_name: "AltDown".to_string(),
             board_name_old: String::new(),
             closed_wing_names: Vec::new(),
             closed_wing_names_old: Vec::new(),
@@ -175,10 +175,14 @@ impl Session {
                         self.interpret_directive(&directive_text);
                     }
                 } else {
-                    println!("directive {directive_tag} needs repetition count and directive to repeat");
+                    println!(
+                        "directive {directive_tag} needs repetition count and directive to repeat"
+                    );
                 }
             } else {
-                println!("directive {directive_tag} needs repetition count and directive to repeat");
+                println!(
+                    "directive {directive_tag} needs repetition count and directive to repeat"
+                );
             }
         } else if directive_tag == TAG_HISTORY {
             println!("{TAG_PLAYERS} {};", self.num_normal_players_old);
@@ -290,10 +294,7 @@ impl Session {
     fn print_game_settings(&self) {
         println!("  NormalPlayers(p): {}", self.num_normal_players);
         println!("  Board(b):         {}", self.board_name);
-        println!(
-            "  ClosedWings(w):   {}",
-            self.closed_wing_names.join(", ")
-        );
+        println!("  ClosedWings(w):   {}", self.closed_wing_names.join(", "));
         println!("  AnalysisLevel(a): {}", self.analysis_level);
     }
 
@@ -352,7 +353,10 @@ impl Session {
         };
 
         if game.has_winner() {
-            println!("{} won already.  Moves not accepted.", game.player_text_for(game.winner));
+            println!(
+                "{} won already.  Moves not accepted.",
+                game.player_text_for(game.winner)
+            );
             return;
         }
 
@@ -361,9 +365,7 @@ impl Session {
         let default_player_display_num = game.current_player_id.0 + 1;
 
         for token in tokens {
-            let subtokens = token
-                .split(|ch| ch == ',' || ch == '@')
-                .collect::<Vec<_>>();
+            let subtokens = token.split(|ch| ch == ',' || ch == '@').collect::<Vec<_>>();
             let dest_room_subtoken = if subtokens.len() == 1 {
                 subtokens[0]
             } else {
@@ -433,14 +435,18 @@ impl Session {
         };
 
         if tokens.len() <= 3 {
-            println!("  setvalue directive needs following tokens: playerNum attributeName attributeValue");
+            println!(
+                "  setvalue directive needs following tokens: playerNum attributeName attributeValue"
+            );
             return;
         }
 
         let player_num = match tokens[1].parse::<i32>() {
             Ok(value) => value,
             Err(_) => {
-                println!("  setvalue directive needs following tokens: playerNum attributeName attributeValue");
+                println!(
+                    "  setvalue directive needs following tokens: playerNum attributeName attributeValue"
+                );
                 return;
             }
         };
@@ -448,13 +454,17 @@ impl Session {
         let attribute_value = match tokens[3].parse::<f64>() {
             Ok(value) => value,
             Err(_) => {
-                println!("  setvalue directive needs following tokens: playerNum attributeName attributeValue");
+                println!(
+                    "  setvalue directive needs following tokens: playerNum attributeName attributeValue"
+                );
                 return;
             }
         };
 
         if player_num < 0 || player_num > game.common.num_all_players as i32 {
-            println!("  setvalue directive needs following tokens: playerNum attributeName attributeValue");
+            println!(
+                "  setvalue directive needs following tokens: playerNum attributeName attributeValue"
+            );
             return;
         }
 
@@ -474,7 +484,9 @@ impl Session {
                 game.player_room_ids[player_id as usize] = dest_room_id;
             }
         } else if player_id < 0 {
-            println!("  setvalue directive needs following tokens: playerNum attributeName attributeValue");
+            println!(
+                "  setvalue directive needs following tokens: playerNum attributeName attributeValue"
+            );
             return;
         } else if attribute_name == "s" || attribute_name == "strength" {
             game.player_strengths[player_id as usize] = attribute_value as i32;

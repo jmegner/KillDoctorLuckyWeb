@@ -11,15 +11,15 @@ use std::{
 };
 
 const EMBEDDED_BOARD_DATA: &[(&str, &str)] = &[
-    ("BoardAltDown", include_str!("boards/BoardAltDown.json")),
-    ("BoardAltFull", include_str!("boards/BoardAltFull.json")),
-    ("BoardAltUp", include_str!("boards/BoardAltUp.json")),
-    ("BoardHaunted", include_str!("boards/BoardHaunted.json")),
-    ("BoardLairFull", include_str!("boards/BoardLairFull.json")),
-    ("BoardLairNorth", include_str!("boards/BoardLairNorth.json")),
-    ("BoardLairSouth", include_str!("boards/BoardLairSouth.json")),
-    ("BoardMain", include_str!("boards/BoardMain.json")),
-    ("BoardTiny", include_str!("boards/BoardTiny.json")),
+    ("AltDown", include_str!("boards/AltDown.json")),
+    ("AltFull", include_str!("boards/AltFull.json")),
+    ("AltUp", include_str!("boards/AltUp.json")),
+    ("Haunted", include_str!("boards/Haunted.json")),
+    ("LairFull", include_str!("boards/LairFull.json")),
+    ("LairNorth", include_str!("boards/LairNorth.json")),
+    ("LairSouth", include_str!("boards/LairSouth.json")),
+    ("Main", include_str!("boards/Main.json")),
+    ("Tiny", include_str!("boards/Tiny.json")),
 ];
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -152,12 +152,11 @@ impl Board {
             board_path: board_path.clone(),
             source: err,
         })?;
-        let spec = BoardSpecification::from_json_str(&board_text).map_err(|err| {
-            BoardLoadError::Json {
+        let spec =
+            BoardSpecification::from_json_str(&board_text).map_err(|err| BoardLoadError::Json {
                 board_path: board_path.clone(),
                 source: err,
-            }
-        })?;
+            })?;
         Self::from_spec(spec, closed_wing_names, board_name_suffix, board_path)
     }
 
