@@ -224,7 +224,10 @@ impl Session {
 
             let mut level = start_level;
             while (level as f64) <= self.analysis_level {
-                self.analyze(do_suggested_move, level, 1);
+                let cancelled = self.analyze(do_suggested_move, level, 1);
+                if cancelled {
+                    break;
+                }
                 level += 1;
             }
         } else if directive_tag == "m" {
@@ -305,9 +308,14 @@ impl Session {
         println!("  AnalysisLevel(a): {}", self.analysis_level);
     }
 
-    fn analyze(&mut self, do_suggested_move: bool, analysis_level: i32, _parallelization: i32) {
+    fn analyze(
+        &mut self,
+        do_suggested_move: bool,
+        analysis_level: i32,
+        _parallelization: i32,
+    ) -> bool {
         let Some(game) = self.game.as_ref() else {
-            return;
+            return false;
         };
 
         let cancel_token = Arc::new(AtomicCancellationToken::new());
@@ -354,6 +362,11 @@ impl Session {
         listener_done.store(true, Ordering::SeqCst);
         let _ = key_listener.join();
 
+        let was_cancelled = cancel_token.is_cancellation_requested();
+        if was_cancelled {
+            println!("analysis cancelled early");
+        }
+
         if let Some(turn) = appraised_turn.turn.clone() {
             self.recent_analyzed_turn = Some(turn);
         }
@@ -381,11 +394,12 @@ impl Session {
             elapsed.as_secs_f64()
         );
 
-        if do_suggested_move && !cancel_token.is_cancellation_requested() {
+        if do_suggested_move && !was_cancelled {
             if let Some(turn) = appraised_turn.turn {
                 self.do_moves_turn(turn);
             }
         }
+        was_cancelled
     }
 
     fn do_moves_tokens(&mut self, tokens: &[String]) {
