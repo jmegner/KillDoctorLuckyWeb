@@ -1,0 +1,89 @@
+{
+    "Name": "altup",
+    "PlayerStartRoomIds": [17],
+    "DoctorStartRoomIds": [23],
+    "CatStartRoomIds": [26],
+    "DogStartRoomIds": [20],
+    "Wings": [ ],
+    "Rooms":
+    [
+        {
+            "Id": "16",
+            "Name": "nursery",
+            "Adjacent": [17,18,19,20,21,22,23,24,25,27,28],
+            "Visible": [17,20,22,23]
+        },
+        {
+            "Id": "17",
+            "Name": "trophy room",
+            "Adjacent": [16,18],
+            "Visible": [16,18]
+        },
+        {
+            "Id": "18",
+            "Name": "library",
+            "Adjacent": [16,17,19,20,21,22,23,24,25,27,28],
+            "Visible": [17,19,25,28]
+        },
+        {
+            "Id": "19",
+            "Name": "armory",
+            "Adjacent": [16,18,20,21,28],
+            "Visible": [18,20,28]
+        },
+        {
+            "Id": "20",
+            "Name": "servants quarters",
+            "Adjacent": [16,18,19,21,28],
+            "Visible": [16,19,21,23]
+        },
+        {
+            "Id": "21",
+            "Name": "rose suite",
+            "Adjacent": [16,18,19,20,22,23,24,25,27,28],
+            "Visible": [20,22]
+        },
+        {
+            "Id": "22",
+            "Name": "gallery",
+            "Adjacent": [16,18,21,23,24,25,27],
+            "Visible": [16,21,23,27]
+        },
+        {
+            "Id": "23",
+            "Name": "master suite",
+            "Adjacent": [16,18,21,22,24,25,27],
+            "Visible": [16,20,22,24]
+        },
+        {
+            "Id": "24",
+            "Name": "lilac room",
+            "Adjacent": [16,18,21,22,23,25,27],
+            "Visible": [23,25]
+        },
+        {
+            "Id": "25",
+            "Name": "tennessee room",
+            "Adjacent": [16,18,21,22,23,24,26,27],
+            "Visible": [18,24,26]
+        },
+        {
+            "Id": "26",
+            "Name": "white room",
+            "Adjacent": [25,27],
+            "Visible": [25,27]
+        },
+        {
+            "Id": "27",
+            "Name": "skippers rest",
+            "Adjacent": [16,18,21,22,23,24,25,26,28],
+            "Visible": [22,26,28]
+        },
+        {
+            "Id": "28",
+            "Name": "lancaster room",
+            "Adjacent": [16,18,19,20,21,27],
+            "Visible": [18,19,27]
+        }
+    ]
+}

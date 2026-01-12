@@ -1,4 +1,3 @@
-use crate::DATA_DIR;
 use kill_doctor_lucky_rust::core::{
     board::Board,
     common_game_state::CommonGameState,
@@ -11,7 +10,6 @@ use kill_doctor_lucky_rust::core::{
 };
 use kill_doctor_lucky_rust::util::cancellation::NeverCancelToken;
 use std::io::{self, Write};
-use std::path::PathBuf;
 use std::time::Instant;
 
 pub struct Session {
@@ -53,14 +51,6 @@ impl Session {
         self.fiddle(None);
         self.reset_game();
         self.interpretation_loop();
-    }
-
-    fn board_path(&self) -> PathBuf {
-        self.json_file_path(&self.board_name)
-    }
-
-    fn json_file_path(&self, base_name: &str) -> PathBuf {
-        PathBuf::from(DATA_DIR).join(format!("{base_name}.json"))
     }
 
     fn interpretation_loop(&mut self) {
@@ -269,14 +259,22 @@ impl Session {
             self.do_moves_tokens(&tokens);
         } else {
             let mut explanations = vec![
-                "q       | quit",
-                "d       | display game state",
-                "r       | reset game",
-                "h       | display user-turn history",
                 "a [int] | analyze next move [int] deep",
-                "board [boardName]",
-                "closedwings [wing1] [wing2] [...]",
-                "numplayers [int]",
+                "aa [int] | analyze levels 1..[int]",
+                "b/board [boardName] | set board (prefixes Board if missing)",
+                "closedwings/w [wing1] [wing2] [...] | set closed wings",
+                "d       | display game state",
+                "e [int] | analyze then execute suggested move",
+                "ep      | execute last analyzed move",
+                "f       | fiddle (dev hook)",
+                "h [bool] | display user-turn history",
+                "m       | mcts analysis (not supported)",
+                "numplayers/p [int] | set number of normal players",
+                "q       | quit",
+                "r       | reset game",
+                "sv/setvalue playerNum attributeName attributeValue | set r/s/m/w/f/t",
+                "u       | undo to previous normal turn",
+                "x [n] [cmd] | repeat [cmd] n times",
                 "[playerNum@destRoomId] [destRoomIdForCurrentPlayer] submit turn of those moves",
             ];
             explanations.sort();
@@ -496,8 +494,8 @@ impl Session {
     }
 
     fn reset_game_with_problems(&mut self) -> Result<(), Vec<String>> {
-        let board = Board::from_json_file_with_options(
-            self.board_path(),
+        let board = Board::from_embedded_json_with_options(
+            &self.board_name,
             self.closed_wing_names.iter().map(String::as_str),
             "",
         )

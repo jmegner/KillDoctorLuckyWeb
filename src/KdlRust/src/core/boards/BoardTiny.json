@@ -1,0 +1,35 @@
+{
+    "Name": "tiny",
+    "PlayerStartRoomIds": [1],
+    "DoctorStartRoomIds": [1],
+    "CatStartRoomIds": [1],
+    "DogStartRoomIds": [1],
+    "Wings": [],
+    "Rooms":
+    [
+        {
+            "Id": 1,
+            "Name": "drawing room",
+            "Adjacent": [2],
+            "Visible": []
+        },
+        {
+            "Id": 2,
+            "Name": "parlor",
+            "Adjacent": [1,3],
+            "Visible": []
+        },
+        {
+            "Id": 3,
+            "Name": "billiard room",
+            "Adjacent": [2,4],
+            "Visible": []
+        },
+        {
+            "Id": 4,
+            "Name": "dining hall",
+            "Adjacent": [3],
+            "Visible": []
+        }
+    ]
+}

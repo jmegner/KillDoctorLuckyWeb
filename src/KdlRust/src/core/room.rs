@@ -1,9 +1,69 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde::de::{self, Visitor};
 use std::fmt;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
 pub struct RoomId(pub usize);
+
+impl<'de> Deserialize<'de> for RoomId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct RoomIdVisitor;
+
+        impl<'de> Visitor<'de> for RoomIdVisitor {
+            type Value = RoomId;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a room id as a number or numeric string")
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                usize::try_from(value)
+                    .map(RoomId)
+                    .map_err(|_| E::custom("room id out of range for usize"))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                if value < 0 {
+                    return Err(E::custom("room id must be non-negative"));
+                }
+
+                usize::try_from(value as u64)
+                    .map(RoomId)
+                    .map_err(|_| E::custom("room id out of range for usize"))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                value
+                    .trim()
+                    .parse::<usize>()
+                    .map(RoomId)
+                    .map_err(E::custom)
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                self.visit_str(&value)
+            }
+        }
+
+        deserializer.deserialize_any(RoomIdVisitor)
+    }
+}
 
 impl fmt::Display for RoomId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

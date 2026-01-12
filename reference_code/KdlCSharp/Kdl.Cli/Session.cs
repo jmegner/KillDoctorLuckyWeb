@@ -336,14 +336,22 @@ namespace Kdl.Cli
             {
                 var explanations = new List<string>()
                 {
-                    "q       | quit",
-                    "d       | display game state",
-                    "r       | reset game",
-                    "h       | display user-turn history",
                     "a [int] | analyze next move [int] deep",
-                    "board [boardName]",
-                    "closedwings [wing1] [wing2] [...]",
-                    "numplayers [int]",
+                    "aa [int] | analyze levels 1..[int]",
+                    "b/board [boardName] | set board (prefixes Board if missing)",
+                    "closedwings/w [wing1] [wing2] [...] | set closed wings",
+                    "d       | display game state",
+                    "e [int] | analyze then execute suggested move",
+                    "ep      | execute last analyzed move",
+                    "f       | fiddle (dev hook)",
+                    "h [bool] | display user-turn history",
+                    "m [sec] [top] | MCTS analyze for [sec] seconds, show [top] results",
+                    "numplayers/p [int] | set number of normal players",
+                    "q       | quit",
+                    "r       | reset game",
+                    "sv/setvalue playerNum attributeName attributeValue | set r/s/m/w/f/t",
+                    "u       | undo to previous normal turn",
+                    "x [n] [cmd] | repeat [cmd] n times",
                     "[playerNum@destRoomId] [destRoomIdForCurrentPlayer] submit turn of those moves"
                 };
 

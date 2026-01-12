@@ -10,6 +10,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const EMBEDDED_BOARD_DATA: &[(&str, &str)] = &[
+    ("BoardAltDown", include_str!("boards/BoardAltDown.json")),
+    ("BoardAltFull", include_str!("boards/BoardAltFull.json")),
+    ("BoardAltUp", include_str!("boards/BoardAltUp.json")),
+    ("BoardHaunted", include_str!("boards/BoardHaunted.json")),
+    ("BoardLairFull", include_str!("boards/BoardLairFull.json")),
+    ("BoardLairNorth", include_str!("boards/BoardLairNorth.json")),
+    ("BoardLairSouth", include_str!("boards/BoardLairSouth.json")),
+    ("BoardMain", include_str!("boards/BoardMain.json")),
+    ("BoardTiny", include_str!("boards/BoardTiny.json")),
+];
+
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 #[readonly::make]
@@ -118,6 +130,14 @@ impl Board {
         Self::from_json_file_with_options(board_path, std::iter::empty::<String>(), "")
     }
 
+    pub fn from_embedded_json(board_name: &str) -> Result<Self, BoardLoadError> {
+        Self::from_embedded_json_with_options(board_name, std::iter::empty::<String>(), "")
+    }
+
+    pub fn embedded_board_names() -> impl Iterator<Item = &'static str> {
+        EMBEDDED_BOARD_DATA.iter().map(|(name, _)| *name)
+    }
+
     pub fn from_json_file_with_options<P, S>(
         board_path: P,
         closed_wing_names: impl IntoIterator<Item = S>,
@@ -137,6 +157,27 @@ impl Board {
                 board_path: board_path.clone(),
                 source: err,
             }
+        })?;
+        Self::from_spec(spec, closed_wing_names, board_name_suffix, board_path)
+    }
+
+    pub fn from_embedded_json_with_options<S>(
+        board_name: &str,
+        closed_wing_names: impl IntoIterator<Item = S>,
+        board_name_suffix: &str,
+    ) -> Result<Self, BoardLoadError>
+    where
+        S: AsRef<str>,
+    {
+        let Some((resolved_name, json)) = embedded_board_entry(board_name) else {
+            return Err(BoardLoadError::EmbeddedBoardNotFound {
+                board_name: board_name.to_string(),
+            });
+        };
+        let board_path = embedded_board_path(resolved_name);
+        let spec = BoardSpecification::from_json_str(json).map_err(|err| BoardLoadError::Json {
+            board_path: board_path.clone(),
+            source: err,
         })?;
         Self::from_spec(spec, closed_wing_names, board_name_suffix, board_path)
     }
@@ -305,6 +346,9 @@ pub enum BoardLoadError {
         board_path: PathBuf,
         role: &'static str,
     },
+    EmbeddedBoardNotFound {
+        board_name: String,
+    },
 }
 
 impl std::fmt::Display for BoardLoadError {
@@ -328,6 +372,9 @@ impl std::fmt::Display for BoardLoadError {
                 board_path.display(),
                 role
             ),
+            BoardLoadError::EmbeddedBoardNotFound { board_name } => {
+                write!(f, "embedded board '{}' not found", board_name)
+            }
         }
     }
 }
@@ -338,8 +385,30 @@ impl std::error::Error for BoardLoadError {
             BoardLoadError::Io { source, .. } => Some(source),
             BoardLoadError::Json { source, .. } => Some(source),
             BoardLoadError::MissingStartRoom { .. } => None,
+            BoardLoadError::EmbeddedBoardNotFound { .. } => None,
         }
     }
+}
+
+fn embedded_board_entry(board_name: &str) -> Option<(&'static str, &'static str)> {
+    let trimmed = trim_json_suffix(board_name);
+    EMBEDDED_BOARD_DATA
+        .iter()
+        .copied()
+        .find(|(name, _)| name.eq_ignore_ascii_case(trimmed))
+}
+
+fn trim_json_suffix(board_name: &str) -> &str {
+    let lower = board_name.to_ascii_lowercase();
+    if lower.ends_with(".json") {
+        &board_name[..board_name.len() - 5]
+    } else {
+        board_name
+    }
+}
+
+fn embedded_board_path(board_name: &str) -> PathBuf {
+    PathBuf::from(format!("embedded/{board_name}.json"))
 }
 
 fn distance_to_stranger_loop_info(
