@@ -8,9 +8,16 @@ use kill_doctor_lucky_rust::core::{
     simple_turn::SimpleTurn,
     tree_search::TreeSearch,
 };
-use kill_doctor_lucky_rust::util::cancellation::NeverCancelToken;
+use kill_doctor_lucky_rust::util::cancellation::{
+    AtomicCancellationToken, CancellationToken,
+};
+use crossterm::{event, terminal};
 use std::io::{self, Write};
-use std::time::Instant;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::{Duration, Instant};
 
 pub struct Session {
     num_normal_players: usize,
@@ -303,15 +310,49 @@ impl Session {
             return;
         };
 
+        let cancel_token = Arc::new(AtomicCancellationToken::new());
+        let listener_done = Arc::new(AtomicBool::new(false));
+        let listener_cancel = cancel_token.clone();
+        let listener_done_flag = listener_done.clone();
+        let key_listener = std::thread::spawn(move || {
+            let raw_mode_enabled = terminal::enable_raw_mode().is_ok();
+            loop {
+                let poll_result = event::poll(Duration::from_millis(0));
+                let Ok(has_event) = poll_result else {
+                    break;
+                };
+                if !has_event {
+                    break;
+                }
+                let _ = event::read();
+            }
+            while !listener_done_flag.load(Ordering::SeqCst) {
+                let poll_result = event::poll(Duration::from_millis(50));
+                let Ok(has_event) = poll_result else {
+                    break;
+                };
+                if has_event && matches!(event::read(), Ok(event::Event::Key(_))) {
+                    listener_cancel.cancel();
+                    break;
+                }
+            }
+            if raw_mode_enabled {
+                let _ = terminal::disable_raw_mode();
+            }
+        });
+
         let mut num_states_visited = 0usize;
         let watch = Instant::now();
         let appraised_turn = TreeSearch::find_best_turn(
             game,
             analysis_level,
-            &NeverCancelToken,
+            cancel_token.as_ref(),
             &mut num_states_visited,
         );
         let elapsed = watch.elapsed();
+
+        listener_done.store(true, Ordering::SeqCst);
+        let _ = key_listener.join();
 
         if let Some(turn) = appraised_turn.turn.clone() {
             self.recent_analyzed_turn = Some(turn);
@@ -340,7 +381,7 @@ impl Session {
             elapsed.as_secs_f64()
         );
 
-        if do_suggested_move {
+        if do_suggested_move && !cancel_token.is_cancellation_requested() {
             if let Some(turn) = appraised_turn.turn {
                 self.do_moves_turn(turn);
             }
