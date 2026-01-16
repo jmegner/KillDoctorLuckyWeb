@@ -21,7 +21,7 @@ function App() {
   return (
     <>
       <h1>Kill Doctor Lucky</h1>
-      <div>
+      <div className="board">
         <svg
           viewBox={`0 0 ${boardWidth} ${boardHeight}`}
           role="img"
