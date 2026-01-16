@@ -9,3 +9,10 @@
 .board {
   width: 100%;
 }
+
+.game-summary {
+  margin: 12px auto 0;
+  padding: 0 12px;
+  text-align: left;
+  white-space: pre-wrap;
+}

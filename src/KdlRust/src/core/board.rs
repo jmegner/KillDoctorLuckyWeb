@@ -391,16 +391,28 @@ impl std::error::Error for BoardLoadError {
 
 fn embedded_board_entry(board_name: &str) -> Option<(&'static str, &'static str)> {
     let trimmed = trim_json_suffix(board_name);
+    let normalized = strip_board_prefix(trimmed);
     EMBEDDED_BOARD_DATA
         .iter()
         .copied()
-        .find(|(name, _)| name.eq_ignore_ascii_case(trimmed))
+        .find(|(name, _)| {
+            name.eq_ignore_ascii_case(trimmed) || name.eq_ignore_ascii_case(normalized)
+        })
 }
 
 fn trim_json_suffix(board_name: &str) -> &str {
     let lower = board_name.to_ascii_lowercase();
     if lower.ends_with(".json") {
         &board_name[..board_name.len() - 5]
+    } else {
+        board_name
+    }
+}
+
+fn strip_board_prefix(board_name: &str) -> &str {
+    let prefix_len = "board".len();
+    if board_name.len() >= prefix_len && board_name[..prefix_len].eq_ignore_ascii_case("board") {
+        &board_name[prefix_len..]
     } else {
         board_name
     }
