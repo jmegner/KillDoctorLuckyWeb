@@ -1,26 +1,26 @@
-import './App.css'
-import boardData from './data/boards/BoardAltDown.json'
+import './App.css';
+import boardData from './data/boards/BoardAltDown.json';
 
 type BoardRoom = {
-  Id: string | number
-  Name?: string
-  Coords: number[]
-}
+  Id: string | number;
+  Name?: string;
+  Coords: number[];
+};
 
 type BoardLayout = {
-  ImagePath: string
-  Rooms: BoardRoom[]
-}
+  ImagePath: string;
+  Rooms: BoardRoom[];
+};
 
-const boardLayout = boardData as BoardLayout
-const boardWidth = 1480
-const boardHeight = 965
-const boardImageHref = `${import.meta.env.BASE_URL}${boardLayout.ImagePath.replace(/^\//, '')}`
+const boardLayout = boardData as BoardLayout;
+const boardWidth = 1480;
+const boardHeight = 965;
+const boardImageHref = `${import.meta.env.BASE_URL}${boardLayout.ImagePath.replace(/^\//, '')}`;
 
 function App() {
   return (
     <>
-      <h1>Kill Doctor Lucky</h1>
+      <h3>Kill Doctor Lucky</h3>
       <div className="board">
         <svg
           viewBox={`0 0 ${boardWidth} ${boardHeight}`}
@@ -32,9 +32,9 @@ function App() {
           <image href={boardImageHref} width={boardWidth} height={boardHeight} />
           {boardLayout.Rooms.map((room) => {
             if (room.Coords.length !== 4) {
-              return null
+              return null;
             }
-            const [x1, y1, x2, y2] = room.Coords
+            const [x1, y1, x2, y2] = room.Coords;
             return (
               <rect
                 key={room.Id}
@@ -46,12 +46,12 @@ function App() {
                 cursor="pointer"
                 aria-label={room.Name ?? `Room ${room.Id}`}
               />
-            )
+            );
           })}
         </svg>
       </div>
     </>
-  )
+  );
 }
 
-export default App
+export default App;
