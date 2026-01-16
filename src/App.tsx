@@ -1,43 +1,54 @@
 import './App.css'
+import boardData from './data/boards/BoardAltDown.json'
+
+type BoardRoom = {
+  Id: string | number
+  Name?: string
+  Coords: number[]
+}
+
+type BoardLayout = {
+  ImagePath: string
+  Rooms: BoardRoom[]
+}
+
+const boardLayout = boardData as BoardLayout
+const boardWidth = 1480
+const boardHeight = 965
+const boardImageHref = `${import.meta.env.BASE_URL}${boardLayout.ImagePath.replace(/^\//, '')}`
 
 function App() {
   return (
     <>
       <h1>Kill Doctor Lucky</h1>
       <div>
-        <img
-          src={`${import.meta.env.BASE_URL}BoardAltDown.jpg`}
-          useMap="#BoardAltDownMap"
-          alt="Kill Doctor Lucky Board Alternate Downstairs"
-        />
-        <map name="BoardAltDownMap">
-          {/* col 1 */}
-          <area shape="rect" coords="6,8,372,297" href="#" id="R14" alt="Room 14" />
-          <area shape="rect" coords="6,311,266,605" href="#" id="R13" alt="Room 13" />
-          <area shape="rect" coords="6,620,266,957" href="#" id="R12" alt="Room 12" />
-
-          {/* col 2 */}
-          <area shape="rect" coords="386,8,630,193" href="#" id="R15" alt="Room 15" />
-          <area shape="rect" coords="386,309,630,605" href="#" id="R5" alt="Room 5" />
-          <area shape="rect" coords="386,620,630,862" href="#" id="R4" alt="Room 4" />
-
-          {/* col 3 */}
-          <area shape="rect" coords="643,8,938,297" href="#" id="R7" alt="Room 7" />
-          <area shape="rect" coords="643,309,938,710" href="#" id="R6" alt="Room 6" />
-          <area shape="rect" coords="643,724,938,862" href="#" id="R3" alt="Room 3" />
-
-          {/* col 4 */}
-          <area shape="rect" coords="948,8,1220,195" href="#" id="R8" alt="Room 8" />
-          <area shape="rect" coords="948,309,1119,556" href="#" id="R1" alt="Room 1" />
-          <area shape="rect" coords="948,568,1220,862" href="#" id="R2" alt="Room 2" />
-
-          {/* col 5 */}
-          <area shape="rect" coords="1233,8,1471,297" href="#" id="R9" alt="Room 9" />
-          <area shape="rect" coords="1233,309,1471,556" href="#" id="R10" alt="Room 10" />
-          <area shape="rect" coords="1233,568,1471,957" href="#" id="R11" alt="Room 11" />
-
-          <area shape="default" id="RestOfBoard" alt="Outside Room Area"/>
-        </map>
+        <svg
+          viewBox={`0 0 ${boardWidth} ${boardHeight}`}
+          role="img"
+          aria-label="Kill Doctor Lucky Board Alternate Downstairs"
+          preserveAspectRatio="xMidYMid meet"
+          style={{ maxWidth: '100%', height: 'auto', width: '100%', display: 'block' }}
+        >
+          <image href={boardImageHref} width={boardWidth} height={boardHeight} />
+          {boardLayout.Rooms.map((room) => {
+            if (room.Coords.length !== 4) {
+              return null
+            }
+            const [x1, y1, x2, y2] = room.Coords
+            return (
+              <rect
+                key={room.Id}
+                x={x1}
+                y={y1}
+                width={x2 - x1}
+                height={y2 - y1}
+                fill="transparent"
+                cursor="pointer"
+                aria-label={room.Name ?? `Room ${room.Id}`}
+              />
+            )
+          })}
+        </svg>
       </div>
     </>
   )
