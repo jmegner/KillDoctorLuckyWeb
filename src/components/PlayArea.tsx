@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { newDefaultGameState, type GameStateHandle } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
 import boardData from '../data/boards/BoardAltDown.json';
 
@@ -175,59 +175,41 @@ function PlayArea() {
   const [planOrder, setPlanOrder] = useState<PieceId[]>([]);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
-  const [turnCounter, setTurnCounter] = useState(0);
-  const [reachableRooms, setReachableRooms] = useState<number[] | null>(null);
-  const summary = useMemo(
-    () => (gameState ? gameState.summary(0) : 'Failed to create game state.'),
-    [gameState, turnCounter]
-  );
-
-  const currentPlayerPieceId = useMemo(() => {
+  const [, setTurnCounter] = useState(0);
+  const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
+  const currentPlayerPieceId = gameState
+    ? (gameState.currentPlayerPieceId() as PieceId)
+    : null;
+  const piecePositions = (() => {
     if (!gameState) {
-      return null;
-    }
-    return gameState.currentPlayerPieceId() as PieceId;
-  }, [gameState, turnCounter]);
-
-  const piecePositions = useMemo<PiecePosition[]>(() => {
-    if (!gameState) {
-      return [];
+      return [] as PiecePosition[];
     }
     try {
       return JSON.parse(gameState.piecePositionsJson()) as PiecePosition[];
     } catch {
-      return [];
+      return [] as PiecePosition[];
     }
-  }, [gameState, turnCounter]);
-
-  useEffect(() => {
+  })();
+  const reachableRooms = (() => {
     if (!gameState || !selectedPieceId) {
-      setReachableRooms(null);
-      return;
+      return null;
     }
     try {
       const reachableJson = gameState.reachableRoomsJson(selectedPieceId, 1);
-      const rooms = JSON.parse(reachableJson) as number[];
-      setReachableRooms(rooms);
+      return JSON.parse(reachableJson) as number[];
     } catch {
-      setReachableRooms(null);
+      return null;
     }
-  }, [gameState, selectedPieceId, turnCounter]);
-
-  const reachableRoomSet = useMemo(
-    () => new Set(reachableRooms ?? []),
-    [reachableRooms]
-  );
-
-  const pieceRoomMap = useMemo(() => {
+  })();
+  const reachableRoomSet = new Set(reachableRooms ?? []);
+  const pieceRoomMap = (() => {
     const map = new Map<PieceId, number>();
     piecePositions.forEach((position) => {
       map.set(position.pieceId, position.roomId);
     });
     return map;
-  }, [piecePositions]);
-
-  const renderPieces = useMemo(() => {
+  })();
+  const renderPieces = (() => {
     const pieces: Array<{
       pieceId: PieceId;
       roomId: number;
@@ -253,7 +235,7 @@ function PlayArea() {
     });
 
     return pieces;
-  }, [pieceRoomMap]);
+  })();
 
   const isPieceSelectable = (pieceId: PieceId) =>
     currentPlayerPieceId !== null &&
@@ -314,7 +296,6 @@ function PlayArea() {
     setPlanOrder([]);
     setSelectedPieceId(null);
     setValidationMessage(null);
-    setReachableRooms(null);
   };
 
   const planSummary =
@@ -399,7 +380,7 @@ function PlayArea() {
                   'aria-label': `${config.label} piece`,
                 };
 
-                let shape: ReactNode;
+                let shape;
                 if (config.shape === 'circle') {
                   shape = (
                     <circle
