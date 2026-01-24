@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600;700&display=swap');
 
 :root {
   color-scheme: light;
@@ -8,7 +8,7 @@
   -moz-osx-font-smoothing: grayscale;
 
   --font-display: 'Fraunces', 'Georgia', serif;
-  --font-mono: 'Space Mono', 'Courier New', monospace;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
   --ink: #1b1b1b;
   --ink-muted: #4a3f35;
   --paper: #f7efe2;
