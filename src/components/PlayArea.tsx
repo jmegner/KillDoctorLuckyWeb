@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { newDefaultGameState, type GameStateHandle } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
 import boardData from '../data/boards/BoardAltDown.json';
 
@@ -19,24 +19,16 @@ const boardHeight = 965;
 const boardImageHref = `${import.meta.env.BASE_URL}${boardLayout.ImagePath.replace(/^\//, '')}`;
 
 function PlayArea() {
-  const [gameState, setGameState] = useState<GameStateHandle | null>(null);
-  const [summary, setSummary] = useState<string>('');
-
-  useEffect(() => {
+  const [gameState] = useState<GameStateHandle | null>(() => {
     try {
-      const state = newDefaultGameState();
-      setGameState(state);
-      setSummary(state.summary(0));
-    } catch (error) {
-      setSummary(`Failed to create game state: ${String(error)}`);
+      return newDefaultGameState();
+    } catch {
+      return null;
     }
-  }, []);
-
-  useEffect(() => {
-    if (gameState) {
-      setSummary(gameState.summary(0));
-    }
-  }, [gameState]);
+  });
+  const summary = gameState
+    ? gameState.summary(0)
+    : 'Failed to create game state.';
 
   return (
     <>
