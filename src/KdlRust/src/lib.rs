@@ -13,7 +13,7 @@ extern "C" {
 
 #[wasm_bindgen]
 pub fn greet() {
-    alert("Hello from KillDoctorLuckyRust.");
+    alert("Hello from KdlRust.");
 }
 
 //#[wasm_bindgen] // with no renaming
@@ -83,13 +83,6 @@ impl fmt::Display for PieceId {
     }
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PiecePosition {
-    piece_id: PieceId,
-    room_id: usize,
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TurnPlanEntry {
@@ -131,36 +124,15 @@ impl GameStateHandle {
         piece_id.as_str().to_string()
     }
 
-    #[wasm_bindgen(js_name = "piecePositionsJson")]
-    pub fn piece_positions_json(&self) -> String {
-        let positions = [
-            PiecePosition {
-                piece_id: PieceId::Doctor,
-                room_id: self.state.doctor_room_id.0,
-            },
-            PiecePosition {
-                piece_id: PieceId::Player1,
-                room_id: self.state.player_room_ids[core::rule_helper::SIDE_A_NORMAL_PLAYER_ID.0]
-                    .0,
-            },
-            PiecePosition {
-                piece_id: PieceId::Player2,
-                room_id: self.state.player_room_ids[core::rule_helper::SIDE_B_NORMAL_PLAYER_ID.0]
-                    .0,
-            },
-            PiecePosition {
-                piece_id: PieceId::Stranger1,
-                room_id: self.state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_FIRST.0]
-                    .0,
-            },
-            PiecePosition {
-                piece_id: PieceId::Stranger2,
-                room_id: self.state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_SECOND.0]
-                    .0,
-            },
-        ];
-
-        serde_json::to_string(&positions).unwrap_or_else(|_| "[]".to_string())
+    #[wasm_bindgen(js_name = "piecePositions")]
+    pub fn piece_positions(&self) -> Vec<u32> {
+        vec![
+            self.state.doctor_room_id.0 as u32,
+            self.state.player_room_ids[core::rule_helper::SIDE_A_NORMAL_PLAYER_ID.0].0 as u32,
+            self.state.player_room_ids[core::rule_helper::SIDE_B_NORMAL_PLAYER_ID.0].0 as u32,
+            self.state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_FIRST.0].0 as u32,
+            self.state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_SECOND.0].0 as u32,
+        ]
     }
 
     #[wasm_bindgen(js_name = "boardRoomsJson")]

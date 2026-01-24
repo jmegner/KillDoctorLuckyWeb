@@ -4,11 +4,6 @@ import boardData from '../data/boards/BoardAltDown.json';
 
 type PieceId = 'doctor' | 'player1' | 'player2' | 'stranger1' | 'stranger2';
 
-type PiecePosition = {
-  pieceId: PieceId;
-  roomId: number;
-};
-
 type TurnPlanEntry = {
   pieceId: PieceId;
   roomId: number;
@@ -180,23 +175,19 @@ function PlayArea() {
   const currentPlayerPieceId = gameState
     ? (gameState.currentPlayerPieceId() as PieceId)
     : null;
-  const piecePositions = (() => {
-    if (!gameState) {
-      return [] as PiecePosition[];
-    }
-    try {
-      return JSON.parse(gameState.piecePositionsJson()) as PiecePosition[];
-    } catch {
-      return [] as PiecePosition[];
-    }
-  })();
+  const pieceRooms = gameState ? gameState.piecePositions() : null;
   const reachableRooms =
     gameState && selectedPieceId ? gameState.reachableRooms(selectedPieceId, 1) : null;
   const reachableRoomSet = new Set(reachableRooms ?? []);
   const pieceRoomMap = (() => {
     const map = new Map<PieceId, number>();
-    piecePositions.forEach((position) => {
-      map.set(position.pieceId, position.roomId);
+    if (!pieceRooms) {
+      return map;
+    }
+    pieceOrder.forEach((pieceId, index) => {
+      if (pieceRooms.length > index) {
+        map.set(pieceId, pieceRooms[index]);
+      }
     });
     return map;
   })();
