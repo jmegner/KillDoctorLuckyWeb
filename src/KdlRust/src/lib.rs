@@ -183,27 +183,26 @@ impl GameStateHandle {
         serde_json::to_string(&rooms).unwrap_or_else(|_| "[]".to_string())
     }
 
-    #[wasm_bindgen(js_name = "reachableRoomsJson")]
-    pub fn reachable_rooms_json(&self, piece_id: &str, steps: i32) -> String {
+    #[wasm_bindgen(js_name = "reachableRooms")]
+    pub fn reachable_rooms(&self, piece_id: &str, steps: i32) -> Vec<u32> {
         let Some(piece_id) = PieceId::parse(piece_id) else {
-            return "[]".to_string();
+            return Vec::new();
         };
         let steps = steps.max(0);
         let room_id = match piece_id {
             PieceId::Doctor => self.state.doctor_room_id,
             _ => {
                 let Some(player_id) = piece_id.to_player_id() else {
-                    return "[]".to_string();
+                    return Vec::new();
                 };
                 let Some(room_id) = self.state.player_room_ids.get(player_id.0) else {
-                    return "[]".to_string();
+                    return Vec::new();
                 };
                 *room_id
             }
         };
 
-        let reachable = self
-            .state
+        self.state
             .common
             .board
             .room_ids
@@ -211,10 +210,8 @@ impl GameStateHandle {
             .filter(|dest_room_id| {
                 self.state.common.board.distance[room_id.0][dest_room_id.0] <= steps
             })
-            .map(|dest_room_id| dest_room_id.0)
-            .collect::<Vec<_>>();
-
-        serde_json::to_string(&reachable).unwrap_or_else(|_| "[]".to_string())
+            .map(|dest_room_id| dest_room_id.0 as u32)
+            .collect::<Vec<_>>()
     }
 
     #[wasm_bindgen(js_name = "validateTurnPlan")]

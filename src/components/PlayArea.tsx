@@ -190,17 +190,8 @@ function PlayArea() {
       return [] as PiecePosition[];
     }
   })();
-  const reachableRooms = (() => {
-    if (!gameState || !selectedPieceId) {
-      return null;
-    }
-    try {
-      const reachableJson = gameState.reachableRoomsJson(selectedPieceId, 1);
-      return JSON.parse(reachableJson) as number[];
-    } catch {
-      return null;
-    }
-  })();
+  const reachableRooms =
+    gameState && selectedPieceId ? gameState.reachableRooms(selectedPieceId, 1) : null;
   const reachableRoomSet = new Set(reachableRooms ?? []);
   const pieceRoomMap = (() => {
     const map = new Map<PieceId, number>();
