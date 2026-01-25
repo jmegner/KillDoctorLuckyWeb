@@ -278,6 +278,22 @@ function PlayArea() {
     setTurnCounter((prev) => prev + 1);
   };
 
+  const handleUndo = () => {
+    if (!gameState) {
+      return;
+    }
+    const didUndo = gameState.undoLastTurn();
+    if (!didUndo) {
+      setValidationMessage('No previous turn to undo.');
+      return;
+    }
+    setPlannedMoves({});
+    setPlanOrder([]);
+    setSelectedPieceId(null);
+    setValidationMessage(null);
+    setTurnCounter((prev) => prev + 1);
+  };
+
   const handleCancel = () => {
     setPlannedMoves({});
     setPlanOrder([]);
@@ -426,9 +442,14 @@ function PlayArea() {
               Current: {currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}
             </h2>
           </div>
-          <button className="planner-info-button" onClick={() => setInfoOpen((prev) => !prev)}>
-            {infoOpen ? 'Close' : 'Info'}
-          </button>
+          <div className="planner-header-actions">
+            <button className="planner-info-button" onClick={() => setInfoOpen((prev) => !prev)}>
+              {infoOpen ? 'Close' : 'Info'}
+            </button>
+            <button className="planner-undo-button" onClick={handleUndo}>
+              Undo
+            </button>
+          </div>
         </div>
         <div className="planner-line">
           <span className="planner-label">Selected</span>

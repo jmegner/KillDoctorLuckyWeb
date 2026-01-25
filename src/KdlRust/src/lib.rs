@@ -186,6 +186,27 @@ impl GameStateHandle {
             .collect::<Vec<_>>()
     }
 
+    #[wasm_bindgen(js_name = "undoLastTurn")]
+    pub fn undo_last_turn(&mut self) -> bool {
+        loop {
+            let prev_state = self
+                .state
+                .prev_state
+                .as_ref()
+                .map(|state| state.as_ref().clone());
+
+            let Some(prev_state) = prev_state else {
+                return false;
+            };
+
+            self.state = prev_state;
+
+            if self.state.is_normal_turn() {
+                return true;
+            }
+        }
+    }
+
     #[wasm_bindgen(js_name = "validateTurnPlan")]
     pub fn validate_turn_plan(&self, turn_plan_json: &str) -> String {
         let turn = match parse_turn_plan(turn_plan_json) {
@@ -210,7 +231,7 @@ impl GameStateHandle {
             return message;
         }
 
-        self.state.after_normal_turn(turn, false);
+        self.state.after_normal_turn(turn, true);
         String::new()
     }
 }

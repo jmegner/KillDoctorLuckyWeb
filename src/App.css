@@ -137,6 +137,12 @@
   margin-bottom: 16px;
 }
 
+.planner-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .planner-kicker {
   margin: 0;
   font-family: var(--font-mono);
@@ -152,6 +158,10 @@
 }
 
 .planner-info-button {
+  padding-inline: 0.9rem;
+}
+
+.planner-undo-button {
   padding-inline: 0.9rem;
 }
 
