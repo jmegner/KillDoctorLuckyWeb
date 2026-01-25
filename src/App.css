@@ -108,9 +108,9 @@
 }
 
 .piece--selected {
-  stroke: var(--accent);
+  stroke: #9966ff;
   stroke-width: 3;
-  filter: drop-shadow(0 0 6px rgba(31, 109, 106, 0.7));
+  filter: drop-shadow(0 0 6px rgba(122, 74, 217, 0.65));
 }
 
 .piece--planned-ghost {
