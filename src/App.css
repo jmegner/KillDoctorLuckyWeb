@@ -113,9 +113,13 @@
   filter: drop-shadow(0 0 6px rgba(31, 109, 106, 0.7));
 }
 
+.piece--planned-ghost {
+  filter: drop-shadow(0 0 4px rgba(43, 108, 176, 0.45));
+}
+
 .piece-label {
   font-family: var(--font-mono);
-  font-weight: 700;
+  font-weight: 800;
   text-anchor: middle;
   dominant-baseline: middle;
   pointer-events: none;

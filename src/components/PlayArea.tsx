@@ -48,6 +48,9 @@ const boardRooms: BoardRoom[] = boardLayout.Rooms.map((room) => ({
   adjacent: room.Adjacent?.map(Number) ?? [],
   visible: room.Visible?.map(Number) ?? [],
 }));
+const boardRoomById = new Map<number, BoardRoom>(
+  boardRooms.map((room) => [room.id, room] as const)
+);
 
 const pieceOrder: PieceId[] = ['doctor', 'player1', 'player2', 'stranger1', 'stranger2'];
 
@@ -157,6 +160,31 @@ const getHexPoints = (x: number, y: number, size: number) => {
   return points.join(' ');
 };
 
+const blendHexColor = (from: string, to: string, ratio: number) => {
+  const normalize = (value: string) => value.replace('#', '').trim();
+  const fromHex = normalize(from);
+  const toHex = normalize(to);
+  if (fromHex.length !== 6 || toHex.length !== 6) {
+    return from;
+  }
+  const fromNum = parseInt(fromHex, 16);
+  const toNum = parseInt(toHex, 16);
+  if (Number.isNaN(fromNum) || Number.isNaN(toNum)) {
+    return from;
+  }
+  const clamp = (value: number) => Math.min(255, Math.max(0, value));
+  const fromRgb = [
+    (fromNum >> 16) & 0xff,
+    (fromNum >> 8) & 0xff,
+    fromNum & 0xff,
+  ];
+  const toRgb = [(toNum >> 16) & 0xff, (toNum >> 8) & 0xff, toNum & 0xff];
+  const blended = fromRgb.map((channel, index) =>
+    clamp(Math.round(channel + (toRgb[index] - channel) * ratio))
+  );
+  return `#${blended.map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+};
+
 function PlayArea() {
   const [gameState] = useState<GameStateHandle | null>(() => {
     try {
@@ -192,6 +220,15 @@ function PlayArea() {
     });
     return map;
   })();
+  const plannedEntries = pieceOrder
+    .map((pieceId) => {
+      const roomId = plannedMoves[pieceId];
+      if (roomId === undefined) {
+        return null;
+      }
+      return { pieceId, roomId };
+    })
+    .filter((entry): entry is TurnPlanEntry => entry !== null);
   const renderPieces = (() => {
     const pieces: Array<{
       pieceId: PieceId;
@@ -218,6 +255,44 @@ function PlayArea() {
     });
 
     return pieces;
+  })();
+  const renderPlannedGhosts = (() => {
+    const ghosts: Array<{
+      pieceId: PieceId;
+      roomId: number;
+      x: number;
+      y: number;
+      size: number;
+    }> = [];
+    const ghostRooms = new Map<number, PieceId[]>();
+
+    plannedEntries.forEach((entry) => {
+      const list = ghostRooms.get(entry.roomId) ?? [];
+      list.push(entry.pieceId);
+      ghostRooms.set(entry.roomId, list);
+    });
+
+    ghostRooms.forEach((pieceIds, roomId) => {
+      const room = boardRoomById.get(roomId);
+      if (!room) {
+        return;
+      }
+      const orderedPieceIds = pieceOrder.filter((pieceId) => pieceIds.includes(pieceId));
+      if (orderedPieceIds.length === 0) {
+        return;
+      }
+      const roomRect = getRoomRect(room.coords);
+      const { size, positions } = getPiecePositionsInRoom(orderedPieceIds.length, roomRect);
+      orderedPieceIds.forEach((pieceId, index) => {
+        const placement = positions[index];
+        if (!placement) {
+          return;
+        }
+        ghosts.push({ pieceId, roomId, x: placement.x, y: placement.y, size });
+      });
+    });
+
+    return ghosts;
   })();
 
   const isPieceSelectable = (pieceId: PieceId) =>
@@ -373,19 +448,31 @@ function PlayArea() {
                 const config = pieceConfig[piece.pieceId];
                 const isSelected = selectedPieceId === piece.pieceId;
                 const selectable = isPieceSelectable(piece.pieceId);
+                const isPlannedSource = plannedMoves[piece.pieceId] !== undefined;
                 const className = [
                   'piece',
                   `piece--${config.shape}`,
                   isSelected ? 'piece--selected' : '',
                   selectable ? 'piece--movable' : 'piece--locked',
+                  isPlannedSource ? 'piece--planned-source' : '',
                 ]
                   .filter(Boolean)
                   .join(' ');
-                const labelSize = Math.min(piece.size * 0.5, 18);
+                const labelSize = Math.min(piece.size * 0.6, 22);
+                const pieceFill = isPlannedSource
+                  ? blendHexColor(config.color, '#9c9c9c', 0.5)
+                  : config.color;
+                const pieceStroke = isPlannedSource ? '#8c8c8c' : undefined;
+                const pieceStrokeWidth = isPlannedSource ? 2.4 : undefined;
+                const labelFill = isPlannedSource
+                  ? blendHexColor(config.textColor, '#6f6f6f', 0.5)
+                  : config.textColor;
 
                 const commonProps = {
                   className,
-                  fill: config.color,
+                  fill: pieceFill,
+                  stroke: pieceStroke,
+                  strokeWidth: pieceStrokeWidth,
                   onClick: (event: MouseEvent<SVGElement>) => {
                     event.stopPropagation();
                     handlePieceClick(piece.pieceId);
@@ -432,7 +519,70 @@ function PlayArea() {
                         x={piece.x + piece.size / 2}
                         y={piece.y + piece.size / 2}
                         fontSize={labelSize}
-                        fill={config.textColor}
+                        fill={labelFill}
+                      >
+                        {config.label}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </g>
+            <g className="piece-layer piece-layer--planned">
+              {renderPlannedGhosts.map((piece) => {
+                const config = pieceConfig[piece.pieceId];
+                const className = ['piece', `piece--${config.shape}`, 'piece--planned-ghost']
+                  .filter(Boolean)
+                  .join(' ');
+                const labelSize = Math.min(piece.size * 0.6, 22);
+                const ghostProps = {
+                  className,
+                  fill: config.color,
+                  stroke: '#1f4f7a',
+                  strokeWidth: 4,
+                  pointerEvents: 'none' as const,
+                  'aria-hidden': true,
+                };
+                let shape;
+                if (config.shape === 'circle') {
+                  shape = (
+                    <circle
+                      cx={piece.x + piece.size / 2}
+                      cy={piece.y + piece.size / 2}
+                      r={piece.size / 2}
+                      {...ghostProps}
+                    />
+                  );
+                } else if (config.shape === 'square') {
+                  shape = (
+                    <rect
+                      x={piece.x}
+                      y={piece.y}
+                      width={piece.size}
+                      height={piece.size}
+                      rx={3}
+                      {...ghostProps}
+                    />
+                  );
+                } else {
+                  shape = (
+                    <polygon
+                      points={getHexPoints(piece.x, piece.y, piece.size)}
+                      {...ghostProps}
+                    />
+                  );
+                }
+
+                return (
+                  <g key={`ghost-${piece.pieceId}`} pointerEvents="none">
+                    {shape}
+                    {config.showLabel && (
+                      <text
+                        className="piece-label piece-label--planned"
+                        x={piece.x + piece.size / 2}
+                        y={piece.y + piece.size / 2}
+                        fontSize={labelSize}
+                        fill="#1f4f7a"
                       >
                         {config.label}
                       </text>
