@@ -322,6 +322,14 @@ function PlayArea() {
     return <div className="play-area-error">Failed to create game state.</div>;
   }
 
+  const handleBoardMouseDown = (event: MouseEvent<SVGSVGElement>) => {
+    if (event.button !== 1) {
+      return;
+    }
+    event.preventDefault();
+    handleSubmit();
+  };
+
   return (
     <section className="play-area">
       <div className="board-shell">
@@ -331,6 +339,7 @@ function PlayArea() {
             role="img"
             aria-label="Kill Doctor Lucky Board Alternate Downstairs"
             preserveAspectRatio="xMidYMid meet"
+            onMouseDown={handleBoardMouseDown}
           >
             <image href={boardImageHref} width={boardWidth} height={boardHeight} />
             <g className="room-layer">
