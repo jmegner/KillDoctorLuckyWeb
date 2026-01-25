@@ -246,6 +246,10 @@
   white-space: pre-wrap;
 }
 
+.game-summary--history {
+  margin-top: 12px;
+}
+
 .play-area-error {
   padding: 24px;
   color: var(--warn);
