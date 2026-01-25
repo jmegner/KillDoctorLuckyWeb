@@ -224,6 +224,11 @@ function PlayArea() {
     (pieceId === currentPlayerPieceId || pieceId === 'stranger1' || pieceId === 'stranger2');
 
   const handlePieceClick = (pieceId: PieceId) => {
+    if (selectedPieceId === pieceId) {
+      setSelectedPieceId(null);
+      setValidationMessage(null);
+      return;
+    }
     if (!isPieceSelectable(pieceId)) {
       setValidationMessage('You can only move your own piece or a stranger.');
       return;
