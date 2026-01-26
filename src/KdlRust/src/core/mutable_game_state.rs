@@ -865,7 +865,7 @@ impl MutableGameState {
 
                 total_dist += dist;
                 short_move_texts.push(format!(
-                    "{}@{}({})",
+                    "{}@{}←{}",
                     CommonGameState::to_player_display_num(player_id),
                     room_id.0,
                     prev_room_id.0
