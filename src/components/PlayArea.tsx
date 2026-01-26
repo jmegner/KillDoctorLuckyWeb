@@ -364,6 +364,18 @@ function PlayArea() {
     setTurnCounter((prev) => prev + 1);
   };
 
+  const handleReset = () => {
+    if (!gameState) {
+      return;
+    }
+    gameState.resetGame();
+    setPlannedMoves({});
+    setPlanOrder([]);
+    setSelectedPieceId(null);
+    setValidationMessage(null);
+    setTurnCounter((prev) => prev + 1);
+  };
+
   const handleCancel = () => {
     setPlannedMoves({});
     setPlanOrder([]);
@@ -604,8 +616,8 @@ function PlayArea() {
             <button className="planner-info-button" onClick={() => setInfoOpen((prev) => !prev)}>
               {infoOpen ? 'Close' : 'Info'}
             </button>
-            <button className="planner-undo-button" onClick={handleUndo}>
-              Undo
+            <button className="planner-reset-button" onClick={handleReset}>
+              Reset
             </button>
           </div>
         </div>
@@ -623,6 +635,9 @@ function PlayArea() {
           </button>
           <button className="planner-button" onClick={handleCancel}>
             Cancel
+          </button>
+          <button className="planner-button" onClick={handleUndo}>
+            Undo
           </button>
         </div>
         {validationMessage && <p className="planner-error">{validationMessage}</p>}

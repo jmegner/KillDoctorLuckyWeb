@@ -207,6 +207,12 @@ impl GameStateHandle {
         }
     }
 
+    #[wasm_bindgen(js_name = "resetGame")]
+    pub fn reset_game(&mut self) {
+        let common = self.state.common.clone();
+        self.state = core::mutable_game_state::MutableGameState::at_start(common);
+    }
+
     #[wasm_bindgen(js_name = "normalTurnHistory")]
     pub fn normal_turn_history(&self) -> String {
         self.state.normal_turn_hist()
