@@ -9,12 +9,12 @@ pub mod simple {
 
     pub const PLAYER_STARTING_WEAPONS: f64 = 2.0;
     pub const WEAPONS_PER_LOOT: f64 = JUST_OVER_ONE_THIRD;
-    pub const STRENGTH_PER_WEAPON: f64 = 53.0 / 24.0;
+    pub const STRENGTH_PER_WEAPON: f64 = 2.0; //53.0 / 24.0;
     pub const CLOVERS_PER_WEAPON: f64 = 1.0;
 
     pub const PLAYER_STARTING_FAILURES: f64 = 4.0;
     pub const FAILURES_PER_LOOT: f64 = JUST_OVER_ONE_THIRD;
-    pub const CLOVERS_PER_FAILURE: f64 = 50.0 / 24.0;
+    pub const CLOVERS_PER_FAILURE: f64 = 2.0; //50.0 / 24.0;
 
     pub const CLOVERS_CONTRIBUTED_PER_STRANGER: f64 = 1.0;
 

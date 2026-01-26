@@ -127,9 +127,15 @@ impl MutableGameState {
         );
 
         if self.common.get_player_type(player_id) == PlayerType::Normal {
+            let clovers = self.player_failures[idx] * rule_helper::simple::CLOVERS_PER_FAILURE
+                + self.player_weapons[idx] * rule_helper::simple::CLOVERS_PER_WEAPON
+                + self.player_move_cards[idx] * rule_helper::simple::CLOVERS_PER_MOVE_CARD;
             text.push_str(&format!(
-                ",M{:.1},W{:.1},F{:.1}",
-                self.player_move_cards[idx], self.player_weapons[idx], self.player_failures[idx]
+                ",M{:.1},W{:.1},F{:.1},C{:.1}",
+                self.player_move_cards[idx],
+                self.player_weapons[idx],
+                self.player_failures[idx],
+                clovers
             ));
         }
 
