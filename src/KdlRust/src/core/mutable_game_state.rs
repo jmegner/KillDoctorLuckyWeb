@@ -167,8 +167,6 @@ impl MutableGameState {
                             + self.player_move_cards[pid.0]
                                 * rule_helper::simple::CLOVERS_PER_MOVE_CARD;
                     }
-                } else {
-                    clovers += 1.0; // think about removing this for shorter games
                 }
             }
         }
@@ -742,9 +740,6 @@ impl MutableGameState {
         self.attacker_hist.push(self.current_player_id);
 
         if self.common.has_strangers() {
-            let stranger_clovers = 1.0;
-            attack_strength -= stranger_clovers;
-
             if attack_strength < 0.0 {
                 return false;
             }

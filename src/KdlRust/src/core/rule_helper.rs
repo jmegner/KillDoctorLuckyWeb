@@ -16,7 +16,7 @@ pub mod simple {
     pub const FAILURES_PER_LOOT: f64 = JUST_OVER_ONE_THIRD;
     pub const CLOVERS_PER_FAILURE: f64 = 2.0; //50.0 / 24.0;
 
-    pub const CLOVERS_CONTRIBUTED_PER_STRANGER: f64 = 1.0;
+    pub const CLOVERS_CONTRIBUTED_PER_STRANGER: f64 = 0.0; // used to be 1 or 0.5
 
     pub const STRANGERS_ARE_NOSY: bool = false;
 }
