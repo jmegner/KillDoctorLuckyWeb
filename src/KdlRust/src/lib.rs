@@ -212,6 +212,11 @@ impl GameStateHandle {
         self.state.normal_turn_hist()
     }
 
+    #[wasm_bindgen(js_name = "prevTurnSummaryVerbose")]
+    pub fn prev_turn_summary_verbose(&self) -> String {
+        self.state.prev_turn_summaries_since_normal(true)
+    }
+
     #[wasm_bindgen(js_name = "validateTurnPlan")]
     pub fn validate_turn_plan(&self, turn_plan_json: &str) -> String {
         let turn = match parse_turn_plan(turn_plan_json) {

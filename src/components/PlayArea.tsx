@@ -200,6 +200,7 @@ function PlayArea() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [, setTurnCounter] = useState(0);
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
+  const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
   const history = gameState ? gameState.normalTurnHistory() : '';
   const currentPlayerPieceId = gameState
     ? (gameState.currentPlayerPieceId() as PieceId)
@@ -636,6 +637,7 @@ function PlayArea() {
       </aside>
       <div className="play-area-summary">
         <pre className="game-summary">{summary}</pre>
+        {prevTurnSummary && <pre className="game-summary">{prevTurnSummary}</pre>}
         {history && <pre className="game-summary game-summary--history">{history}</pre>}
       </div>
     </section>

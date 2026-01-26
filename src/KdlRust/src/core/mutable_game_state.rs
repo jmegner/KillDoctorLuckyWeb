@@ -841,7 +841,7 @@ impl MutableGameState {
         }
     }
 
-    fn prev_turn_summary(&self, verbose: bool) -> String {
+    pub fn prev_turn_summary(&self, verbose: bool) -> String {
         let Some(prev_state) = self.prev_state.as_deref() else {
             return "PrevStateNull".to_string();
         };
@@ -1031,6 +1031,21 @@ impl MutableGameState {
         }
 
         sb
+    }
+
+    pub fn prev_turn_summaries_since_normal(&self, verbose: bool) -> String {
+        let mut summaries = Vec::new();
+        let mut state = self;
+
+        while let Some(prev_state) = state.prev_state.as_deref() {
+            summaries.push(state.prev_turn_summary(verbose));
+            if prev_state.is_normal_turn() {
+                break;
+            }
+            state = prev_state;
+        }
+
+        summaries.into_iter().rev().collect::<Vec<_>>().join("\n")
     }
 }
 
