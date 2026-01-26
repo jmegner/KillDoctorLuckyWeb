@@ -120,7 +120,7 @@ impl MutableGameState {
     pub fn player_text_long(&self, player_id: PlayerId) -> String {
         let idx = player_id.0;
         let mut text = format!(
-            "{}(R{:02}),S{}",
+            "{}(R{:02},S{}",
             self.player_text_for(player_id),
             self.player_room_ids[idx].0,
             self.player_strengths[idx],
