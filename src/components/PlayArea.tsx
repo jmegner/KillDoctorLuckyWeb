@@ -322,22 +322,33 @@ function PlayArea() {
     if (!gameState) {
       return;
     }
-    const planEntries = planOrder
+    submitPlan(plannedMoves, planOrder);
+  };
+
+  const submitPlan = (
+    moves: Partial<Record<PieceId, number>>,
+    order: PieceId[]
+  ) => {
+    const planEntries = order
       .map((pieceId) => {
-        const roomId = plannedMoves[pieceId];
+        const roomId = moves[pieceId];
         if (roomId === undefined) {
           return null;
         }
         return { pieceId, roomId };
       })
       .filter((entry): entry is TurnPlanEntry => entry !== null);
-    const validation = gameState.validateTurnPlan(JSON.stringify(planEntries));
+    const validation = gameState?.validateTurnPlan(JSON.stringify(planEntries));
     if (validation) {
+      setPlannedMoves(moves);
+      setPlanOrder(order);
       setValidationMessage(validation);
       return;
     }
-    const applyError = gameState.applyTurnPlan(JSON.stringify(planEntries));
+    const applyError = gameState?.applyTurnPlan(JSON.stringify(planEntries)) ?? '';
     if (applyError) {
+      setPlannedMoves(moves);
+      setPlanOrder(order);
       setValidationMessage(applyError);
       return;
     }
@@ -381,6 +392,24 @@ function PlayArea() {
     setPlanOrder([]);
     setSelectedPieceId(null);
     setValidationMessage(null);
+  };
+
+  const handleRoomMouseDown = (event: MouseEvent<SVGRectElement>, roomId: number) => {
+    if (event.button !== 1) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (!selectedPieceId) {
+      setValidationMessage('Select a piece, then choose a destination room.');
+      return;
+    }
+    const nextMoves = { ...plannedMoves, [selectedPieceId]: roomId };
+    const nextOrder = planOrder.includes(selectedPieceId)
+      ? planOrder
+      : [...planOrder, selectedPieceId];
+    setSelectedPieceId(null);
+    submitPlan(nextMoves, nextOrder);
   };
 
   const planSummary =
@@ -444,6 +473,7 @@ function PlayArea() {
                     height={y2 - y1}
                     className={roomClassName}
                     onClick={() => handleRoomClick(room.id)}
+                    onMouseDown={(event) => handleRoomMouseDown(event, room.id)}
                     aria-label={room.name ?? `Room ${room.id}`}
                   />
                 );
