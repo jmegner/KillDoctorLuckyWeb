@@ -230,69 +230,62 @@ function PlayArea() {
     })
     .filter((entry): entry is TurnPlanEntry => entry !== null);
   const renderPieces = (() => {
-    const pieces: Array<{
+    type RenderToken = {
       pieceId: PieceId;
       roomId: number;
+      kind: 'actual' | 'ghost';
       x: number;
       y: number;
       size: number;
-    }> = [];
+    };
+    const roomTokens = new Map<number, Array<Omit<RenderToken, 'x' | 'y' | 'size'>>>();
 
-    boardRooms.forEach((room) => {
-      const piecesHere = pieceOrder.filter((pieceId) => pieceRoomMap.get(pieceId) === room.id);
-      if (piecesHere.length === 0) {
+    pieceOrder.forEach((pieceId) => {
+      const roomId = pieceRoomMap.get(pieceId);
+      if (roomId === undefined) {
         return;
       }
-      const roomRect = getRoomRect(room.coords);
-      const { size, positions } = getPiecePositionsInRoom(piecesHere.length, roomRect);
-      piecesHere.forEach((pieceId, index) => {
-        const placement = positions[index];
-        if (!placement) {
-          return;
-        }
-        pieces.push({ pieceId, roomId: room.id, x: placement.x, y: placement.y, size });
-      });
+      const list = roomTokens.get(roomId) ?? [];
+      list.push({ pieceId, roomId, kind: 'actual' });
+      roomTokens.set(roomId, list);
     });
-
-    return pieces;
-  })();
-  const renderPlannedGhosts = (() => {
-    const ghosts: Array<{
-      pieceId: PieceId;
-      roomId: number;
-      x: number;
-      y: number;
-      size: number;
-    }> = [];
-    const ghostRooms = new Map<number, PieceId[]>();
 
     plannedEntries.forEach((entry) => {
-      const list = ghostRooms.get(entry.roomId) ?? [];
-      list.push(entry.pieceId);
-      ghostRooms.set(entry.roomId, list);
+      const list = roomTokens.get(entry.roomId) ?? [];
+      list.push({ pieceId: entry.pieceId, roomId: entry.roomId, kind: 'ghost' });
+      roomTokens.set(entry.roomId, list);
     });
 
-    ghostRooms.forEach((pieceIds, roomId) => {
+    const tokens: RenderToken[] = [];
+    roomTokens.forEach((entries, roomId) => {
       const room = boardRoomById.get(roomId);
       if (!room) {
         return;
       }
-      const orderedPieceIds = pieceOrder.filter((pieceId) => pieceIds.includes(pieceId));
-      if (orderedPieceIds.length === 0) {
-        return;
-      }
+      const orderedEntries = entries.slice().sort((a, b) => {
+        const aIndex = pieceOrder.indexOf(a.pieceId);
+        const bIndex = pieceOrder.indexOf(b.pieceId);
+        if (aIndex !== bIndex) {
+          return aIndex - bIndex;
+        }
+        if (a.kind === b.kind) {
+          return 0;
+        }
+        return a.kind === 'actual' ? -1 : 1;
+      });
+
       const roomRect = getRoomRect(room.coords);
-      const { size, positions } = getPiecePositionsInRoom(orderedPieceIds.length, roomRect);
-      orderedPieceIds.forEach((pieceId, index) => {
+      const { size, positions } = getPiecePositionsInRoom(orderedEntries.length, roomRect);
+      orderedEntries.forEach((entry, index) => {
         const placement = positions[index];
         if (!placement) {
           return;
         }
-        ghosts.push({ pieceId, roomId, x: placement.x, y: placement.y, size });
+        tokens.push({ ...entry, x: placement.x, y: placement.y, size });
       });
     });
 
-    return ghosts;
+    return tokens;
   })();
 
   const isPieceSelectable = (pieceId: PieceId) =>
@@ -444,7 +437,9 @@ function PlayArea() {
               })}
             </g>
             <g className="piece-layer">
-              {renderPieces.map((piece) => {
+              {renderPieces
+                .filter((piece) => piece.kind === 'actual')
+                .map((piece) => {
                 const config = pieceConfig[piece.pieceId];
                 const isSelected = selectedPieceId === piece.pieceId;
                 const selectable = isPieceSelectable(piece.pieceId);
@@ -529,7 +524,9 @@ function PlayArea() {
               })}
             </g>
             <g className="piece-layer piece-layer--planned">
-              {renderPlannedGhosts.map((piece) => {
+              {renderPieces
+                .filter((piece) => piece.kind === 'ghost')
+                .map((piece) => {
                 const config = pieceConfig[piece.pieceId];
                 const className = ['piece', `piece--${config.shape}`, 'piece--planned-ghost']
                   .filter(Boolean)
