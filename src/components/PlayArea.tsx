@@ -64,11 +64,11 @@ const pieceConfig: Record<
     showLabel: boolean;
   }
 > = {
-  doctor: { label: 'Dr', shape: 'circle', color: '#1b1b1b', textColor: '#fefbf5', showLabel: false },
+  doctor: { label: 'Dr', shape: 'circle', color: '#1b1b1b', textColor: '#fefbf5', showLabel: true },
   player1: { label: 'P1', shape: 'square', color: '#d93b30', textColor: '#fefbf5', showLabel: true },
-  player2: { label: 'P2', shape: 'square', color: '#3a7d44', textColor: '#fefbf5', showLabel: true },
-  stranger1: { label: 'S1', shape: 'hex', color: '#f08a24', textColor: '#1b1b1b', showLabel: true },
-  stranger2: { label: 'S2', shape: 'hex', color: '#f2c14e', textColor: '#1b1b1b', showLabel: true },
+  player2: { label: 'P3', shape: 'square', color: '#3a7d44', textColor: '#fefbf5', showLabel: true },
+  stranger1: { label: 'p2', shape: 'hex', color: '#f08a24', textColor: '#1b1b1b', showLabel: true },
+  stranger2: { label: 'p4', shape: 'hex', color: '#f2c14e', textColor: '#1b1b1b', showLabel: true },
 };
 
 const pieceSizeTarget = 60;
