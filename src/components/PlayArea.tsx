@@ -307,7 +307,10 @@ function PlayArea() {
     setValidationMessage(null);
   };
 
-  const handleRoomClick = (roomId: number) => {
+  const handleRoomClick = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
+    if (event?.detail && event.detail > 1 && !selectedPieceId) {
+      return;
+    }
     if (!selectedPieceId) {
       setValidationMessage('Select a piece, then choose a destination room.');
       return;
@@ -412,6 +415,21 @@ function PlayArea() {
     submitPlan(nextMoves, nextOrder);
   };
 
+  const handleRoomDoubleClick = (roomId: number) => {
+    if (selectedPieceId) {
+      return;
+    }
+    if (!currentPlayerPieceId) {
+      setValidationMessage('No current player available.');
+      return;
+    }
+    const nextMoves = { ...plannedMoves, [currentPlayerPieceId]: roomId };
+    const nextOrder = planOrder.includes(currentPlayerPieceId)
+      ? planOrder
+      : [...planOrder, currentPlayerPieceId];
+    submitPlan(nextMoves, nextOrder);
+  };
+
   const planSummary =
     planOrder.length === 0
       ? 'No moves planned.'
@@ -472,8 +490,9 @@ function PlayArea() {
                     width={x2 - x1}
                     height={y2 - y1}
                     className={roomClassName}
-                    onClick={() => handleRoomClick(room.id)}
+                    onClick={(event) => handleRoomClick(room.id, event)}
                     onMouseDown={(event) => handleRoomMouseDown(event, room.id)}
+                    onDoubleClick={() => handleRoomDoubleClick(room.id)}
                     aria-label={room.name ?? `Room ${room.id}`}
                   />
                 );
