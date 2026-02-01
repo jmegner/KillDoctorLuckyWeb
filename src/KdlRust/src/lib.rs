@@ -223,6 +223,22 @@ impl GameStateHandle {
         self.state.prev_turn_summaries_since_normal(true)
     }
 
+    #[wasm_bindgen(js_name = "animationFrames")]
+    pub fn animation_frames(&self) -> Vec<u32> {
+        let frames = self.state.animation_frames_since_normal();
+        let mut flat = Vec::with_capacity(frames.len() * 5);
+
+        for frame in frames {
+            flat.push(frame[0].0 as u32);
+            flat.push(frame[1].0 as u32);
+            flat.push(frame[2].0 as u32);
+            flat.push(frame[3].0 as u32);
+            flat.push(frame[4].0 as u32);
+        }
+
+        flat
+    }
+
     #[wasm_bindgen(js_name = "validateTurnPlan")]
     pub fn validate_turn_plan(&self, turn_plan_json: &str) -> String {
         let turn = match parse_turn_plan(turn_plan_json) {

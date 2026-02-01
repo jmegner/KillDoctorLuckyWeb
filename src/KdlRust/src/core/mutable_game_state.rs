@@ -1047,6 +1047,73 @@ impl MutableGameState {
 
         summaries.into_iter().rev().collect::<Vec<_>>().join("\n")
     }
+
+    pub fn animation_frames_since_normal(&self) -> Vec<[RoomId; 5]> {
+        let mut states = Vec::new();
+        let mut state = self;
+
+        while let Some(prev_state) = state.prev_state.as_deref() {
+            states.push(state);
+            if prev_state.is_normal_turn() {
+                break;
+            }
+            state = prev_state;
+        }
+
+        if states.is_empty() {
+            return Vec::new();
+        }
+
+        states.reverse();
+        let earliest_state = states[0];
+        let Some(prev_state) = earliest_state.prev_state.as_deref() else {
+            return Vec::new();
+        };
+
+        let mut baseline_player_rooms = prev_state.player_room_ids.clone();
+        for mv in &earliest_state.prev_turn.moves {
+            if mv.player_id.0 < baseline_player_rooms.len() {
+                baseline_player_rooms[mv.player_id.0] = mv.dest_room_id;
+            }
+        }
+
+        let mut frames = Vec::with_capacity(states.len() + 1);
+        frames.push(Self::frame_from_positions(
+            prev_state.doctor_room_id,
+            &baseline_player_rooms,
+        ));
+
+        for state in states {
+            frames.push(Self::frame_from_positions(
+                state.doctor_room_id,
+                &state.player_room_ids,
+            ));
+        }
+
+        frames
+    }
+
+    fn frame_from_positions(doctor_room_id: RoomId, player_room_ids: &[RoomId]) -> [RoomId; 5] {
+        [
+            doctor_room_id,
+            player_room_ids
+                .get(rule_helper::SIDE_A_NORMAL_PLAYER_ID.0)
+                .copied()
+                .unwrap_or(RoomId(0)),
+            player_room_ids
+                .get(rule_helper::SIDE_B_NORMAL_PLAYER_ID.0)
+                .copied()
+                .unwrap_or(RoomId(0)),
+            player_room_ids
+                .get(rule_helper::STRANGER_PLAYER_ID_FIRST.0)
+                .copied()
+                .unwrap_or(RoomId(0)),
+            player_room_ids
+                .get(rule_helper::STRANGER_PLAYER_ID_SECOND.0)
+                .copied()
+                .unwrap_or(RoomId(0)),
+        ]
+    }
 }
 
 fn use_weapon(player_weapons: &mut [f64], idx: usize, attack_strength: &mut f64) {

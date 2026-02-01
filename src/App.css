@@ -202,6 +202,12 @@
   margin-top: 16px;
 }
 
+.planner-button.is-active {
+  background: var(--accent);
+  color: #fefbf5;
+  border-color: var(--accent-strong);
+}
+
 .planner-button--primary {
   background: var(--accent);
   color: #fefbf5;
@@ -234,6 +240,36 @@
 .planner-info h3 {
   margin: 0 0 8px;
   color: var(--ink);
+}
+
+.planner-animations {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.planner-animations-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.planner-animations-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.planner-animations-speed {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.9rem;
+  min-width: 60px;
+  text-align: center;
 }
 
 .play-area-summary {

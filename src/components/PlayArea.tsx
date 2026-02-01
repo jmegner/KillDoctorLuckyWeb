@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react';
+import { useRef, useState, type MouseEvent } from 'react';
 import { newDefaultGameState, type GameStateHandle } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
 import boardData from '../data/boards/BoardAltDown.json';
 
@@ -53,6 +53,8 @@ const boardRoomById = new Map<number, BoardRoom>(
 );
 
 const pieceOrder: PieceId[] = ['doctor', 'player1', 'player2', 'stranger1', 'stranger2'];
+const animationSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
+const defaultSpeedIndex = 3;
 
 const pieceConfig: Record<
   PieceId,
@@ -199,6 +201,20 @@ function PlayArea() {
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [, setTurnCounter] = useState(0);
+  const [animationEnabled, setAnimationEnabled] = useState(true);
+  const [animationSpeedIndex, setAnimationSpeedIndex] = useState(defaultSpeedIndex);
+  const [animatedPieces, setAnimatedPieces] = useState<
+    Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }> | null
+  >(null);
+  const animationRef = useRef<{
+    frames: Array<Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>>;
+    frameIndex: number;
+    startTime: number;
+    durationMs: number;
+    speed: number;
+    rafId: number | null;
+  } | null>(null);
+  const animationSpeed = animationSpeeds[animationSpeedIndex];
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
   const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
   const history = gameState ? gameState.normalTurnHistory() : '';
@@ -288,6 +304,7 @@ function PlayArea() {
 
     return tokens;
   })();
+  const animatedPieceList = animatedPieces ?? [];
 
   const isPieceSelectable = (pieceId: PieceId) =>
     currentPlayerPieceId !== null &&
@@ -319,13 +336,6 @@ function PlayArea() {
     setPlanOrder((prev) => (prev.includes(selectedPieceId) ? prev : [...prev, selectedPieceId]));
     setSelectedPieceId(null);
     setValidationMessage(null);
-  };
-
-  const handleSubmit = () => {
-    if (!gameState) {
-      return;
-    }
-    submitPlan(plannedMoves, planOrder);
   };
 
   const submitPlan = (
@@ -360,6 +370,13 @@ function PlayArea() {
     setSelectedPieceId(null);
     setValidationMessage(null);
     setTurnCounter((prev) => prev + 1);
+    startAnimationFromState();
+  };
+  const handleSubmit = () => {
+    if (!gameState) {
+      return;
+    }
+    submitPlan(plannedMoves, planOrder);
   };
 
   const handleUndo = () => {
@@ -371,6 +388,7 @@ function PlayArea() {
       setValidationMessage('No previous turn to undo.');
       return;
     }
+    stopAnimation();
     setPlannedMoves({});
     setPlanOrder([]);
     setSelectedPieceId(null);
@@ -383,6 +401,7 @@ function PlayArea() {
       return;
     }
     gameState.resetGame();
+    stopAnimation();
     setPlannedMoves({});
     setPlanOrder([]);
     setSelectedPieceId(null);
@@ -391,6 +410,7 @@ function PlayArea() {
   };
 
   const handleCancel = () => {
+    stopAnimation();
     setPlannedMoves({});
     setPlanOrder([]);
     setSelectedPieceId(null);
@@ -446,6 +466,153 @@ function PlayArea() {
   const selectedSuffix =
     selectedPieceId && plannedMoves[selectedPieceId] !== undefined ? ' (update)' : '';
 
+  const stopAnimation = () => {
+    const current = animationRef.current;
+    if (current && current.rafId !== null) {
+      cancelAnimationFrame(current.rafId);
+    }
+    animationRef.current = null;
+    setAnimatedPieces(null);
+  };
+
+  const buildPositionsForRooms = (roomIds: number[]) => {
+    const roomTokens = new Map<number, PieceId[]>();
+    pieceOrder.forEach((pieceId, index) => {
+      const roomId = roomIds[index];
+      if (roomId === undefined) {
+        return;
+      }
+      const list = roomTokens.get(roomId) ?? [];
+      list.push(pieceId);
+      roomTokens.set(roomId, list);
+    });
+
+    const positionsByPiece = new Map<
+      PieceId,
+      { pieceId: PieceId; roomId: number; x: number; y: number; size: number }
+    >();
+    roomTokens.forEach((pieceIds, roomId) => {
+      const room = boardRoomById.get(roomId);
+      if (!room) {
+        return;
+      }
+      const orderedPieceIds = pieceOrder.filter((pieceId) => pieceIds.includes(pieceId));
+      const roomRect = getRoomRect(room.coords);
+      const { size, positions } = getPiecePositionsInRoom(orderedPieceIds.length, roomRect);
+      orderedPieceIds.forEach((pieceId, index) => {
+        const placement = positions[index];
+        if (!placement) {
+          return;
+        }
+        positionsByPiece.set(pieceId, {
+          pieceId,
+          roomId,
+          x: placement.x,
+          y: placement.y,
+          size,
+        });
+      });
+    });
+
+    return pieceOrder
+      .map((pieceId) => positionsByPiece.get(pieceId))
+      .filter(
+        (piece): piece is { pieceId: PieceId; roomId: number; x: number; y: number; size: number } =>
+          piece !== undefined
+      );
+  };
+
+  const startAnimationFromState = () => {
+    if (!gameState || !animationEnabled) {
+      return;
+    }
+    const framesRaw = gameState.animationFrames();
+    if (!framesRaw || framesRaw.length === 0) {
+      return;
+    }
+    const frameCount = Math.floor(framesRaw.length / pieceOrder.length);
+    if (frameCount <= 1) {
+      return;
+    }
+    const frames = Array.from({ length: frameCount }, (_, frameIndex) => {
+      const rooms = pieceOrder.map(
+        (_pieceId, index) => framesRaw[frameIndex * pieceOrder.length + index]
+      );
+      return buildPositionsForRooms(rooms);
+    });
+
+    stopAnimation();
+
+    const animationState = {
+      frames,
+      frameIndex: 0,
+      startTime: performance.now(),
+      durationMs: 1000 / animationSpeed,
+      speed: animationSpeed,
+      rafId: null as number | null,
+    };
+
+    const tick = (now: number) => {
+      if (!animationRef.current) {
+        return;
+      }
+      const current = animationRef.current;
+      const nextIndex = current.frameIndex + 1;
+      if (nextIndex >= current.frames.length) {
+        stopAnimation();
+        return;
+      }
+
+      const progress = Math.min(1, (now - current.startTime) / current.durationMs);
+      const from = current.frames[current.frameIndex];
+      const to = current.frames[nextIndex];
+      const interpolated = from.map((piece, index) => {
+        const target = to[index] ?? piece;
+        return {
+          pieceId: piece.pieceId,
+          roomId: target.roomId,
+          x: piece.x + (target.x - piece.x) * progress,
+          y: piece.y + (target.y - piece.y) * progress,
+          size: piece.size + (target.size - piece.size) * progress,
+        };
+      });
+
+      setAnimatedPieces(interpolated);
+
+      if (progress >= 1) {
+        current.frameIndex = nextIndex;
+        current.startTime = now;
+        current.durationMs = 1000 / current.speed;
+      }
+
+      current.rafId = requestAnimationFrame(tick);
+    };
+
+    animationRef.current = animationState;
+    setAnimatedPieces(frames[0]);
+    animationRef.current.rafId = requestAnimationFrame(tick);
+  };
+
+  const handleAnimationEnabled = (enabled: boolean) => {
+    setAnimationEnabled(enabled);
+    if (!enabled) {
+      stopAnimation();
+    }
+  };
+
+  const handleSpeedChange = (direction: 'slower' | 'faster') => {
+    setAnimationSpeedIndex((prev) => {
+      const next =
+        direction === 'slower'
+          ? Math.max(0, prev - 1)
+          : Math.min(animationSpeeds.length - 1, prev + 1);
+      if (animationRef.current) {
+        animationRef.current.speed = animationSpeeds[next];
+      }
+      return next;
+    });
+  };
+
   if (!gameState) {
     return <div className="play-area-error">Failed to create game state.</div>;
   }
@@ -499,9 +666,10 @@ function PlayArea() {
               })}
             </g>
             <g className="piece-layer">
-              {renderPieces
-                .filter((piece) => piece.kind === 'actual')
-                .map((piece) => {
+              {(animatedPieces
+                ? animatedPieceList
+                : renderPieces.filter((piece) => piece.kind === 'actual')
+              ).map((piece) => {
                 const config = pieceConfig[piece.pieceId];
                 const isSelected = selectedPieceId === piece.pieceId;
                 const selectable = isPieceSelectable(piece.pieceId);
@@ -698,6 +866,34 @@ function PlayArea() {
             <p>Opponent pieces and the doctor cannot be moved.</p>
           </div>
         )}
+        <div className="planner-animations">
+          <p className="planner-animations-title">Animations</p>
+          <div className="planner-animations-row">
+            <button
+              className={`planner-button ${animationEnabled ? '' : 'is-active'}`}
+              onClick={() => handleAnimationEnabled(false)}
+            >
+              Off
+            </button>
+            <button
+              className={`planner-button ${animationEnabled ? 'is-active' : ''}`}
+              onClick={() => handleAnimationEnabled(true)}
+            >
+              On
+            </button>
+          </div>
+          <div className="planner-animations-row">
+            <button className="planner-button" onClick={() => handleSpeedChange('slower')}>
+              Slower
+            </button>
+            <span className="planner-animations-speed">
+              {animationSpeed.toFixed(2)}x
+            </span>
+            <button className="planner-button" onClick={() => handleSpeedChange('faster')}>
+              Faster
+            </button>
+          </div>
+        </div>
       </aside>
       <div className="play-area-summary">
         <pre className="game-summary">{summary}</pre>
