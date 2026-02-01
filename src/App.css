@@ -304,6 +304,10 @@
   }
 
   .planner-panel {
-    order: -1;
+    order: 1;
+  }
+
+  .play-area-summary {
+    order: 2;
   }
 }
