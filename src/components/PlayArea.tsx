@@ -881,16 +881,22 @@ function PlayArea() {
             >
               On
             </button>
-          </div>
-          <div className="planner-animations-row">
-            <button className="planner-button" onClick={() => handleSpeedChange('slower')}>
-              Slower
+            <button
+              className="planner-button"
+              onClick={() => handleSpeedChange('slower')}
+              aria-label="Slower"
+            >
+              -
             </button>
             <span className="planner-animations-speed">
               {animationSpeed.toFixed(2)}x
             </span>
-            <button className="planner-button" onClick={() => handleSpeedChange('faster')}>
-              Faster
+            <button
+              className="planner-button"
+              onClick={() => handleSpeedChange('faster')}
+              aria-label="Faster"
+            >
+              +
             </button>
           </div>
         </div>

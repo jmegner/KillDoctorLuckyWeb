@@ -261,14 +261,20 @@
 .planner-animations-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.planner-animations-row .planner-button {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
 }
 
 .planner-animations-speed {
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 0.9rem;
-  min-width: 60px;
+  min-width: 52px;
   text-align: center;
 }
 
