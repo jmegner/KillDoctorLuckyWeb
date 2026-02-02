@@ -233,18 +233,34 @@ const buildRoomDistanceMap = (startRoomId: number) => {
 };
 
 const parseActionActor = (token: string): PieceId | null => {
-  switch (token.trim().toUpperCase()) {
-    case 'P1':
-      return 'player1';
-    case 'P2':
-      return 'player2';
-    case 'S1':
-      return 'stranger1';
-    case 'S2':
-      return 'stranger2';
-    default:
-      return null;
+  const trimmed = token.trim();
+  if (!trimmed) {
+    return null;
   }
+  const prefix = trimmed[0];
+  const num = Number(trimmed.slice(1));
+  if (!Number.isFinite(num)) {
+    return null;
+  }
+  if (prefix === 'P') {
+    if (num === 1) {
+      return 'player1';
+    }
+    if (num === 2 || num === 3) {
+      return 'player2';
+    }
+    return null;
+  }
+  if (prefix === 'p') {
+    if (num === 2) {
+      return 'stranger1';
+    }
+    if (num === 4) {
+      return 'stranger2';
+    }
+    return null;
+  }
+  return null;
 };
 
 const parseActionSummaries = (summary: string): Array<ActionInfo | null> => {
