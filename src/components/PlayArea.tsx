@@ -30,6 +30,13 @@ type BoardLayout = {
   Rooms: BoardRoomRaw[];
 };
 
+type ActionKind = 'loot' | 'attack';
+
+type ActionInfo = {
+  kind: ActionKind;
+  actor: PieceId;
+};
+
 type RoomRect = {
   x: number;
   y: number;
@@ -167,6 +174,23 @@ const getHexPoints = (x: number, y: number, size: number) => {
   return points.join(' ');
 };
 
+const actionDisplayBounds = (() => {
+  const room3 = boardRoomById.get(3);
+  const room11 = boardRoomById.get(11);
+  const room12 = boardRoomById.get(12);
+  if (!room3 || !room11 || !room12) {
+    return null;
+  }
+  const room3Rect = getRoomRect(room3.coords);
+  const room11Rect = getRoomRect(room11.coords);
+  const room12Rect = getRoomRect(room12.coords);
+  return {
+    minX: room12Rect.x + room12Rect.width,
+    maxX: room11Rect.x,
+    minY: room3Rect.y + room3Rect.height,
+  };
+})();
+
 const buildRoomDistanceMap = (startRoomId: number) => {
   const distances = new Map<number, number>();
   const queue = [startRoomId];
@@ -195,6 +219,98 @@ const buildRoomDistanceMap = (startRoomId: number) => {
   }
 
   return distances;
+};
+
+const parseActionActor = (token: string): PieceId | null => {
+  switch (token.trim().toUpperCase()) {
+    case 'P1':
+      return 'player1';
+    case 'P2':
+      return 'player2';
+    case 'S1':
+      return 'stranger1';
+    case 'S2':
+      return 'stranger2';
+    default:
+      return null;
+  }
+};
+
+const parseActionSummaries = (summary: string): Array<ActionInfo | null> => {
+  const trimmed = summary.trim();
+  if (!trimmed) {
+    return [];
+  }
+  const lines = summary.split(/\r?\n/);
+  const summaries: string[][] = [];
+  let current: string[] = [];
+
+  lines.forEach((line) => {
+    if (line.startsWith('  Turn')) {
+      if (current.length > 0) {
+        summaries.push(current);
+      }
+      current = [line];
+    } else if (current.length > 0) {
+      current.push(line);
+    }
+  });
+
+  if (current.length > 0) {
+    summaries.push(current);
+  }
+
+  return summaries.map((entry) => {
+    const actionKind = entry.some((line) => line.includes('    LOOT '))
+      ? 'loot'
+      : entry.some((line) => line.includes('    ATTACK:'))
+        ? 'attack'
+        : null;
+    if (!actionKind) {
+      return null;
+    }
+    const firstLine = entry[0] ?? '';
+    const match = firstLine.match(/\(([^)]+)\)/);
+    if (!match) {
+      return null;
+    }
+    const actorToken = match[1].replace(/[MLA]+$/g, '');
+    const actor = parseActionActor(actorToken);
+    if (!actor) {
+      return null;
+    }
+    return { kind: actionKind, actor };
+  });
+};
+
+const buildActionOverlayLayout = (text: string) => {
+  const fontSize = 18;
+  const paddingX = 16;
+  const paddingY = 8;
+  const estimatedTextWidth = Math.max(60, text.length * fontSize * 0.6);
+  const boxHeight = fontSize + paddingY * 2;
+  const bounds = actionDisplayBounds;
+  const minX = bounds ? bounds.minX + 8 : 12;
+  const maxX = bounds ? bounds.maxX - 8 : boardWidth - 12;
+  const minY = bounds ? bounds.minY + 6 : 12;
+  const maxWidth = Math.max(120, maxX - minX);
+  const boxWidth = Math.min(maxWidth, Math.max(160, estimatedTextWidth + paddingX * 2));
+  const desiredX = boardWidth / 2 - boxWidth / 2;
+  const desiredY = boardHeight - boxHeight - 12;
+  const clampedX = Math.min(Math.max(desiredX, minX), Math.max(minX, maxX - boxWidth));
+  const clampedY = Math.min(
+    Math.max(desiredY, minY),
+    Math.max(minY, boardHeight - boxHeight - 6)
+  );
+
+  return {
+    boxX: clampedX,
+    boxY: clampedY,
+    boxWidth,
+    boxHeight,
+    textX: clampedX + boxWidth / 2,
+    textY: clampedY + boxHeight / 2 + 0.5,
+  };
 };
 
 const blendHexColor = (from: string, to: string, ratio: number) => {
@@ -232,6 +348,7 @@ function PlayArea() {
   const [, setTurnCounter] = useState(0);
   const [animationEnabled, setAnimationEnabled] = useState(true);
   const [animationSpeedIndex, setAnimationSpeedIndex] = useState(defaultSpeedIndex);
+  const [actionOverlay, setActionOverlay] = useState<string | null>(null);
   const [animatedPieces, setAnimatedPieces] = useState<Array<{
     pieceId: PieceId;
     roomId: number;
@@ -240,8 +357,12 @@ function PlayArea() {
     size: number;
   }> | null>(null);
   const animationRef = useRef<{
-    frames: Array<Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>>;
-    frameIndex: number;
+    segments: Array<{
+      from: Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>;
+      to: Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>;
+      actionText: string | null;
+    }>;
+    segmentIndex: number;
     startTime: number;
     durationMs: number;
     speed: number;
@@ -487,6 +608,7 @@ function PlayArea() {
   const selectedSuffix = selectedPieceId && plannedMoves[selectedPieceId] !== undefined ? ' (update)' : '';
   const selectedRoomId = selectedPieceId ? pieceRoomMap.get(selectedPieceId) : undefined;
   const distanceByRoom = selectedRoomId !== undefined ? buildRoomDistanceMap(selectedRoomId) : null;
+  const actionOverlayLayout = actionOverlay ? buildActionOverlayLayout(actionOverlay) : null;
 
   const stopAnimation = () => {
     const current = animationRef.current;
@@ -495,6 +617,7 @@ function PlayArea() {
     }
     animationRef.current = null;
     setAnimatedPieces(null);
+    setActionOverlay(null);
   };
 
   const buildPositionsForRooms = (roomIds: number[]) => {
@@ -556,16 +679,49 @@ function PlayArea() {
     if (frameCount <= 1) {
       return;
     }
-    const frames = Array.from({ length: frameCount }, (_, frameIndex) => {
-      const rooms = pieceOrder.map((_pieceId, index) => framesRaw[frameIndex * pieceOrder.length + index]);
-      return buildPositionsForRooms(rooms);
+    const frameRooms = Array.from({ length: frameCount }, (_, frameIndex) =>
+      pieceOrder.map((_pieceId, index) => framesRaw[frameIndex * pieceOrder.length + index]),
+    );
+    const frames = frameRooms.map((rooms) => buildPositionsForRooms(rooms));
+    const summaryText = gameState.prevTurnSummaryVerbose();
+    const summaryActions = parseActionSummaries(summaryText);
+    const actionTexts = summaryActions.map((action, index) => {
+      if (!action) {
+        return null;
+      }
+      const pieceIndex = pieceOrder.indexOf(action.actor);
+      const rooms = frameRooms[index + 1];
+      if (pieceIndex < 0 || !rooms) {
+        return null;
+      }
+      const roomId = rooms[pieceIndex];
+      const label = pieceConfig[action.actor].label;
+      return action.kind === 'loot'
+        ? `${label} loots R${roomId}`
+        : `${label} attacks in R${roomId}`;
     });
+    const segments: Array<{
+      from: Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>;
+      to: Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>;
+      actionText: string | null;
+    }> = [];
+    for (let index = 0; index < frames.length - 1; index += 1) {
+      segments.push({ from: frames[index], to: frames[index + 1], actionText: null });
+      const actionText = actionTexts[index] ?? null;
+      if (actionText) {
+        segments.push({ from: frames[index + 1], to: frames[index + 1], actionText });
+      }
+    }
 
     stopAnimation();
 
+    if (segments.length === 0) {
+      return;
+    }
+
     const animationState = {
-      frames,
-      frameIndex: 0,
+      segments,
+      segmentIndex: 0,
       startTime: performance.now(),
       durationMs: 1000 / animationSpeed,
       speed: animationSpeed,
@@ -577,15 +733,10 @@ function PlayArea() {
         return;
       }
       const current = animationRef.current;
-      const nextIndex = current.frameIndex + 1;
-      if (nextIndex >= current.frames.length) {
-        stopAnimation();
-        return;
-      }
-
+      const segment = current.segments[current.segmentIndex];
       const progress = Math.min(1, (now - current.startTime) / current.durationMs);
-      const from = current.frames[current.frameIndex];
-      const to = current.frames[nextIndex];
+      const from = segment.from;
+      const to = segment.to;
       const interpolated = from.map((piece, index) => {
         const target = to[index] ?? piece;
         return {
@@ -600,16 +751,23 @@ function PlayArea() {
       setAnimatedPieces(interpolated);
 
       if (progress >= 1) {
-        current.frameIndex = nextIndex;
+        const nextIndex = current.segmentIndex + 1;
+        if (nextIndex >= current.segments.length) {
+          stopAnimation();
+          return;
+        }
+        current.segmentIndex = nextIndex;
         current.startTime = now;
         current.durationMs = 1000 / current.speed;
+        setActionOverlay(current.segments[nextIndex].actionText);
       }
 
       current.rafId = requestAnimationFrame(tick);
     };
 
     animationRef.current = animationState;
-    setAnimatedPieces(frames[0]);
+    setAnimatedPieces(segments[0].from);
+    setActionOverlay(segments[0].actionText);
     animationRef.current.rafId = requestAnimationFrame(tick);
   };
 
@@ -840,9 +998,29 @@ function PlayArea() {
                         </text>
                       )}
                     </g>
-                  );
-                })}
+                );
+              })}
             </g>
+            {actionOverlay && actionOverlayLayout && (
+              <g className="action-overlay">
+                <rect
+                  className="action-overlay-box"
+                  x={actionOverlayLayout.boxX}
+                  y={actionOverlayLayout.boxY}
+                  width={actionOverlayLayout.boxWidth}
+                  height={actionOverlayLayout.boxHeight}
+                  rx={10}
+                  ry={10}
+                />
+                <text
+                  className="action-overlay-text"
+                  x={actionOverlayLayout.textX}
+                  y={actionOverlayLayout.textY}
+                >
+                  {actionOverlay}
+                </text>
+              </g>
+            )}
           </svg>
         </div>
       </div>

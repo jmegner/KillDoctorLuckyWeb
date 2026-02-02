@@ -110,6 +110,24 @@
   pointer-events: none;
 }
 
+.action-overlay {
+  pointer-events: none;
+}
+
+.action-overlay-box {
+  fill: #ffe740;
+}
+
+.action-overlay-text {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 18px;
+  fill: #000000;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
 .piece {
   stroke: rgba(255, 255, 255, 0.9);
   stroke-width: 1.4;
