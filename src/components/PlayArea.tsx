@@ -706,10 +706,28 @@ function PlayArea() {
       actionText: string | null;
     }> = [];
     for (let index = 0; index < frames.length - 1; index += 1) {
-      segments.push({ from: frames[index], to: frames[index + 1], actionText: null });
+      const startRooms = frameRooms[index];
+      const endRooms = frameRooms[index + 1];
+      const actionRooms = [startRooms[0], ...endRooms.slice(1)];
       const actionText = actionTexts[index] ?? null;
+      const startEqualsAction = startRooms.every((roomId, roomIndex) => roomId === actionRooms[roomIndex]);
+      const actionEqualsEnd = actionRooms.every((roomId, roomIndex) => roomId === endRooms[roomIndex]);
+      const startFrame = frames[index];
+      const endFrame = frames[index + 1];
+      const actionFrame = startEqualsAction
+        ? startFrame
+        : actionEqualsEnd
+          ? endFrame
+          : buildPositionsForRooms(actionRooms);
+
+      if (!startEqualsAction) {
+        segments.push({ from: startFrame, to: actionFrame, actionText: null });
+      }
       if (actionText) {
-        segments.push({ from: frames[index + 1], to: frames[index + 1], actionText });
+        segments.push({ from: actionFrame, to: actionFrame, actionText });
+      }
+      if (!actionEqualsEnd) {
+        segments.push({ from: actionFrame, to: endFrame, actionText: null });
       }
     }
 
