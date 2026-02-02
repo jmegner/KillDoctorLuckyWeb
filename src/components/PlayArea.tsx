@@ -48,9 +48,7 @@ const boardRooms: BoardRoom[] = boardLayout.Rooms.map((room) => ({
   adjacent: room.Adjacent?.map(Number) ?? [],
   visible: room.Visible?.map(Number) ?? [],
 }));
-const boardRoomById = new Map<number, BoardRoom>(
-  boardRooms.map((room) => [room.id, room] as const)
-);
+const boardRoomById = new Map<number, BoardRoom>(boardRooms.map((room) => [room.id, room] as const));
 
 const pieceOrder: PieceId[] = ['doctor', 'player1', 'player2', 'stranger1', 'stranger2'];
 const animationSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
@@ -66,11 +64,11 @@ const pieceConfig: Record<
     showLabel: boolean;
   }
 > = {
-  doctor: { label: 'Dr', shape: 'circle', color: '#1b1b1b', textColor: '#fefbf5', showLabel: true },
-  player1: { label: 'P1', shape: 'square', color: '#d93b30', textColor: '#fefbf5', showLabel: true },
-  player2: { label: 'P3', shape: 'square', color: '#3a7d44', textColor: '#fefbf5', showLabel: true },
-  stranger1: { label: 'p2', shape: 'hex', color: '#f08a24', textColor: '#1b1b1b', showLabel: true },
-  stranger2: { label: 'p4', shape: 'hex', color: '#f2c14e', textColor: '#1b1b1b', showLabel: true },
+  doctor: { label: 'Dr', shape: 'circle', color: '#000000', textColor: '#ffffff', showLabel: true },
+  player1: { label: 'P1', shape: 'square', color: '#ff4444', textColor: '#000000', showLabel: true },
+  player2: { label: 'P3', shape: 'square', color: '#44ff44', textColor: '#000000', showLabel: true },
+  stranger1: { label: 'p2', shape: 'hex', color: '#f08a24', textColor: '#000000', showLabel: true },
+  stranger2: { label: 'p4', shape: 'hex', color: '#55cccc', textColor: '#000000', showLabel: true },
 };
 
 const pieceSizeTarget = 60;
@@ -88,7 +86,14 @@ const getSlotLayout = (count: number) => {
     return { cols: 1, rows: 1, slots: [{ col: 0, row: 0 }] };
   }
   if (count === 2) {
-    return { cols: 2, rows: 1, slots: [{ col: 0, row: 0 }, { col: 1, row: 0 }] };
+    return {
+      cols: 2,
+      rows: 1,
+      slots: [
+        { col: 0, row: 0 },
+        { col: 1, row: 0 },
+      ],
+    };
   }
   if (count === 3) {
     return {
@@ -175,15 +180,9 @@ const blendHexColor = (from: string, to: string, ratio: number) => {
     return from;
   }
   const clamp = (value: number) => Math.min(255, Math.max(0, value));
-  const fromRgb = [
-    (fromNum >> 16) & 0xff,
-    (fromNum >> 8) & 0xff,
-    fromNum & 0xff,
-  ];
+  const fromRgb = [(fromNum >> 16) & 0xff, (fromNum >> 8) & 0xff, fromNum & 0xff];
   const toRgb = [(toNum >> 16) & 0xff, (toNum >> 8) & 0xff, toNum & 0xff];
-  const blended = fromRgb.map((channel, index) =>
-    clamp(Math.round(channel + (toRgb[index] - channel) * ratio))
-  );
+  const blended = fromRgb.map((channel, index) => clamp(Math.round(channel + (toRgb[index] - channel) * ratio)));
   return `#${blended.map((value) => value.toString(16).padStart(2, '0')).join('')}`;
 };
 
@@ -203,9 +202,13 @@ function PlayArea() {
   const [, setTurnCounter] = useState(0);
   const [animationEnabled, setAnimationEnabled] = useState(true);
   const [animationSpeedIndex, setAnimationSpeedIndex] = useState(defaultSpeedIndex);
-  const [animatedPieces, setAnimatedPieces] = useState<
-    Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }> | null
-  >(null);
+  const [animatedPieces, setAnimatedPieces] = useState<Array<{
+    pieceId: PieceId;
+    roomId: number;
+    x: number;
+    y: number;
+    size: number;
+  }> | null>(null);
   const animationRef = useRef<{
     frames: Array<Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>>;
     frameIndex: number;
@@ -218,12 +221,9 @@ function PlayArea() {
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
   const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
   const history = gameState ? gameState.normalTurnHistory() : '';
-  const currentPlayerPieceId = gameState
-    ? (gameState.currentPlayerPieceId() as PieceId)
-    : null;
+  const currentPlayerPieceId = gameState ? (gameState.currentPlayerPieceId() as PieceId) : null;
   const pieceRooms = gameState ? gameState.piecePositions() : null;
-  const reachableRooms =
-    gameState && selectedPieceId ? gameState.reachableRooms(selectedPieceId, 1) : null;
+  const reachableRooms = gameState && selectedPieceId ? gameState.reachableRooms(selectedPieceId, 1) : null;
   const reachableRoomSet = new Set(reachableRooms ?? []);
   const pieceRoomMap = (() => {
     const map = new Map<PieceId, number>();
@@ -338,10 +338,7 @@ function PlayArea() {
     setValidationMessage(null);
   };
 
-  const submitPlan = (
-    moves: Partial<Record<PieceId, number>>,
-    order: PieceId[]
-  ) => {
+  const submitPlan = (moves: Partial<Record<PieceId, number>>, order: PieceId[]) => {
     const planEntries = order
       .map((pieceId) => {
         const roomId = moves[pieceId];
@@ -428,9 +425,7 @@ function PlayArea() {
       return;
     }
     const nextMoves = { ...plannedMoves, [selectedPieceId]: roomId };
-    const nextOrder = planOrder.includes(selectedPieceId)
-      ? planOrder
-      : [...planOrder, selectedPieceId];
+    const nextOrder = planOrder.includes(selectedPieceId) ? planOrder : [...planOrder, selectedPieceId];
     setSelectedPieceId(null);
     submitPlan(nextMoves, nextOrder);
   };
@@ -444,9 +439,7 @@ function PlayArea() {
       return;
     }
     const nextMoves = { ...plannedMoves, [currentPlayerPieceId]: roomId };
-    const nextOrder = planOrder.includes(currentPlayerPieceId)
-      ? planOrder
-      : [...planOrder, currentPlayerPieceId];
+    const nextOrder = planOrder.includes(currentPlayerPieceId) ? planOrder : [...planOrder, currentPlayerPieceId];
     submitPlan(nextMoves, nextOrder);
   };
 
@@ -463,8 +456,7 @@ function PlayArea() {
           .join(', ');
 
   const selectedLabel = selectedPieceId ? pieceConfig[selectedPieceId].label : 'None';
-  const selectedSuffix =
-    selectedPieceId && plannedMoves[selectedPieceId] !== undefined ? ' (update)' : '';
+  const selectedSuffix = selectedPieceId && plannedMoves[selectedPieceId] !== undefined ? ' (update)' : '';
 
   const stopAnimation = () => {
     const current = animationRef.current;
@@ -518,7 +510,7 @@ function PlayArea() {
       .map((pieceId) => positionsByPiece.get(pieceId))
       .filter(
         (piece): piece is { pieceId: PieceId; roomId: number; x: number; y: number; size: number } =>
-          piece !== undefined
+          piece !== undefined,
       );
   };
 
@@ -535,9 +527,7 @@ function PlayArea() {
       return;
     }
     const frames = Array.from({ length: frameCount }, (_, frameIndex) => {
-      const rooms = pieceOrder.map(
-        (_pieceId, index) => framesRaw[frameIndex * pieceOrder.length + index]
-      );
+      const rooms = pieceOrder.map((_pieceId, index) => framesRaw[frameIndex * pieceOrder.length + index]);
       return buildPositionsForRooms(rooms);
     });
 
@@ -602,10 +592,7 @@ function PlayArea() {
 
   const handleSpeedChange = (direction: 'slower' | 'faster') => {
     setAnimationSpeedIndex((prev) => {
-      const next =
-        direction === 'slower'
-          ? Math.max(0, prev - 1)
-          : Math.min(animationSpeeds.length - 1, prev + 1);
+      const next = direction === 'slower' ? Math.max(0, prev - 1) : Math.min(animationSpeeds.length - 1, prev + 1);
       if (animationRef.current) {
         animationRef.current.speed = animationSpeeds[next];
       }
@@ -666,157 +653,130 @@ function PlayArea() {
               })}
             </g>
             <g className="piece-layer">
-              {(animatedPieces
-                ? animatedPieceList
-                : renderPieces.filter((piece) => piece.kind === 'actual')
-              ).map((piece) => {
-                const config = pieceConfig[piece.pieceId];
-                const isSelected = selectedPieceId === piece.pieceId;
-                const selectable = isPieceSelectable(piece.pieceId);
-                const isPlannedSource = plannedMoves[piece.pieceId] !== undefined;
-                const className = [
-                  'piece',
-                  `piece--${config.shape}`,
-                  isSelected ? 'piece--selected' : '',
-                  selectable ? 'piece--movable' : 'piece--locked',
-                  isPlannedSource ? 'piece--planned-source' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ');
-                const labelSize = Math.min(piece.size * 0.6, 22);
-                const pieceFill = isPlannedSource
-                  ? blendHexColor(config.color, '#9c9c9c', 0.5)
-                  : config.color;
-                const pieceStroke = isPlannedSource ? '#8c8c8c' : undefined;
-                const pieceStrokeWidth = isPlannedSource ? 2.4 : undefined;
-                const labelFill = isPlannedSource
-                  ? blendHexColor(config.textColor, '#6f6f6f', 0.5)
-                  : config.textColor;
+              {(animatedPieces ? animatedPieceList : renderPieces.filter((piece) => piece.kind === 'actual')).map(
+                (piece) => {
+                  const config = pieceConfig[piece.pieceId];
+                  const isSelected = selectedPieceId === piece.pieceId;
+                  const selectable = isPieceSelectable(piece.pieceId);
+                  const isPlannedSource = plannedMoves[piece.pieceId] !== undefined;
+                  const className = [
+                    'piece',
+                    `piece--${config.shape}`,
+                    isSelected ? 'piece--selected' : '',
+                    selectable ? 'piece--movable' : 'piece--locked',
+                    isPlannedSource ? 'piece--planned-source' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
+                  const labelSize = Math.min(piece.size * 0.6, 22);
+                  const pieceFill = isPlannedSource ? blendHexColor(config.color, '#9c9c9c', 0.5) : config.color;
+                  const pieceStroke = isPlannedSource ? '#8c8c8c' : undefined;
+                  const pieceStrokeWidth = isPlannedSource ? 2.4 : undefined;
+                  const labelFill = isPlannedSource
+                    ? blendHexColor(config.textColor, '#6f6f6f', 0.5)
+                    : config.textColor;
 
-                const commonProps = {
-                  className,
-                  fill: pieceFill,
-                  stroke: pieceStroke,
-                  strokeWidth: pieceStrokeWidth,
-                  onClick: (event: MouseEvent<SVGElement>) => {
-                    event.stopPropagation();
-                    handlePieceClick(piece.pieceId);
-                  },
-                  'aria-label': `${config.label} piece`,
-                };
+                  const commonProps = {
+                    className,
+                    fill: pieceFill,
+                    stroke: pieceStroke,
+                    strokeWidth: pieceStrokeWidth,
+                    onClick: (event: MouseEvent<SVGElement>) => {
+                      event.stopPropagation();
+                      handlePieceClick(piece.pieceId);
+                    },
+                    'aria-label': `${config.label} piece`,
+                  };
 
-                let shape;
-                if (config.shape === 'circle') {
-                  shape = (
-                    <circle
-                      cx={piece.x + piece.size / 2}
-                      cy={piece.y + piece.size / 2}
-                      r={piece.size / 2}
-                      {...commonProps}
-                    />
-                  );
-                } else if (config.shape === 'square') {
-                  shape = (
-                    <rect
-                      x={piece.x}
-                      y={piece.y}
-                      width={piece.size}
-                      height={piece.size}
-                      rx={3}
-                      {...commonProps}
-                    />
-                  );
-                } else {
-                  shape = (
-                    <polygon
-                      points={getHexPoints(piece.x, piece.y, piece.size)}
-                      {...commonProps}
-                    />
-                  );
-                }
+                  let shape;
+                  if (config.shape === 'circle') {
+                    shape = (
+                      <circle
+                        cx={piece.x + piece.size / 2}
+                        cy={piece.y + piece.size / 2}
+                        r={piece.size / 2}
+                        {...commonProps}
+                      />
+                    );
+                  } else if (config.shape === 'square') {
+                    shape = (
+                      <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} rx={3} {...commonProps} />
+                    );
+                  } else {
+                    shape = <polygon points={getHexPoints(piece.x, piece.y, piece.size)} {...commonProps} />;
+                  }
 
-                return (
-                  <g key={piece.pieceId}>
-                    {shape}
-                    {config.showLabel && (
-                      <text
-                        className="piece-label"
-                        x={piece.x + piece.size / 2}
-                        y={piece.y + piece.size / 2}
-                        fontSize={labelSize}
-                        fill={labelFill}
-                      >
-                        {config.label}
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
+                  return (
+                    <g key={piece.pieceId}>
+                      {shape}
+                      {config.showLabel && (
+                        <text
+                          className="piece-label"
+                          x={piece.x + piece.size / 2}
+                          y={piece.y + piece.size / 2}
+                          fontSize={labelSize}
+                          fill={labelFill}
+                        >
+                          {config.label}
+                        </text>
+                      )}
+                    </g>
+                  );
+                },
+              )}
             </g>
             <g className="piece-layer piece-layer--planned">
               {renderPieces
                 .filter((piece) => piece.kind === 'ghost')
                 .map((piece) => {
-                const config = pieceConfig[piece.pieceId];
-                const className = ['piece', `piece--${config.shape}`, 'piece--planned-ghost']
-                  .filter(Boolean)
-                  .join(' ');
-                const labelSize = Math.min(piece.size * 0.6, 22);
-                const ghostProps = {
-                  className,
-                  fill: config.color,
-                  stroke: '#1f4f7a',
-                  strokeWidth: 4,
-                  pointerEvents: 'none' as const,
-                  'aria-hidden': true,
-                };
-                let shape;
-                if (config.shape === 'circle') {
-                  shape = (
-                    <circle
-                      cx={piece.x + piece.size / 2}
-                      cy={piece.y + piece.size / 2}
-                      r={piece.size / 2}
-                      {...ghostProps}
-                    />
-                  );
-                } else if (config.shape === 'square') {
-                  shape = (
-                    <rect
-                      x={piece.x}
-                      y={piece.y}
-                      width={piece.size}
-                      height={piece.size}
-                      rx={3}
-                      {...ghostProps}
-                    />
-                  );
-                } else {
-                  shape = (
-                    <polygon
-                      points={getHexPoints(piece.x, piece.y, piece.size)}
-                      {...ghostProps}
-                    />
-                  );
-                }
+                  const config = pieceConfig[piece.pieceId];
+                  const className = ['piece', `piece--${config.shape}`, 'piece--planned-ghost']
+                    .filter(Boolean)
+                    .join(' ');
+                  const labelSize = Math.min(piece.size * 0.6, 22);
+                  const ghostProps = {
+                    className,
+                    fill: config.color,
+                    stroke: '#1f4f7a',
+                    strokeWidth: 4,
+                    pointerEvents: 'none' as const,
+                    'aria-hidden': true,
+                  };
+                  let shape;
+                  if (config.shape === 'circle') {
+                    shape = (
+                      <circle
+                        cx={piece.x + piece.size / 2}
+                        cy={piece.y + piece.size / 2}
+                        r={piece.size / 2}
+                        {...ghostProps}
+                      />
+                    );
+                  } else if (config.shape === 'square') {
+                    shape = (
+                      <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} rx={3} {...ghostProps} />
+                    );
+                  } else {
+                    shape = <polygon points={getHexPoints(piece.x, piece.y, piece.size)} {...ghostProps} />;
+                  }
 
-                return (
-                  <g key={`ghost-${piece.pieceId}`} pointerEvents="none">
-                    {shape}
-                    {config.showLabel && (
-                      <text
-                        className="piece-label piece-label--planned"
-                        x={piece.x + piece.size / 2}
-                        y={piece.y + piece.size / 2}
-                        fontSize={labelSize}
-                        fill="#1f4f7a"
-                      >
-                        {config.label}
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
+                  return (
+                    <g key={`ghost-${piece.pieceId}`} pointerEvents="none">
+                      {shape}
+                      {config.showLabel && (
+                        <text
+                          className="piece-label piece-label--planned"
+                          x={piece.x + piece.size / 2}
+                          y={piece.y + piece.size / 2}
+                          fontSize={labelSize}
+                          fill="#1f4f7a"
+                        >
+                          {config.label}
+                        </text>
+                      )}
+                    </g>
+                  );
+                })}
             </g>
           </svg>
         </div>
@@ -881,21 +841,11 @@ function PlayArea() {
             >
               On
             </button>
-            <button
-              className="planner-button"
-              onClick={() => handleSpeedChange('slower')}
-              aria-label="Slower"
-            >
+            <button className="planner-button" onClick={() => handleSpeedChange('slower')} aria-label="Slower">
               -
             </button>
-            <span className="planner-animations-speed">
-              {animationSpeed.toFixed(2)}x
-            </span>
-            <button
-              className="planner-button"
-              onClick={() => handleSpeedChange('faster')}
-              aria-label="Faster"
-            >
+            <span className="planner-animations-speed">{animationSpeed.toFixed(2)}x</span>
+            <button className="planner-button" onClick={() => handleSpeedChange('faster')} aria-label="Faster">
               +
             </button>
           </div>
