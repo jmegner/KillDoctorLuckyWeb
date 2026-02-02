@@ -37,6 +37,17 @@ type ActionInfo = {
   actor: PieceId;
 };
 
+type ShapeProps = {
+  className?: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  pointerEvents?: string;
+  onClick?: (event: MouseEvent<SVGElement>) => void;
+  'aria-label'?: string;
+  'aria-hidden'?: boolean;
+};
+
 type RoomRect = {
   x: number;
   y: number;
@@ -349,6 +360,7 @@ function PlayArea() {
   const [animationEnabled, setAnimationEnabled] = useState(true);
   const [animationSpeedIndex, setAnimationSpeedIndex] = useState(defaultSpeedIndex);
   const [actionOverlay, setActionOverlay] = useState<string | null>(null);
+  const [actionHighlightPieceId, setActionHighlightPieceId] = useState<PieceId | null>(null);
   const [animatedPieces, setAnimatedPieces] = useState<Array<{
     pieceId: PieceId;
     roomId: number;
@@ -361,6 +373,7 @@ function PlayArea() {
       from: Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>;
       to: Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>;
       actionText: string | null;
+      highlightPieceId: PieceId | null;
     }>;
     segmentIndex: number;
     startTime: number;
@@ -618,6 +631,7 @@ function PlayArea() {
     animationRef.current = null;
     setAnimatedPieces(null);
     setActionOverlay(null);
+    setActionHighlightPieceId(null);
   };
 
   const buildPositionsForRooms = (roomIds: number[]) => {
@@ -700,10 +714,17 @@ function PlayArea() {
         ? `${label} loots R${roomId}`
         : `${label} attacks in R${roomId}`;
     });
+    const actionHighlights = summaryActions.map((action) => {
+      if (!action) {
+        return null;
+      }
+      return action.kind === 'attack' ? 'doctor' : action.actor;
+    });
     const segments: Array<{
       from: Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>;
       to: Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>;
       actionText: string | null;
+      highlightPieceId: PieceId | null;
     }> = [];
     for (let index = 0; index < frames.length - 1; index += 1) {
       const startRooms = frameRooms[index];
@@ -721,13 +742,18 @@ function PlayArea() {
           : buildPositionsForRooms(actionRooms);
 
       if (!startEqualsAction) {
-        segments.push({ from: startFrame, to: actionFrame, actionText: null });
+        segments.push({ from: startFrame, to: actionFrame, actionText: null, highlightPieceId: null });
       }
       if (actionText) {
-        segments.push({ from: actionFrame, to: actionFrame, actionText });
+        segments.push({
+          from: actionFrame,
+          to: actionFrame,
+          actionText,
+          highlightPieceId: actionHighlights[index] ?? null,
+        });
       }
       if (!actionEqualsEnd) {
-        segments.push({ from: actionFrame, to: endFrame, actionText: null });
+        segments.push({ from: actionFrame, to: endFrame, actionText: null, highlightPieceId: null });
       }
     }
 
@@ -778,6 +804,7 @@ function PlayArea() {
         current.startTime = now;
         current.durationMs = 1000 / current.speed;
         setActionOverlay(current.segments[nextIndex].actionText);
+        setActionHighlightPieceId(current.segments[nextIndex].highlightPieceId);
       }
 
       current.rafId = requestAnimationFrame(tick);
@@ -786,6 +813,7 @@ function PlayArea() {
     animationRef.current = animationState;
     setAnimatedPieces(segments[0].from);
     setActionOverlay(segments[0].actionText);
+    setActionHighlightPieceId(segments[0].highlightPieceId);
     animationRef.current.rafId = requestAnimationFrame(tick);
   };
 
@@ -898,6 +926,7 @@ function PlayArea() {
                 (piece) => {
                   const config = pieceConfig[piece.pieceId];
                   const isSelected = selectedPieceId === piece.pieceId;
+                  const isFlashing = actionHighlightPieceId === piece.pieceId;
                   const selectable = isPieceSelectable(piece.pieceId);
                   const isPlannedSource = plannedMoves[piece.pieceId] !== undefined;
                   const className = [
@@ -929,26 +958,34 @@ function PlayArea() {
                     'aria-label': `${config.label} piece`,
                   };
 
-                  let shape;
-                  if (config.shape === 'circle') {
-                    shape = (
-                      <circle
-                        cx={piece.x + piece.size / 2}
-                        cy={piece.y + piece.size / 2}
-                        r={piece.size / 2}
-                        {...commonProps}
-                      />
-                    );
-                  } else if (config.shape === 'square') {
-                    shape = (
-                      <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} rx={3} {...commonProps} />
-                    );
-                  } else {
-                    shape = <polygon points={getHexPoints(piece.x, piece.y, piece.size)} {...commonProps} />;
-                  }
+                  const buildShape = (props: ShapeProps) => {
+                    if (config.shape === 'circle') {
+                      return (
+                        <circle
+                          cx={piece.x + piece.size / 2}
+                          cy={piece.y + piece.size / 2}
+                          r={piece.size / 2}
+                          {...props}
+                        />
+                      );
+                    }
+                    if (config.shape === 'square') {
+                      return <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} rx={3} {...props} />;
+                    }
+                    return <polygon points={getHexPoints(piece.x, piece.y, piece.size)} {...props} />;
+                  };
+                  const outlineShape = isFlashing
+                    ? buildShape({
+                        className: 'piece--flash-outline',
+                        pointerEvents: 'none',
+                        'aria-hidden': true,
+                      })
+                    : null;
+                  const shape = buildShape(commonProps);
 
                   return (
                     <g key={piece.pieceId}>
+                      {outlineShape}
                       {shape}
                       {config.showLabel && (
                         <text
