@@ -599,7 +599,7 @@ function PlayArea() {
     event.preventDefault();
     event.stopPropagation();
     if (!selectedPieceId) {
-      setValidationMessage('Select a piece, then choose a destination room.');
+      handleSubmit();
       return;
     }
     const nextMoves = { ...plannedMoves, [selectedPieceId]: roomId };
@@ -856,6 +856,9 @@ function PlayArea() {
 
   const handleBoardMouseDown = (event: MouseEvent<SVGSVGElement>) => {
     if (event.button !== 1) {
+      return;
+    }
+    if (selectedPieceId) {
       return;
     }
     event.preventDefault();
