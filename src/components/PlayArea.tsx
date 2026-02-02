@@ -167,6 +167,36 @@ const getHexPoints = (x: number, y: number, size: number) => {
   return points.join(' ');
 };
 
+const buildRoomDistanceMap = (startRoomId: number) => {
+  const distances = new Map<number, number>();
+  const queue = [startRoomId];
+  distances.set(startRoomId, 0);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === undefined) {
+      continue;
+    }
+    const currentDistance = distances.get(current);
+    if (currentDistance === undefined) {
+      continue;
+    }
+    const room = boardRoomById.get(current);
+    if (!room) {
+      continue;
+    }
+    room.adjacent.forEach((neighbor) => {
+      if (distances.has(neighbor)) {
+        return;
+      }
+      distances.set(neighbor, currentDistance + 1);
+      queue.push(neighbor);
+    });
+  }
+
+  return distances;
+};
+
 const blendHexColor = (from: string, to: string, ratio: number) => {
   const normalize = (value: string) => value.replace('#', '').trim();
   const fromHex = normalize(from);
@@ -223,8 +253,6 @@ function PlayArea() {
   const history = gameState ? gameState.normalTurnHistory() : '';
   const currentPlayerPieceId = gameState ? (gameState.currentPlayerPieceId() as PieceId) : null;
   const pieceRooms = gameState ? gameState.piecePositions() : null;
-  const reachableRooms = gameState && selectedPieceId ? gameState.reachableRooms(selectedPieceId, 1) : null;
-  const reachableRoomSet = new Set(reachableRooms ?? []);
   const pieceRoomMap = (() => {
     const map = new Map<PieceId, number>();
     if (!pieceRooms) {
@@ -457,6 +485,8 @@ function PlayArea() {
 
   const selectedLabel = selectedPieceId ? pieceConfig[selectedPieceId].label : 'None';
   const selectedSuffix = selectedPieceId && plannedMoves[selectedPieceId] !== undefined ? ' (update)' : '';
+  const selectedRoomId = selectedPieceId ? pieceRoomMap.get(selectedPieceId) : undefined;
+  const distanceByRoom = selectedRoomId !== undefined ? buildRoomDistanceMap(selectedRoomId) : null;
 
   const stopAnimation = () => {
     const current = animationRef.current;
@@ -630,12 +660,7 @@ function PlayArea() {
                   return null;
                 }
                 const [x1, y1, x2, y2] = room.coords;
-                const isReachable = selectedPieceId ? reachableRoomSet.has(room.id) : false;
-                const roomClassName = selectedPieceId
-                  ? isReachable
-                    ? 'room-hit room-hit--reachable'
-                    : 'room-hit room-hit--blocked'
-                  : 'room-hit';
+                const roomClassName = 'room-hit';
                 return (
                   <rect
                     key={room.id}
@@ -652,6 +677,46 @@ function PlayArea() {
                 );
               })}
             </g>
+            {distanceByRoom && selectedRoomId !== undefined && (
+              <g className="room-distance-layer">
+                {boardRooms.map((room) => {
+                  if (room.coords.length !== 4) {
+                    return null;
+                  }
+                  if (room.id === selectedRoomId) {
+                    return null;
+                  }
+                  const distance = distanceByRoom.get(room.id);
+                  if (distance === undefined) {
+                    return null;
+                  }
+                  const rect = getRoomRect(room.coords);
+                  const boxWidth = 30;
+                  const boxHeight = 30;
+                  const boxX = rect.x + (rect.width - boxWidth) / 2;
+                  const boxY = rect.y + rect.height * 0.2;
+                  const textX = boxX + boxWidth / 2;
+                  const textY = boxY + boxHeight / 2 + 0.5;
+
+                  return (
+                    <g key={`distance-${room.id}`}>
+                      <rect
+                        className="room-distance-box"
+                        x={boxX}
+                        y={boxY}
+                        width={boxWidth}
+                        height={boxHeight}
+                        rx={4}
+                        ry={4}
+                      />
+                      <text className="room-distance-text" x={textX} y={textY}>
+                        {distance}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            )}
             <g className="piece-layer">
               {(animatedPieces ? animatedPieceList : renderPieces.filter((piece) => piece.kind === 'actual')).map(
                 (piece) => {
