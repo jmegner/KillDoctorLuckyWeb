@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:wasm": "cd src/KdlRust && cargo test",
+    "bench": "cd src/KdlRust && cargo run --release --bin tree_search_bench",
     "cli": "cd src/KdlRust && cargo run --bin kdl_cli --release --target x86_64-pc-windows-msvc --manifest-path Cargo.toml --"
   },
   "dependencies": {
