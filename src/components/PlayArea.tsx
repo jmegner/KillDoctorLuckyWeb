@@ -401,6 +401,10 @@ function PlayArea() {
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
   const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
   const history = gameState ? gameState.normalTurnHistory() : '';
+  const hasWinner = gameState ? gameState.hasWinner() : false;
+  const winnerPieceIdRaw = gameState ? gameState.winnerPieceId() : '';
+  const winnerPieceId =
+    winnerPieceIdRaw === 'player1' || winnerPieceIdRaw === 'player2' ? (winnerPieceIdRaw as PieceId) : null;
   const currentPlayerPieceId = gameState ? (gameState.currentPlayerPieceId() as PieceId) : null;
   const pieceRooms = gameState ? gameState.piecePositions() : null;
   const pieceRoomMap = (() => {
@@ -485,10 +489,14 @@ function PlayArea() {
   const animatedPieceList = animatedPieces ?? [];
 
   const isPieceSelectable = (pieceId: PieceId) =>
+    !hasWinner &&
     currentPlayerPieceId !== null &&
     (pieceId === currentPlayerPieceId || pieceId === 'stranger1' || pieceId === 'stranger2');
 
   const handlePieceClick = (pieceId: PieceId) => {
+    if (hasWinner) {
+      return;
+    }
     if (selectedPieceId === pieceId) {
       setSelectedPieceId(null);
       setValidationMessage(null);
@@ -503,6 +511,9 @@ function PlayArea() {
   };
 
   const handleRoomClick = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
+    if (hasWinner) {
+      return;
+    }
     if (event?.detail && event.detail > 1 && !selectedPieceId) {
       return;
     }
@@ -517,6 +528,9 @@ function PlayArea() {
   };
 
   const submitPlan = (moves: Partial<Record<PieceId, number>>, order: PieceId[]) => {
+    if (hasWinner) {
+      return;
+    }
     const planEntries = order
       .map((pieceId) => {
         const roomId = moves[pieceId];
@@ -548,7 +562,7 @@ function PlayArea() {
     startAnimationFromState();
   };
   const handleSubmit = () => {
-    if (!gameState) {
+    if (!gameState || hasWinner) {
       return;
     }
     submitPlan(plannedMoves, planOrder);
@@ -593,6 +607,9 @@ function PlayArea() {
   };
 
   const handleRoomMouseDown = (event: MouseEvent<SVGRectElement>, roomId: number) => {
+    if (hasWinner) {
+      return;
+    }
     if (event.button !== 1) {
       return;
     }
@@ -609,6 +626,9 @@ function PlayArea() {
   };
 
   const handleRoomDoubleClick = (roomId: number) => {
+    if (hasWinner) {
+      return;
+    }
     if (selectedPieceId) {
       return;
     }
@@ -855,6 +875,9 @@ function PlayArea() {
   }
 
   const handleBoardMouseDown = (event: MouseEvent<SVGSVGElement>) => {
+    if (hasWinner) {
+      return;
+    }
     if (event.button !== 1) {
       return;
     }
@@ -1095,6 +1118,14 @@ function PlayArea() {
                 </text>
               </g>
             )}
+            {hasWinner && winnerPieceId && (
+              <g className="winner-overlay" aria-hidden>
+                <rect className="winner-overlay-backdrop" x={0} y={0} width={boardWidth} height={boardHeight} />
+                <text className="winner-overlay-text" x={boardWidth / 2} y={boardHeight / 2}>
+                  {pieceConfig[winnerPieceId].label} won!
+                </text>
+              </g>
+            )}
           </svg>
         </div>
       </div>
@@ -1103,7 +1134,9 @@ function PlayArea() {
           <div>
             <p className="planner-kicker">Turn Planner</p>
             <h2 className="planner-title">
-              Current: {currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}
+              {hasWinner && winnerPieceId
+                ? `${pieceConfig[winnerPieceId].label} won!`
+                : `Current: ${currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}`}
             </h2>
           </div>
           <div className="planner-header-actions">
@@ -1124,7 +1157,7 @@ function PlayArea() {
           <span className="planner-value">{planSummary}</span>
         </div>
         <div className="planner-actions">
-          <button className="planner-button planner-button--primary" onClick={handleSubmit}>
+          <button className="planner-button planner-button--primary" onClick={handleSubmit} disabled={hasWinner}>
             Submit
           </button>
           <button className="planner-button" onClick={handleCancel}>

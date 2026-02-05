@@ -128,6 +128,26 @@
   pointer-events: none;
 }
 
+.winner-overlay {
+  pointer-events: none;
+}
+
+.winner-overlay-backdrop {
+  fill: rgba(0, 0, 0, 0.18);
+}
+
+.winner-overlay-text {
+  font-family: var(--font-mono);
+  font-size: 110px;
+  font-weight: 900;
+  fill: rgba(255, 255, 255, 0.88);
+  stroke: rgba(0, 0, 0, 0.4);
+  stroke-width: 4;
+  paint-order: stroke;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
 .piece {
   stroke: rgba(255, 255, 255, 0.9);
   stroke-width: 1.4;
@@ -274,6 +294,13 @@
 
 .planner-button--primary:hover {
   background: var(--accent-strong);
+}
+
+.planner-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .planner-error {

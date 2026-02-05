@@ -124,6 +124,26 @@ impl GameStateHandle {
         piece_id.as_str().to_string()
     }
 
+    #[wasm_bindgen(js_name = "hasWinner")]
+    pub fn has_winner(&self) -> bool {
+        self.state.has_winner()
+    }
+
+    #[wasm_bindgen(js_name = "winnerPieceId")]
+    pub fn winner_piece_id(&self) -> String {
+        if !self.state.has_winner() {
+            return String::new();
+        }
+
+        let normal_id = core::rule_helper::to_normal_player_id(self.state.winner, self.state.common.num_normal_players);
+        let piece_id = if normal_id == core::rule_helper::SIDE_A_NORMAL_PLAYER_ID {
+            PieceId::Player1
+        } else {
+            PieceId::Player2
+        };
+        piece_id.as_str().to_string()
+    }
+
     #[wasm_bindgen(js_name = "piecePositions")]
     pub fn piece_positions(&self) -> Vec<u32> {
         vec![
