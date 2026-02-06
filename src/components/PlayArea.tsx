@@ -16,6 +16,10 @@ type TurnPlanPreviewResponse = {
   attackers: string[];
   currentPlayerLoots: boolean;
   doctorRoomId: number;
+  movedStrangers: Array<{
+    pieceId: string;
+    roomId: number;
+  }>;
 };
 
 type BoardRoomRaw = {
@@ -79,7 +83,7 @@ const boardRoomById = new Map<number, BoardRoom>(boardRooms.map((room) => [room.
 
 const pieceOrder: PieceId[] = ['doctor', 'player1', 'player2', 'stranger1', 'stranger2'];
 const animationSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
-const defaultSpeedIndex = 3;
+const defaultSpeedIndex = 8;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 
 const pieceConfig: Record<
@@ -523,17 +527,9 @@ function PlayArea() {
     (pieceId === currentPlayerPieceId || pieceId === 'stranger1' || pieceId === 'stranger2');
 
   const alliedStranger =
-    currentPlayerPieceId === 'player1'
-      ? 'stranger2'
-      : currentPlayerPieceId === 'player2'
-        ? 'stranger1'
-        : null;
+    currentPlayerPieceId === 'player1' ? 'stranger2' : currentPlayerPieceId === 'player2' ? 'stranger1' : null;
   const opposingStranger =
-    currentPlayerPieceId === 'player1'
-      ? 'stranger1'
-      : currentPlayerPieceId === 'player2'
-        ? 'stranger2'
-        : null;
+    currentPlayerPieceId === 'player1' ? 'stranger1' : currentPlayerPieceId === 'player2' ? 'stranger2' : null;
 
   const getPreferredSelectablePieceInRoom = (roomId: number) => {
     const preference: Array<PieceId | null> = [currentPlayerPieceId, alliedStranger, opposingStranger];
@@ -734,41 +730,62 @@ function PlayArea() {
               : `${pieceConfig[pieceId].label}@R${roomId}`;
           })
           .join(', ');
-  const previewSummary = (() => {
+  const previewDisplay = (() => {
     if (!gameState) {
-      return 'Preview unavailable.';
+      return {
+        message: 'Preview unavailable.',
+        tokens: [] as string[],
+        nextPieceId: null as PieceId | null,
+      };
     }
     const rawPreview = gameState.previewTurnPlan(JSON.stringify(plannedEntries));
     let parsed: TurnPlanPreviewResponse;
     try {
       parsed = JSON.parse(rawPreview) as TurnPlanPreviewResponse;
     } catch {
-      return 'Preview unavailable.';
+      return {
+        message: 'Preview unavailable.',
+        tokens: [] as string[],
+        nextPieceId: null as PieceId | null,
+      };
     }
     if (!parsed.isValid) {
-      return 'Invalid plan.';
+      return {
+        message: 'Invalid plan.',
+        tokens: [] as string[],
+        nextPieceId: null as PieceId | null,
+      };
     }
 
-    const nextText = (() => {
-      if (!parsed.nextPlayerPieceId) {
-        return '??';
-      }
-      return isPieceId(parsed.nextPlayerPieceId) ? pieceConfig[parsed.nextPlayerPieceId].label : parsed.nextPlayerPieceId;
-    })();
+    const nextPieceId = isPieceId(parsed.nextPlayerPieceId) ? parsed.nextPlayerPieceId : null;
+    const nextText = nextPieceId ? pieceConfig[nextPieceId].label : parsed.nextPlayerPieceId || '??';
     const segments = [`Next:${nextText}`];
 
     if (parsed.attackers.length > 0) {
-      const attackerLabels = parsed.attackers.map((pieceId) => (isPieceId(pieceId) ? pieceConfig[pieceId].label : pieceId));
+      const attackerLabels = parsed.attackers.map((pieceId) =>
+        isPieceId(pieceId) ? pieceConfig[pieceId].label : pieceId,
+      );
       segments.push(`Atk:${attackerLabels.join(',')}`);
     }
 
     if (parsed.currentPlayerLoots) {
       segments.push('Loot');
     }
+
+    parsed.movedStrangers.forEach((entry) => {
+      const pieceText = isPieceId(entry.pieceId) ? pieceConfig[entry.pieceId].label : entry.pieceId;
+      const roomText = Number.isFinite(entry.roomId) ? entry.roomId : '?';
+      segments.push(`${pieceText}:R${roomText}`);
+    });
+
     const doctorRoomText = Number.isFinite(parsed.doctorRoomId) ? parsed.doctorRoomId : '?';
     segments.push(`Dr:R${doctorRoomText}`);
 
-    return segments.join(' | ');
+    return {
+      message: null as string | null,
+      tokens: segments,
+      nextPieceId,
+    };
   })();
 
   const selectedLabel = selectedPieceId ? pieceConfig[selectedPieceId].label : 'None';
@@ -1288,7 +1305,33 @@ function PlayArea() {
         </div>
         <div className="planner-line">
           <span className="planner-label">Preview</span>
-          <span className="planner-value">{previewSummary}</span>
+          <span className="planner-value planner-value--preview">
+            {previewDisplay.message
+              ? previewDisplay.message
+              : previewDisplay.tokens.map((token, index) => {
+                  const nextPieceId = previewDisplay.nextPieceId;
+                  const isNextToken = index === 0 && nextPieceId !== null;
+                  const nextTokenStyle = isNextToken
+                    ? {
+                        backgroundColor: pieceConfig[nextPieceId].color,
+                        color: pieceConfig[nextPieceId].textColor,
+                      }
+                    : undefined;
+                  return (
+                    <span key={`preview-token-${token}-${index}`}>
+                      {index > 0 && <span className="planner-preview-sep"> | </span>}
+                      <span
+                        className={
+                          isNextToken ? 'planner-preview-token planner-preview-token--next' : 'planner-preview-token'
+                        }
+                        style={nextTokenStyle}
+                      >
+                        {token}
+                      </span>
+                    </span>
+                  );
+                })}
+          </span>
         </div>
         <div className="planner-actions">
           <button className="planner-button planner-button--primary" onClick={handleSubmit} disabled={hasWinner}>

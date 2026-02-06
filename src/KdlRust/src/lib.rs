@@ -126,6 +126,14 @@ struct TurnPlanPreview {
     attackers: Vec<String>,
     current_player_loots: bool,
     doctor_room_id: usize,
+    moved_strangers: Vec<PreviewPieceRoom>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewPieceRoom {
+    piece_id: String,
+    room_id: usize,
 }
 
 fn normal_piece_id_for_state(state: &core::mutable_game_state::MutableGameState) -> PieceId {
@@ -140,7 +148,7 @@ fn normal_piece_id_for_state(state: &core::mutable_game_state::MutableGameState)
 
 fn to_preview_json(preview: &TurnPlanPreview) -> String {
     serde_json::to_string(preview).unwrap_or_else(|_| {
-        "{\"isValid\":false,\"validationMessage\":\"Preview serialization failed.\",\"nextPlayerPieceId\":\"\",\"attackers\":[],\"currentPlayerLoots\":false,\"doctorRoomId\":0}".to_string()
+        "{\"isValid\":false,\"validationMessage\":\"Preview serialization failed.\",\"nextPlayerPieceId\":\"\",\"attackers\":[],\"currentPlayerLoots\":false,\"doctorRoomId\":0,\"movedStrangers\":[]}".to_string()
     })
 }
 
@@ -152,6 +160,7 @@ fn invalid_preview_json(message: String) -> String {
         attackers: Vec::new(),
         current_player_loots: false,
         doctor_room_id: 0,
+        moved_strangers: Vec::new(),
     })
 }
 
@@ -385,6 +394,24 @@ impl GameStateHandle {
             }
         }
 
+        let mut moved_strangers = Vec::new();
+        if preview_state.common.has_strangers() {
+            let stranger_rooms = [
+                (core::rule_helper::STRANGER_PLAYER_ID_FIRST, PieceId::Stranger1),
+                (core::rule_helper::STRANGER_PLAYER_ID_SECOND, PieceId::Stranger2),
+            ];
+            for (player_id, piece_id) in stranger_rooms {
+                let current_room_id = self.state.player_room_ids[player_id.0].0;
+                let preview_room_id = preview_state.player_room_ids[player_id.0].0;
+                if current_room_id != preview_room_id {
+                    moved_strangers.push(PreviewPieceRoom {
+                        piece_id: piece_id.as_str().to_string(),
+                        room_id: preview_room_id,
+                    });
+                }
+            }
+        }
+
         to_preview_json(&TurnPlanPreview {
             is_valid: true,
             validation_message: String::new(),
@@ -392,6 +419,7 @@ impl GameStateHandle {
             attackers,
             current_player_loots,
             doctor_room_id: preview_state.doctor_room_id.0,
+            moved_strangers,
         })
     }
 }
