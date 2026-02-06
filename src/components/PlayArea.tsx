@@ -86,6 +86,7 @@ const animationSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
 const defaultSpeedIndex = 8;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 const animationPrefsStorageKey = 'kdl.settings.v1';
+const gameStateStorageKey = 'kdl.gameState.v1';
 
 type AnimationPrefs = {
   animationEnabled: boolean;
@@ -135,6 +136,43 @@ const saveAnimationPrefs = (prefs: AnimationPrefs) => {
     );
   } catch {
     // Ignore persistence failures (e.g. private mode / quota).
+  }
+};
+
+const saveGameStateSnapshot = (gameState: GameStateHandle | null) => {
+  if (!gameState || typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(gameStateStorageKey, gameState.exportStateJson());
+  } catch {
+    // Ignore persistence failures (e.g. private mode / quota).
+  }
+};
+
+const loadGameStateSnapshot = (gameState: GameStateHandle) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const rawSnapshot = window.localStorage.getItem(gameStateStorageKey);
+    if (!rawSnapshot) {
+      return;
+    }
+
+    const importError = gameState.importStateJson(rawSnapshot);
+    if (importError) {
+      window.localStorage.removeItem(gameStateStorageKey);
+      console.warn(`Saved game ignored: ${importError}`);
+    }
+  } catch {
+    try {
+      window.localStorage.removeItem(gameStateStorageKey);
+    } catch {
+      // Ignore cleanup failures.
+    }
   }
 };
 
@@ -446,7 +484,9 @@ const blendHexColor = (from: string, to: string, ratio: number) => {
 function PlayArea() {
   const [gameState] = useState<GameStateHandle | null>(() => {
     try {
-      return newDefaultGameState();
+      const freshState = newDefaultGameState();
+      loadGameStateSnapshot(freshState);
+      return freshState;
     } catch {
       return null;
     }
@@ -675,6 +715,7 @@ function PlayArea() {
     setPlanOrder([]);
     setSelectedPieceId(null);
     setValidationMessage(null);
+    saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
     startAnimationFromState();
   };
@@ -699,6 +740,7 @@ function PlayArea() {
     setPlanOrder([]);
     setSelectedPieceId(null);
     setValidationMessage(null);
+    saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
   };
 
@@ -712,6 +754,7 @@ function PlayArea() {
     setPlanOrder([]);
     setSelectedPieceId(null);
     setValidationMessage(null);
+    saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
   };
 

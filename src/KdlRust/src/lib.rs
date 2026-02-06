@@ -136,6 +136,16 @@ struct PreviewPieceRoom {
     room_id: usize,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PersistedGameState {
+    version: u32,
+    board_name: String,
+    normal_turns: Vec<core::simple_turn::SimpleTurn>,
+}
+
+const PERSISTED_GAME_STATE_VERSION: u32 = 1;
+
 fn normal_piece_id_for_state(state: &core::mutable_game_state::MutableGameState) -> PieceId {
     let normal_id =
         core::rule_helper::to_normal_player_id(state.current_player_id, state.common.num_normal_players);
@@ -184,6 +194,30 @@ fn current_player_loots_after_turn(
     }
 
     preview_state.best_action_allowed(moved_stranger_that_saw_doctor) == core::player::PlayerAction::Loot
+}
+
+fn collect_normal_turns(state: &core::mutable_game_state::MutableGameState) -> Vec<core::simple_turn::SimpleTurn> {
+    let mut states = Vec::new();
+    let mut cursor = Some(state);
+
+    while let Some(current) = cursor {
+        states.push(current);
+        cursor = current.prev_state.as_deref();
+    }
+
+    states.reverse();
+    states
+        .into_iter()
+        .skip(1)
+        .filter_map(|current| {
+            let prev_state = current.prev_state.as_deref()?;
+            if prev_state.is_normal_turn() {
+                Some(current.prev_turn.clone())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
 }
 
 #[wasm_bindgen]
@@ -421,6 +455,57 @@ impl GameStateHandle {
             doctor_room_id: preview_state.doctor_room_id.0,
             moved_strangers,
         })
+    }
+
+    #[wasm_bindgen(js_name = "exportStateJson")]
+    pub fn export_state_json(&self) -> String {
+        let snapshot = PersistedGameState {
+            version: PERSISTED_GAME_STATE_VERSION,
+            board_name: self.state.common.board.name.clone(),
+            normal_turns: collect_normal_turns(&self.state),
+        };
+
+        serde_json::to_string(&snapshot).unwrap_or_else(|_| {
+            "{\"version\":1,\"boardName\":\"\",\"normalTurns\":[]}".to_string()
+        })
+    }
+
+    #[wasm_bindgen(js_name = "importStateJson")]
+    pub fn import_state_json(&mut self, state_json: &str) -> String {
+        let snapshot = match serde_json::from_str::<PersistedGameState>(state_json) {
+            Ok(snapshot) => snapshot,
+            Err(err) => return format!("Invalid saved game JSON: {err}"),
+        };
+
+        if snapshot.version != PERSISTED_GAME_STATE_VERSION {
+            return format!(
+                "Unsupported saved game version {}.",
+                snapshot.version
+            );
+        }
+
+        if snapshot.board_name != self.state.common.board.name {
+            return format!(
+                "Saved game board '{}' does not match current board '{}'.",
+                snapshot.board_name, self.state.common.board.name
+            );
+        }
+
+        let common = self.state.common.clone();
+        let mut restored = core::mutable_game_state::MutableGameState::at_start(common);
+
+        for (turn_idx, turn) in snapshot.normal_turns.into_iter().enumerate() {
+            if let Err(message) = restored.check_normal_turn(&turn) {
+                return format!(
+                    "Saved game turn {} is invalid: {message}",
+                    turn_idx + 1
+                );
+            }
+            restored.after_normal_turn(turn, true);
+        }
+
+        self.state = restored;
+        String::new()
     }
 }
 
