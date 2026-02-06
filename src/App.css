@@ -52,6 +52,23 @@
   align-items: start;
 }
 
+.board-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.board-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.board-control-button {
+  padding-inline: 1rem;
+}
+
 .board-shell {
   background: var(--paper);
   border: 4px solid var(--line);
@@ -319,6 +336,44 @@
 .planner-info h3 {
   margin: 0 0 8px;
   color: var(--ink);
+}
+
+.info-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(22, 15, 8, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  padding: 24px;
+  cursor: pointer;
+}
+
+.info-popup {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: 18px 22px;
+  max-width: 520px;
+  width: min(520px, 100%);
+  color: var(--ink);
+}
+
+.info-popup h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.info-popup p {
+  margin: 0 0 8px;
+}
+
+.info-popup p:last-child {
+  margin-bottom: 0;
 }
 
 .planner-animations {

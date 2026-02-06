@@ -325,10 +325,7 @@ const buildActionOverlayLayout = (text: string) => {
   const desiredX = boardWidth / 2 - boxWidth / 2;
   const desiredY = boardHeight - boxHeight - 12;
   const clampedX = Math.min(Math.max(desiredX, minX), Math.max(minX, maxX - boxWidth));
-  const clampedY = Math.min(
-    Math.max(desiredY, minY),
-    Math.max(minY, boardHeight - boxHeight - 6)
-  );
+  const clampedY = Math.min(Math.max(desiredY, minY), Math.max(minY, boardHeight - boxHeight - 6));
 
   return {
     boxX: clampedX,
@@ -392,7 +389,7 @@ function PlayArea() {
   const [plannedMoves, setPlannedMoves] = useState<Partial<Record<PieceId, number>>>({});
   const [planOrder, setPlanOrder] = useState<PieceId[]>([]);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
-  const [infoOpen, setInfoOpen] = useState(false);
+  const [infoPopup, setInfoPopup] = useState<'rules' | 'ui' | null>(null);
   const [, setTurnCounter] = useState(0);
   const [animationEnabled, setAnimationEnabled] = useState(true);
   const [animationSpeedIndex, setAnimationSpeedIndex] = useState(defaultSpeedIndex);
@@ -628,6 +625,10 @@ function PlayArea() {
     setValidationMessage(null);
   };
 
+  const handleInfoToggle = (kind: 'rules' | 'ui') => {
+    setInfoPopup((prev) => (prev === kind ? null : kind));
+  };
+
   const handleRoomMouseDown = (event: MouseEvent<SVGRectElement>, roomId: number) => {
     if (hasWinner) {
       return;
@@ -769,9 +770,7 @@ function PlayArea() {
       }
       const roomId = rooms[pieceIndex];
       const label = pieceConfig[action.actor].label;
-      return action.kind === 'loot'
-        ? `${label} loots R${roomId}`
-        : `${label} attacks in R${roomId}`;
+      return action.kind === 'loot' ? `${label} loots R${roomId}` : `${label} attacks in R${roomId}`;
     });
     const actionHighlights = summaryActions.map((action) => {
       if (!action) {
@@ -914,248 +913,261 @@ function PlayArea() {
   const currentPlayerColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].color : 'var(--line)';
   const currentPlayerTextColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].textColor : 'var(--ink)';
   const boardOutlineColor = animatedPieces ? '#8c8c8c' : currentPlayerColor;
+  let infoPopupTitle = infoPopup === 'rules' ? 'Rule Info' : infoPopup === 'ui' ? 'UI Info' : 'UNKNOWN3854';
+  infoPopupTitle += ' (click anywhere to close)';
+  const infoPopupContent =
+    infoPopup === 'rules' ? (
+      <p>The rules: TODO</p>
+    ) : infoPopup === 'ui' ? (
+      <>
+        <p>Select your piece or a stranger, then click a room to set a destination.</p>
+        <p>Click a planned piece again to update its destination. Submit validates the plan.</p>
+        <p>Opponent pieces and the doctor cannot be moved.</p>
+      </>
+    ) : null;
 
   return (
     <section className="play-area">
-      <div className="board-shell" style={{ borderColor: boardOutlineColor }}>
-        <div className="board">
-          <svg
-            viewBox={`0 0 ${boardWidth} ${boardHeight}`}
-            role="img"
-            aria-label="Kill Doctor Lucky Board Alternate Downstairs"
-            preserveAspectRatio="xMidYMid meet"
-            onMouseDown={handleBoardMouseDown}
-          >
-            <image href={boardImageHref} width={boardWidth} height={boardHeight} />
-            <g className="room-layer">
-              {boardRooms.map((room) => {
-                if (room.coords.length !== 4) {
-                  return null;
-                }
-                const [x1, y1, x2, y2] = room.coords;
-                const roomClassName = 'room-hit';
-                return (
-                  <rect
-                    key={room.id}
-                    x={x1}
-                    y={y1}
-                    width={x2 - x1}
-                    height={y2 - y1}
-                    className={roomClassName}
-                    onClick={(event) => handleRoomClick(room.id, event)}
-                    onMouseDown={(event) => handleRoomMouseDown(event, room.id)}
-                    onDoubleClick={() => handleRoomDoubleClick(room.id)}
-                    aria-label={room.name ?? `Room ${room.id}`}
-                  />
-                );
-              })}
-            </g>
-            {distanceByRoom && selectedRoomId !== undefined && (
-              <g className="room-distance-layer">
+      <div className="board-column">
+        <div className="board-controls">
+          <button className="board-control-button" onClick={handleReset}>
+            Reset
+          </button>
+          <button className="board-control-button" onClick={() => handleInfoToggle('rules')}>
+            Rule Info
+          </button>
+          <button className="board-control-button" onClick={() => handleInfoToggle('ui')}>
+            UI Info
+          </button>
+        </div>
+        <div className="board-shell" style={{ borderColor: boardOutlineColor }}>
+          <div className="board">
+            <svg
+              viewBox={`0 0 ${boardWidth} ${boardHeight}`}
+              role="img"
+              aria-label="Kill Doctor Lucky Board Alternate Downstairs"
+              preserveAspectRatio="xMidYMid meet"
+              onMouseDown={handleBoardMouseDown}
+            >
+              <image href={boardImageHref} width={boardWidth} height={boardHeight} />
+              <g className="room-layer">
                 {boardRooms.map((room) => {
                   if (room.coords.length !== 4) {
                     return null;
                   }
-                  if (room.id === selectedRoomId) {
-                    return null;
-                  }
-                  const distance = distanceByRoom.get(room.id);
-                  if (distance === undefined) {
-                    return null;
-                  }
-                  const rect = getRoomRect(room.coords);
-                  const boxWidth = 30;
-                  const boxHeight = 30;
-                  const boxX = rect.x + (rect.width - boxWidth) / 2;
-                  const boxY = rect.y + rect.height * 0.2;
-                  const textX = boxX + boxWidth / 2;
-                  const textY = boxY + boxHeight / 2 + 0.5;
-
+                  const [x1, y1, x2, y2] = room.coords;
+                  const roomClassName = 'room-hit';
                   return (
-                    <g key={`distance-${room.id}`}>
-                      <rect
-                        className="room-distance-box"
-                        x={boxX}
-                        y={boxY}
-                        width={boxWidth}
-                        height={boxHeight}
-                      />
-                      <text className="room-distance-text" x={textX} y={textY}>
-                        {distance}
-                      </text>
-                    </g>
+                    <rect
+                      key={room.id}
+                      x={x1}
+                      y={y1}
+                      width={x2 - x1}
+                      height={y2 - y1}
+                      className={roomClassName}
+                      onClick={(event) => handleRoomClick(room.id, event)}
+                      onMouseDown={(event) => handleRoomMouseDown(event, room.id)}
+                      onDoubleClick={() => handleRoomDoubleClick(room.id)}
+                      aria-label={room.name ?? `Room ${room.id}`}
+                    />
                   );
                 })}
               </g>
-            )}
-            <g className="piece-layer">
-              {(animatedPieces ? animatedPieceList : renderPieces.filter((piece) => piece.kind === 'actual')).map(
-                (piece) => {
-                  const config = pieceConfig[piece.pieceId];
-                  const isSelected = selectedPieceId === piece.pieceId;
-                  const isFlashing = actionHighlightPieceId === piece.pieceId;
-                  const selectable = isPieceSelectable(piece.pieceId);
-                  const isPlannedSource = plannedMoves[piece.pieceId] !== undefined;
-                  const className = [
-                    'piece',
-                    `piece--${config.shape}`,
-                    isSelected ? 'piece--selected' : '',
-                    selectable ? 'piece--movable' : 'piece--locked',
-                    isPlannedSource ? 'piece--planned-source' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ');
-                  const labelSize = Math.min(piece.size * 0.6, 22);
-                  const pieceFill = isPlannedSource ? blendHexColor(config.color, '#9c9c9c', 0.5) : config.color;
-                  const pieceStroke = isPlannedSource ? '#8c8c8c' : undefined;
-                  const pieceStrokeWidth = isPlannedSource ? 2.4 : undefined;
-                  const labelFill = isPlannedSource
-                    ? blendHexColor(config.textColor, '#6f6f6f', 0.5)
-                    : config.textColor;
+              {distanceByRoom && selectedRoomId !== undefined && (
+                <g className="room-distance-layer">
+                  {boardRooms.map((room) => {
+                    if (room.coords.length !== 4) {
+                      return null;
+                    }
+                    if (room.id === selectedRoomId) {
+                      return null;
+                    }
+                    const distance = distanceByRoom.get(room.id);
+                    if (distance === undefined) {
+                      return null;
+                    }
+                    const rect = getRoomRect(room.coords);
+                    const boxWidth = 30;
+                    const boxHeight = 30;
+                    const boxX = rect.x + (rect.width - boxWidth) / 2;
+                    const boxY = rect.y + rect.height * 0.2;
+                    const textX = boxX + boxWidth / 2;
+                    const textY = boxY + boxHeight / 2 + 0.5;
 
-                  const commonProps = {
-                    className,
-                    fill: pieceFill,
-                    stroke: pieceStroke,
-                    strokeWidth: pieceStrokeWidth,
-                    onClick: (event: MouseEvent<SVGElement>) => {
-                      event.stopPropagation();
-                      handlePieceClick(piece.pieceId);
-                    },
-                    'aria-label': `${config.label} piece`,
-                  };
+                    return (
+                      <g key={`distance-${room.id}`}>
+                        <rect className="room-distance-box" x={boxX} y={boxY} width={boxWidth} height={boxHeight} />
+                        <text className="room-distance-text" x={textX} y={textY}>
+                          {distance}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
+              )}
+              <g className="piece-layer">
+                {(animatedPieces ? animatedPieceList : renderPieces.filter((piece) => piece.kind === 'actual')).map(
+                  (piece) => {
+                    const config = pieceConfig[piece.pieceId];
+                    const isSelected = selectedPieceId === piece.pieceId;
+                    const isFlashing = actionHighlightPieceId === piece.pieceId;
+                    const selectable = isPieceSelectable(piece.pieceId);
+                    const isPlannedSource = plannedMoves[piece.pieceId] !== undefined;
+                    const className = [
+                      'piece',
+                      `piece--${config.shape}`,
+                      isSelected ? 'piece--selected' : '',
+                      selectable ? 'piece--movable' : 'piece--locked',
+                      isPlannedSource ? 'piece--planned-source' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ');
+                    const labelSize = Math.min(piece.size * 0.6, 22);
+                    const pieceFill = isPlannedSource ? blendHexColor(config.color, '#9c9c9c', 0.5) : config.color;
+                    const pieceStroke = isPlannedSource ? '#8c8c8c' : undefined;
+                    const pieceStrokeWidth = isPlannedSource ? 2.4 : undefined;
+                    const labelFill = isPlannedSource
+                      ? blendHexColor(config.textColor, '#6f6f6f', 0.5)
+                      : config.textColor;
 
-                  const buildShape = (props: ShapeProps) => {
+                    const commonProps = {
+                      className,
+                      fill: pieceFill,
+                      stroke: pieceStroke,
+                      strokeWidth: pieceStrokeWidth,
+                      onClick: (event: MouseEvent<SVGElement>) => {
+                        event.stopPropagation();
+                        handlePieceClick(piece.pieceId);
+                      },
+                      'aria-label': `${config.label} piece`,
+                    };
+
+                    const buildShape = (props: ShapeProps) => {
+                      if (config.shape === 'circle') {
+                        return (
+                          <circle
+                            cx={piece.x + piece.size / 2}
+                            cy={piece.y + piece.size / 2}
+                            r={piece.size / 2}
+                            {...props}
+                          />
+                        );
+                      }
+                      if (config.shape === 'square') {
+                        return <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} {...props} />;
+                      }
+                      return <polygon points={getHexPoints(piece.x, piece.y, piece.size)} {...props} />;
+                    };
+                    const outlineShape = isFlashing
+                      ? buildShape({
+                          className: 'piece--flash-outline',
+                          pointerEvents: 'none',
+                          'aria-hidden': true,
+                        })
+                      : null;
+                    const shape = buildShape(commonProps);
+
+                    return (
+                      <g key={piece.pieceId}>
+                        {outlineShape}
+                        {shape}
+                        {config.showLabel && (
+                          <text
+                            className="piece-label"
+                            x={piece.x + piece.size / 2}
+                            y={piece.y + piece.size / 2}
+                            fontSize={labelSize}
+                            fill={labelFill}
+                          >
+                            {config.label}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  },
+                )}
+              </g>
+              <g className="piece-layer piece-layer--planned">
+                {renderPieces
+                  .filter((piece) => piece.kind === 'ghost')
+                  .map((piece) => {
+                    const config = pieceConfig[piece.pieceId];
+                    const className = ['piece', `piece--${config.shape}`, 'piece--planned-ghost']
+                      .filter(Boolean)
+                      .join(' ');
+                    const labelSize = Math.min(piece.size * 0.6, 22);
+                    const ghostProps = {
+                      className,
+                      fill: config.color,
+                      stroke: '#1f4f7a',
+                      strokeWidth: 4,
+                      pointerEvents: 'none' as const,
+                      'aria-hidden': true,
+                    };
+                    let shape;
                     if (config.shape === 'circle') {
-                      return (
+                      shape = (
                         <circle
                           cx={piece.x + piece.size / 2}
                           cy={piece.y + piece.size / 2}
                           r={piece.size / 2}
-                          {...props}
+                          {...ghostProps}
                         />
                       );
+                    } else if (config.shape === 'square') {
+                      shape = <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} {...ghostProps} />;
+                    } else {
+                      shape = <polygon points={getHexPoints(piece.x, piece.y, piece.size)} {...ghostProps} />;
                     }
-                    if (config.shape === 'square') {
-                      return <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} {...props} />;
-                    }
-                    return <polygon points={getHexPoints(piece.x, piece.y, piece.size)} {...props} />;
-                  };
-                  const outlineShape = isFlashing
-                    ? buildShape({
-                        className: 'piece--flash-outline',
-                        pointerEvents: 'none',
-                        'aria-hidden': true,
-                      })
-                    : null;
-                  const shape = buildShape(commonProps);
 
-                  return (
-                    <g key={piece.pieceId}>
-                      {outlineShape}
-                      {shape}
-                      {config.showLabel && (
-                        <text
-                          className="piece-label"
-                          x={piece.x + piece.size / 2}
-                          y={piece.y + piece.size / 2}
-                          fontSize={labelSize}
-                          fill={labelFill}
-                        >
-                          {config.label}
-                        </text>
-                      )}
-                    </g>
-                  );
-                },
+                    return (
+                      <g key={`ghost-${piece.pieceId}`} pointerEvents="none">
+                        {shape}
+                        {config.showLabel && (
+                          <text
+                            className="piece-label piece-label--planned"
+                            x={piece.x + piece.size / 2}
+                            y={piece.y + piece.size / 2}
+                            fontSize={labelSize}
+                            fill="#1f4f7a"
+                          >
+                            {config.label}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })}
+              </g>
+              {actionOverlay && actionOverlayLayout && (
+                <g className="action-overlay">
+                  <rect
+                    className="action-overlay-box"
+                    x={actionOverlayLayout.boxX}
+                    y={actionOverlayLayout.boxY}
+                    width={actionOverlayLayout.boxWidth}
+                    height={actionOverlayLayout.boxHeight}
+                  />
+                  <text className="action-overlay-text" x={actionOverlayLayout.textX} y={actionOverlayLayout.textY}>
+                    {actionOverlay}
+                  </text>
+                </g>
               )}
-            </g>
-            <g className="piece-layer piece-layer--planned">
-              {renderPieces
-                .filter((piece) => piece.kind === 'ghost')
-                .map((piece) => {
-                  const config = pieceConfig[piece.pieceId];
-                  const className = ['piece', `piece--${config.shape}`, 'piece--planned-ghost']
-                    .filter(Boolean)
-                    .join(' ');
-                  const labelSize = Math.min(piece.size * 0.6, 22);
-                  const ghostProps = {
-                    className,
-                    fill: config.color,
-                    stroke: '#1f4f7a',
-                    strokeWidth: 4,
-                    pointerEvents: 'none' as const,
-                    'aria-hidden': true,
-                  };
-                  let shape;
-                  if (config.shape === 'circle') {
-                    shape = (
-                      <circle
-                        cx={piece.x + piece.size / 2}
-                        cy={piece.y + piece.size / 2}
-                        r={piece.size / 2}
-                        {...ghostProps}
-                      />
-                    );
-                  } else if (config.shape === 'square') {
-                    shape = (
-                      <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} {...ghostProps} />
-                    );
-                  } else {
-                    shape = <polygon points={getHexPoints(piece.x, piece.y, piece.size)} {...ghostProps} />;
-                  }
-
-                  return (
-                    <g key={`ghost-${piece.pieceId}`} pointerEvents="none">
-                      {shape}
-                      {config.showLabel && (
-                        <text
-                          className="piece-label piece-label--planned"
-                          x={piece.x + piece.size / 2}
-                          y={piece.y + piece.size / 2}
-                          fontSize={labelSize}
-                          fill="#1f4f7a"
-                        >
-                          {config.label}
-                        </text>
-                      )}
-                    </g>
-                );
-              })}
-            </g>
-            {actionOverlay && actionOverlayLayout && (
-              <g className="action-overlay">
-                <rect
-                  className="action-overlay-box"
-                  x={actionOverlayLayout.boxX}
-                  y={actionOverlayLayout.boxY}
-                  width={actionOverlayLayout.boxWidth}
-                  height={actionOverlayLayout.boxHeight}
-                />
-                <text
-                  className="action-overlay-text"
-                  x={actionOverlayLayout.textX}
-                  y={actionOverlayLayout.textY}
-                >
-                  {actionOverlay}
-                </text>
-              </g>
-            )}
-            {hasWinner && winnerOverlayText && winnerOverlayLayout && (
-              <g className="winner-overlay" aria-hidden>
-                <rect
-                  className="winner-overlay-box"
-                  x={winnerOverlayLayout.boxX}
-                  y={winnerOverlayLayout.boxY}
-                  width={winnerOverlayLayout.boxWidth}
-                  height={winnerOverlayLayout.boxHeight}
-                />
-                <text className="winner-overlay-text" x={winnerOverlayLayout.textX} y={winnerOverlayLayout.textY}>
-                  {winnerOverlayText}
-                </text>
-              </g>
-            )}
-          </svg>
+              {hasWinner && winnerOverlayText && winnerOverlayLayout && (
+                <g className="winner-overlay" aria-hidden>
+                  <rect
+                    className="winner-overlay-box"
+                    x={winnerOverlayLayout.boxX}
+                    y={winnerOverlayLayout.boxY}
+                    width={winnerOverlayLayout.boxWidth}
+                    height={winnerOverlayLayout.boxHeight}
+                  />
+                  <text className="winner-overlay-text" x={winnerOverlayLayout.textX} y={winnerOverlayLayout.textY}>
+                    {winnerOverlayText}
+                  </text>
+                </g>
+              )}
+            </svg>
+          </div>
         </div>
       </div>
       <aside className="planner-panel">
@@ -1169,14 +1181,6 @@ function PlayArea() {
                 ? winnerOverlayText
                 : `Current: ${currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}`}
             </h2>
-          </div>
-          <div className="planner-header-actions">
-            <button className="planner-info-button" onClick={() => setInfoOpen((prev) => !prev)}>
-              {infoOpen ? 'Close' : 'Info'}
-            </button>
-            <button className="planner-reset-button" onClick={handleReset}>
-              Reset
-            </button>
           </div>
         </div>
         <div className="planner-line">
@@ -1199,14 +1203,6 @@ function PlayArea() {
           </button>
         </div>
         {validationMessage && <p className="planner-error">{validationMessage}</p>}
-        {infoOpen && (
-          <div className="planner-info">
-            <h3>How to plan a turn</h3>
-            <p>Select your piece or a stranger, then click a room to set a destination.</p>
-            <p>Click a planned piece again to update its destination. Submit validates the plan.</p>
-            <p>Opponent pieces and the doctor cannot be moved.</p>
-          </div>
-        )}
         <div className="planner-animations">
           <p className="planner-animations-title">Animations</p>
           <div className="planner-animations-row">
@@ -1237,6 +1233,14 @@ function PlayArea() {
         {prevTurnSummary && <pre className="game-summary">{prevTurnSummary}</pre>}
         {history && <pre className="game-summary game-summary--history">{history}</pre>}
       </div>
+      {infoPopup && infoPopupContent && (
+        <div className="info-overlay" role="dialog" aria-modal="true" onClick={() => setInfoPopup(null)}>
+          <div className="info-popup">
+            <h3>{infoPopupTitle}</h3>
+            {infoPopupContent}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
