@@ -512,6 +512,35 @@ function PlayArea() {
     currentPlayerPieceId !== null &&
     (pieceId === currentPlayerPieceId || pieceId === 'stranger1' || pieceId === 'stranger2');
 
+  const alliedStranger =
+    currentPlayerPieceId === 'player1'
+      ? 'stranger2'
+      : currentPlayerPieceId === 'player2'
+        ? 'stranger1'
+        : null;
+  const opposingStranger =
+    currentPlayerPieceId === 'player1'
+      ? 'stranger1'
+      : currentPlayerPieceId === 'player2'
+        ? 'stranger2'
+        : null;
+
+  const getPreferredSelectablePieceInRoom = (roomId: number) => {
+    const preference: Array<PieceId | null> = [currentPlayerPieceId, alliedStranger, opposingStranger];
+    for (const pieceId of preference) {
+      if (!pieceId) {
+        continue;
+      }
+      if (!isPieceSelectable(pieceId)) {
+        continue;
+      }
+      if (pieceRoomMap.get(pieceId) === roomId) {
+        return pieceId;
+      }
+    }
+    return null;
+  };
+
   const handlePieceClick = (pieceId: PieceId) => {
     if (hasWinner) {
       return;
@@ -537,7 +566,18 @@ function PlayArea() {
       return;
     }
     if (!selectedPieceId) {
+      const preferredPiece = getPreferredSelectablePieceInRoom(roomId);
+      if (preferredPiece) {
+        setSelectedPieceId(preferredPiece);
+        setValidationMessage(null);
+        return;
+      }
       setValidationMessage('Select a piece, then choose a destination room.');
+      return;
+    }
+    if (pieceRoomMap.get(selectedPieceId) === roomId) {
+      setSelectedPieceId(null);
+      setValidationMessage(null);
       return;
     }
     setPlannedMoves((prev) => ({ ...prev, [selectedPieceId]: roomId }));
@@ -642,6 +682,11 @@ function PlayArea() {
       handleSubmit();
       return;
     }
+    if (pieceRoomMap.get(selectedPieceId) === roomId) {
+      setSelectedPieceId(null);
+      setValidationMessage(null);
+      return;
+    }
     const nextMoves = { ...plannedMoves, [selectedPieceId]: roomId };
     const nextOrder = planOrder.includes(selectedPieceId) ? planOrder : [...planOrder, selectedPieceId];
     setSelectedPieceId(null);
@@ -657,6 +702,10 @@ function PlayArea() {
     }
     if (!currentPlayerPieceId) {
       setValidationMessage('No current player available.');
+      return;
+    }
+    if (pieceRoomMap.get(currentPlayerPieceId) === roomId) {
+      setValidationMessage(null);
       return;
     }
     const nextMoves = { ...plannedMoves, [currentPlayerPieceId]: roomId };
