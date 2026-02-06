@@ -890,10 +890,11 @@ function PlayArea() {
 
   const currentPlayerColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].color : 'var(--line)';
   const currentPlayerTextColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].textColor : 'var(--ink)';
+  const boardOutlineColor = animatedPieces ? '#8c8c8c' : currentPlayerColor;
 
   return (
     <section className="play-area">
-      <div className="board-shell" style={{ borderColor: currentPlayerColor }}>
+      <div className="board-shell" style={{ borderColor: boardOutlineColor }}>
         <div className="board">
           <svg
             viewBox={`0 0 ${boardWidth} ${boardHeight}`}

@@ -53,7 +53,7 @@ a:hover {
 }
 
 button {
-  border-radius: 0;
+  border-radius: 6px;
   border: 1px solid var(--line);
   padding: 0.55rem 1.1rem;
   font-size: 0.95rem;
