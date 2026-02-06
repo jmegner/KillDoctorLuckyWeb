@@ -1118,15 +1118,13 @@ function PlayArea() {
                 </text>
               </g>
             )}
-            {hasWinner && winnerPieceId && (
-              <g className="winner-overlay" aria-hidden>
-                <rect className="winner-overlay-backdrop" x={0} y={0} width={boardWidth} height={boardHeight} />
-                <text className="winner-overlay-text" x={boardWidth / 2} y={boardHeight / 2}>
-                  {pieceConfig[winnerPieceId].label} won!
-                </text>
-              </g>
-            )}
           </svg>
+          {hasWinner && winnerPieceId && (
+            <div className="winner-overlay" aria-hidden>
+              <div className="winner-overlay-backdrop" />
+              <div className="winner-overlay-text">{pieceConfig[winnerPieceId].label} won!</div>
+            </div>
+          )}
         </div>
       </div>
       <aside className="planner-panel">
