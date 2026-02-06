@@ -64,6 +64,24 @@ impl PieceId {
         }
     }
 
+    fn from_player_id(player_id: core::player::PlayerId, has_strangers: bool) -> Option<Self> {
+        if has_strangers {
+            match player_id.0 {
+                0 => Some(PieceId::Player1),
+                1 => Some(PieceId::Stranger1),
+                2 => Some(PieceId::Player2),
+                3 => Some(PieceId::Stranger2),
+                _ => None,
+            }
+        } else {
+            match player_id.0 {
+                0 => Some(PieceId::Player1),
+                1 => Some(PieceId::Player2),
+                _ => None,
+            }
+        }
+    }
+
     fn to_player_id(self) -> Option<core::player::PlayerId> {
         use core::rule_helper;
 
@@ -99,6 +117,66 @@ struct BoardRoomInfo {
     visible: Vec<usize>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TurnPlanPreview {
+    is_valid: bool,
+    validation_message: String,
+    next_player_piece_id: String,
+    attackers: Vec<String>,
+    current_player_loots: bool,
+    doctor_room_id: usize,
+}
+
+fn normal_piece_id_for_state(state: &core::mutable_game_state::MutableGameState) -> PieceId {
+    let normal_id =
+        core::rule_helper::to_normal_player_id(state.current_player_id, state.common.num_normal_players);
+    if normal_id == core::rule_helper::SIDE_A_NORMAL_PLAYER_ID {
+        PieceId::Player1
+    } else {
+        PieceId::Player2
+    }
+}
+
+fn to_preview_json(preview: &TurnPlanPreview) -> String {
+    serde_json::to_string(preview).unwrap_or_else(|_| {
+        "{\"isValid\":false,\"validationMessage\":\"Preview serialization failed.\",\"nextPlayerPieceId\":\"\",\"attackers\":[],\"currentPlayerLoots\":false,\"doctorRoomId\":0}".to_string()
+    })
+}
+
+fn invalid_preview_json(message: String) -> String {
+    to_preview_json(&TurnPlanPreview {
+        is_valid: false,
+        validation_message: message,
+        next_player_piece_id: String::new(),
+        attackers: Vec::new(),
+        current_player_loots: false,
+        doctor_room_id: 0,
+    })
+}
+
+fn current_player_loots_after_turn(
+    state: &core::mutable_game_state::MutableGameState,
+    turn: &core::simple_turn::SimpleTurn,
+) -> bool {
+    let mut preview_state = state.copy_state();
+    let current_player_id = preview_state.current_player_id;
+    let mut moved_stranger_that_saw_doctor = false;
+
+    for mv in &turn.moves {
+        let player_idx = mv.player_id.0;
+        let current_room_id = preview_state.player_room_ids[player_idx];
+        if mv.player_id != current_player_id
+            && preview_state.common.board.sight[current_room_id.0][preview_state.doctor_room_id.0]
+        {
+            moved_stranger_that_saw_doctor = true;
+        }
+        preview_state.player_room_ids[player_idx] = mv.dest_room_id;
+    }
+
+    preview_state.best_action_allowed(moved_stranger_that_saw_doctor) == core::player::PlayerAction::Loot
+}
+
 #[wasm_bindgen]
 pub struct GameStateHandle {
     state: core::mutable_game_state::MutableGameState,
@@ -112,16 +190,7 @@ impl GameStateHandle {
 
     #[wasm_bindgen(js_name = "currentPlayerPieceId")]
     pub fn current_player_piece_id(&self) -> String {
-        let normal_id = core::rule_helper::to_normal_player_id(
-            self.state.current_player_id,
-            self.state.common.num_normal_players,
-        );
-        let piece_id = if normal_id == core::rule_helper::SIDE_A_NORMAL_PLAYER_ID {
-            PieceId::Player1
-        } else {
-            PieceId::Player2
-        };
-        piece_id.as_str().to_string()
+        normal_piece_id_for_state(&self.state).as_str().to_string()
     }
 
     #[wasm_bindgen(js_name = "hasWinner")]
@@ -285,6 +354,45 @@ impl GameStateHandle {
 
         self.state.after_normal_turn(turn, true);
         String::new()
+    }
+
+    #[wasm_bindgen(js_name = "previewTurnPlan")]
+    pub fn preview_turn_plan(&self, turn_plan_json: &str) -> String {
+        let turn = match parse_turn_plan(turn_plan_json) {
+            Ok(turn) => turn,
+            Err(message) => return invalid_preview_json(message),
+        };
+
+        if let Err(message) = self.state.check_normal_turn(&turn) {
+            return invalid_preview_json(message);
+        }
+
+        let current_player_loots = current_player_loots_after_turn(&self.state, &turn);
+        let prior_attack_count = self.state.attacker_hist.len();
+        let mut preview_state = self.state.copy_state();
+        preview_state.after_normal_turn(turn, false);
+
+        let mut seen_attackers = HashSet::new();
+        let mut attackers = Vec::new();
+        let has_strangers = preview_state.common.has_strangers();
+        for player_id in preview_state.attacker_hist.iter().skip(prior_attack_count) {
+            let Some(piece_id) = PieceId::from_player_id(*player_id, has_strangers) else {
+                continue;
+            };
+            let piece_id = piece_id.as_str().to_string();
+            if seen_attackers.insert(piece_id.clone()) {
+                attackers.push(piece_id);
+            }
+        }
+
+        to_preview_json(&TurnPlanPreview {
+            is_valid: true,
+            validation_message: String::new(),
+            next_player_piece_id: normal_piece_id_for_state(&preview_state).as_str().to_string(),
+            attackers,
+            current_player_loots,
+            doctor_room_id: preview_state.doctor_room_id.0,
+        })
     }
 }
 

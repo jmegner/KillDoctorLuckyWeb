@@ -9,6 +9,15 @@ type TurnPlanEntry = {
   roomId: number;
 };
 
+type TurnPlanPreviewResponse = {
+  isValid: boolean;
+  validationMessage: string;
+  nextPlayerPieceId: string;
+  attackers: string[];
+  currentPlayerLoots: boolean;
+  doctorRoomId: number;
+};
+
 type BoardRoomRaw = {
   Id: string | number;
   Name?: string;
@@ -71,6 +80,7 @@ const boardRoomById = new Map<number, BoardRoom>(boardRooms.map((room) => [room.
 const pieceOrder: PieceId[] = ['doctor', 'player1', 'player2', 'stranger1', 'stranger2'];
 const animationSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
 const defaultSpeedIndex = 3;
+const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 
 const pieceConfig: Record<
   PieceId,
@@ -724,6 +734,42 @@ function PlayArea() {
               : `${pieceConfig[pieceId].label}@R${roomId}`;
           })
           .join(', ');
+  const previewSummary = (() => {
+    if (!gameState) {
+      return 'Preview unavailable.';
+    }
+    const rawPreview = gameState.previewTurnPlan(JSON.stringify(plannedEntries));
+    let parsed: TurnPlanPreviewResponse;
+    try {
+      parsed = JSON.parse(rawPreview) as TurnPlanPreviewResponse;
+    } catch {
+      return 'Preview unavailable.';
+    }
+    if (!parsed.isValid) {
+      return 'Invalid plan.';
+    }
+
+    const nextText = (() => {
+      if (!parsed.nextPlayerPieceId) {
+        return '??';
+      }
+      return isPieceId(parsed.nextPlayerPieceId) ? pieceConfig[parsed.nextPlayerPieceId].label : parsed.nextPlayerPieceId;
+    })();
+    const segments = [`Next:${nextText}`];
+
+    if (parsed.attackers.length > 0) {
+      const attackerLabels = parsed.attackers.map((pieceId) => (isPieceId(pieceId) ? pieceConfig[pieceId].label : pieceId));
+      segments.push(`Atk:${attackerLabels.join(',')}`);
+    }
+
+    if (parsed.currentPlayerLoots) {
+      segments.push('Loot');
+    }
+    const doctorRoomText = Number.isFinite(parsed.doctorRoomId) ? parsed.doctorRoomId : '?';
+    segments.push(`Dr:R${doctorRoomText}`);
+
+    return segments.join(' | ');
+  })();
 
   const selectedLabel = selectedPieceId ? pieceConfig[selectedPieceId].label : 'None';
   const selectedSuffix = selectedPieceId && plannedMoves[selectedPieceId] !== undefined ? ' (update)' : '';
@@ -1239,6 +1285,10 @@ function PlayArea() {
         <div className="planner-line">
           <span className="planner-label">Planned</span>
           <span className="planner-value">{planSummary}</span>
+        </div>
+        <div className="planner-line">
+          <span className="planner-label">Preview</span>
+          <span className="planner-value">{previewSummary}</span>
         </div>
         <div className="planner-actions">
           <button className="planner-button planner-button--primary" onClick={handleSubmit} disabled={hasWinner}>
