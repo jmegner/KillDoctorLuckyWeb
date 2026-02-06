@@ -85,6 +85,58 @@ const pieceOrder: PieceId[] = ['doctor', 'player1', 'player2', 'stranger1', 'str
 const animationSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
 const defaultSpeedIndex = 8;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
+const animationPrefsStorageKey = 'kdl.settings.v1';
+
+type AnimationPrefs = {
+  animationEnabled: boolean;
+  animationSpeedIndex: number;
+};
+
+const clampAnimationSpeedIndex = (value: number) => Math.min(animationSpeeds.length - 1, Math.max(0, value));
+
+const loadAnimationPrefs = (): AnimationPrefs => {
+  const defaults: AnimationPrefs = { animationEnabled: true, animationSpeedIndex: defaultSpeedIndex };
+  if (typeof window === 'undefined') {
+    return defaults;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(animationPrefsStorageKey);
+    if (!raw) {
+      return defaults;
+    }
+    const parsed = JSON.parse(raw) as Partial<AnimationPrefs>;
+    const animationEnabled = typeof parsed.animationEnabled === 'boolean' ? parsed.animationEnabled : true;
+    const parsedSpeedIndex =
+      typeof parsed.animationSpeedIndex === 'number' && Number.isFinite(parsed.animationSpeedIndex)
+        ? Math.trunc(parsed.animationSpeedIndex)
+        : defaultSpeedIndex;
+    return {
+      animationEnabled,
+      animationSpeedIndex: clampAnimationSpeedIndex(parsedSpeedIndex),
+    };
+  } catch {
+    return defaults;
+  }
+};
+
+const saveAnimationPrefs = (prefs: AnimationPrefs) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      animationPrefsStorageKey,
+      JSON.stringify({
+        animationEnabled: prefs.animationEnabled,
+        animationSpeedIndex: clampAnimationSpeedIndex(prefs.animationSpeedIndex),
+      }),
+    );
+  } catch {
+    // Ignore persistence failures (e.g. private mode / quota).
+  }
+};
 
 const pieceConfig: Record<
   PieceId,
@@ -405,8 +457,8 @@ function PlayArea() {
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [infoPopup, setInfoPopup] = useState<'rules' | 'ui' | null>(null);
   const [, setTurnCounter] = useState(0);
-  const [animationEnabled, setAnimationEnabled] = useState(true);
-  const [animationSpeedIndex, setAnimationSpeedIndex] = useState(defaultSpeedIndex);
+  const [animationEnabled, setAnimationEnabled] = useState(() => loadAnimationPrefs().animationEnabled);
+  const [animationSpeedIndex, setAnimationSpeedIndex] = useState(() => loadAnimationPrefs().animationSpeedIndex);
   const [actionOverlay, setActionOverlay] = useState<string | null>(null);
   const [actionHighlightPieceId, setActionHighlightPieceId] = useState<PieceId | null>(null);
   const [animatedPieces, setAnimatedPieces] = useState<Array<{
@@ -990,6 +1042,10 @@ function PlayArea() {
 
   const handleAnimationEnabled = (enabled: boolean) => {
     setAnimationEnabled(enabled);
+    saveAnimationPrefs({
+      animationEnabled: enabled,
+      animationSpeedIndex,
+    });
     if (!enabled) {
       stopAnimation();
     }
@@ -998,6 +1054,10 @@ function PlayArea() {
   const handleSpeedChange = (direction: 'slower' | 'faster') => {
     setAnimationSpeedIndex((prev) => {
       const next = direction === 'slower' ? Math.max(0, prev - 1) : Math.min(animationSpeeds.length - 1, prev + 1);
+      saveAnimationPrefs({
+        animationEnabled,
+        animationSpeedIndex: next,
+      });
       if (animationRef.current) {
         animationRef.current.speed = animationSpeeds[next];
       }
