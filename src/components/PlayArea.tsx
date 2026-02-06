@@ -888,9 +888,12 @@ function PlayArea() {
     handleSubmit();
   };
 
+  const currentPlayerColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].color : 'var(--line)';
+  const currentPlayerTextColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].textColor : 'var(--ink)';
+
   return (
     <section className="play-area">
-      <div className="board-shell">
+      <div className="board-shell" style={{ borderColor: currentPlayerColor }}>
         <div className="board">
           <svg
             viewBox={`0 0 ${boardWidth} ${boardHeight}`}
@@ -952,8 +955,6 @@ function PlayArea() {
                         y={boxY}
                         width={boxWidth}
                         height={boxHeight}
-                        rx={4}
-                        ry={4}
                       />
                       <text className="room-distance-text" x={textX} y={textY}>
                         {distance}
@@ -1012,7 +1013,7 @@ function PlayArea() {
                       );
                     }
                     if (config.shape === 'square') {
-                      return <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} rx={3} {...props} />;
+                      return <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} {...props} />;
                     }
                     return <polygon points={getHexPoints(piece.x, piece.y, piece.size)} {...props} />;
                   };
@@ -1074,7 +1075,7 @@ function PlayArea() {
                     );
                   } else if (config.shape === 'square') {
                     shape = (
-                      <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} rx={3} {...ghostProps} />
+                      <rect x={piece.x} y={piece.y} width={piece.size} height={piece.size} {...ghostProps} />
                     );
                   } else {
                     shape = <polygon points={getHexPoints(piece.x, piece.y, piece.size)} {...ghostProps} />;
@@ -1106,8 +1107,6 @@ function PlayArea() {
                   y={actionOverlayLayout.boxY}
                   width={actionOverlayLayout.boxWidth}
                   height={actionOverlayLayout.boxHeight}
-                  rx={10}
-                  ry={10}
                 />
                 <text
                   className="action-overlay-text"
@@ -1132,8 +1131,10 @@ function PlayArea() {
       <aside className="planner-panel">
         <div className="planner-header">
           <div>
-            <p className="planner-kicker">Turn Planner</p>
-            <h2 className="planner-title">
+            <h2
+              className="planner-title"
+              style={{ backgroundColor: currentPlayerColor, color: currentPlayerTextColor }}
+            >
               {hasWinner && winnerPieceId
                 ? `${pieceConfig[winnerPieceId].label} won!`
                 : `Current: ${currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}`}
