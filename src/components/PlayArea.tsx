@@ -340,6 +340,27 @@ const buildActionOverlayLayout = (text: string) => {
   };
 };
 
+const buildWinnerOverlayLayout = (text: string) => {
+  const fontSize = 52;
+  const paddingX = 24;
+  const paddingY = 18;
+  const estimatedTextWidth = Math.max(180, text.length * fontSize * 0.58);
+  const maxWidth = Math.max(220, boardWidth - 40);
+  const boxWidth = Math.min(maxWidth, Math.max(280, estimatedTextWidth + paddingX * 2));
+  const boxHeight = fontSize + paddingY * 2;
+  const boxX = boardWidth / 2 - boxWidth / 2;
+  const boxY = boardHeight / 2 - boxHeight / 2;
+
+  return {
+    boxX,
+    boxY,
+    boxWidth,
+    boxHeight,
+    textX: boxX + boxWidth / 2,
+    textY: boxY + boxHeight / 2 + 1,
+  };
+};
+
 const blendHexColor = (from: string, to: string, ratio: number) => {
   const normalize = (value: string) => value.replace('#', '').trim();
   const fromHex = normalize(from);
@@ -405,6 +426,7 @@ function PlayArea() {
   const winnerPieceIdRaw = gameState ? gameState.winnerPieceId() : '';
   const winnerPieceId =
     winnerPieceIdRaw === 'player1' || winnerPieceIdRaw === 'player2' ? (winnerPieceIdRaw as PieceId) : null;
+  const winnerOverlayText = winnerPieceId ? `${pieceConfig[winnerPieceId].label} wins!` : null;
   const currentPlayerPieceId = gameState ? (gameState.currentPlayerPieceId() as PieceId) : null;
   const pieceRooms = gameState ? gameState.piecePositions() : null;
   const pieceRoomMap = (() => {
@@ -658,6 +680,7 @@ function PlayArea() {
   const selectedRoomId = selectedPieceId ? pieceRoomMap.get(selectedPieceId) : undefined;
   const distanceByRoom = selectedRoomId !== undefined ? buildRoomDistanceMap(selectedRoomId) : null;
   const actionOverlayLayout = actionOverlay ? buildActionOverlayLayout(actionOverlay) : null;
+  const winnerOverlayLayout = winnerOverlayText ? buildWinnerOverlayLayout(winnerOverlayText) : null;
 
   const stopAnimation = () => {
     const current = animationRef.current;
@@ -1118,11 +1141,17 @@ function PlayArea() {
                 </text>
               </g>
             )}
-            {hasWinner && winnerPieceId && (
+            {hasWinner && winnerOverlayText && winnerOverlayLayout && (
               <g className="winner-overlay" aria-hidden>
-                <rect className="winner-overlay-backdrop" x={0} y={0} width={boardWidth} height={boardHeight} />
-                <text className="winner-overlay-text" x={boardWidth / 2} y={boardHeight / 2}>
-                  {pieceConfig[winnerPieceId].label} won!
+                <rect
+                  className="winner-overlay-box"
+                  x={winnerOverlayLayout.boxX}
+                  y={winnerOverlayLayout.boxY}
+                  width={winnerOverlayLayout.boxWidth}
+                  height={winnerOverlayLayout.boxHeight}
+                />
+                <text className="winner-overlay-text" x={winnerOverlayLayout.textX} y={winnerOverlayLayout.textY}>
+                  {winnerOverlayText}
                 </text>
               </g>
             )}
@@ -1136,8 +1165,8 @@ function PlayArea() {
               className="planner-title"
               style={{ backgroundColor: currentPlayerColor, color: currentPlayerTextColor }}
             >
-              {hasWinner && winnerPieceId
-                ? `${pieceConfig[winnerPieceId].label} won!`
+              {hasWinner && winnerOverlayText
+                ? winnerOverlayText
                 : `Current: ${currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}`}
             </h2>
           </div>
