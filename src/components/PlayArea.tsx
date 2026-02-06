@@ -731,11 +731,11 @@ function PlayArea() {
           })
           .join(', ');
   const previewDisplay = (() => {
+    const emptyTokens: Array<{ text: string; colorPieceId: PieceId | null }> = [];
     if (!gameState) {
       return {
         message: 'Preview unavailable.',
-        tokens: [] as string[],
-        nextPieceId: null as PieceId | null,
+        tokens: emptyTokens,
       };
     }
     const rawPreview = gameState.previewTurnPlan(JSON.stringify(plannedEntries));
@@ -745,46 +745,47 @@ function PlayArea() {
     } catch {
       return {
         message: 'Preview unavailable.',
-        tokens: [] as string[],
-        nextPieceId: null as PieceId | null,
+        tokens: emptyTokens,
       };
     }
     if (!parsed.isValid) {
       return {
         message: 'Invalid plan.',
-        tokens: [] as string[],
-        nextPieceId: null as PieceId | null,
+        tokens: emptyTokens,
       };
     }
 
     const nextPieceId = isPieceId(parsed.nextPlayerPieceId) ? parsed.nextPlayerPieceId : null;
     const nextText = nextPieceId ? pieceConfig[nextPieceId].label : parsed.nextPlayerPieceId || '??';
-    const segments = [`Next:${nextText}`];
+    const tokens: Array<{ text: string; colorPieceId: PieceId | null }> = [
+      { text: `Next:${nextText}`, colorPieceId: nextPieceId },
+    ];
 
     if (parsed.attackers.length > 0) {
       const attackerLabels = parsed.attackers.map((pieceId) =>
         isPieceId(pieceId) ? pieceConfig[pieceId].label : pieceId,
       );
-      segments.push(`Atk:${attackerLabels.join(',')}`);
+      tokens.push({ text: `Atk:${attackerLabels.join(',')}`, colorPieceId: null });
     }
 
     if (parsed.currentPlayerLoots) {
-      segments.push('Loot');
+      tokens.push({ text: 'Loot', colorPieceId: null });
     }
 
     parsed.movedStrangers.forEach((entry) => {
-      const pieceText = isPieceId(entry.pieceId) ? pieceConfig[entry.pieceId].label : entry.pieceId;
+      const pieceId = isPieceId(entry.pieceId) ? entry.pieceId : null;
+      const pieceText = pieceId ? pieceConfig[pieceId].label : entry.pieceId;
       const roomText = Number.isFinite(entry.roomId) ? entry.roomId : '?';
-      segments.push(`${pieceText}:R${roomText}`);
+      const colorPieceId = pieceId === 'stranger1' || pieceId === 'stranger2' ? pieceId : null;
+      tokens.push({ text: `${pieceText}:R${roomText}`, colorPieceId });
     });
 
     const doctorRoomText = Number.isFinite(parsed.doctorRoomId) ? parsed.doctorRoomId : '?';
-    segments.push(`Dr:R${doctorRoomText}`);
+    tokens.push({ text: `Dr:R${doctorRoomText}`, colorPieceId: null });
 
     return {
       message: null as string | null,
-      tokens: segments,
-      nextPieceId,
+      tokens,
     };
   })();
 
@@ -1309,24 +1310,25 @@ function PlayArea() {
             {previewDisplay.message
               ? previewDisplay.message
               : previewDisplay.tokens.map((token, index) => {
-                  const nextPieceId = previewDisplay.nextPieceId;
-                  const isNextToken = index === 0 && nextPieceId !== null;
-                  const nextTokenStyle = isNextToken
+                  const colorPieceId = token.colorPieceId;
+                  const previewTokenStyle = colorPieceId
                     ? {
-                        backgroundColor: pieceConfig[nextPieceId].color,
-                        color: pieceConfig[nextPieceId].textColor,
+                        backgroundColor: pieceConfig[colorPieceId].color,
+                        color: pieceConfig[colorPieceId].textColor,
                       }
                     : undefined;
                   return (
-                    <span key={`preview-token-${token}-${index}`}>
+                    <span key={`preview-token-${token.text}-${index}`}>
                       {index > 0 && <span className="planner-preview-sep"> | </span>}
                       <span
                         className={
-                          isNextToken ? 'planner-preview-token planner-preview-token--next' : 'planner-preview-token'
+                          colorPieceId
+                            ? 'planner-preview-token planner-preview-token--badge'
+                            : 'planner-preview-token'
                         }
-                        style={nextTokenStyle}
+                        style={previewTokenStyle}
                       >
-                        {token}
+                        {token.text}
                       </span>
                     </span>
                   );
