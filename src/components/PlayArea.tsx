@@ -2130,18 +2130,28 @@ function PlayArea() {
               <tbody>
                 {playerStatsRows.map((row) => {
                   const config = pieceConfig[row.pieceId];
+                  const isNormalPlayerRow = row.pieceId === 'player1' || row.pieceId === 'player2';
+                  const numericCellClassName = isNormalPlayerRow ? 'player-stats-cell--bold' : undefined;
                   return (
                     <tr
                       key={`player-stats-${row.pieceId}`}
                       style={{ backgroundColor: config.color, color: config.textColor }}
                     >
                       <th scope="row">{config.label}</th>
-                      <td>{formatPlayerInteger(row.doctorDistance)}</td>
-                      <td>{formatPlayerInteger(row.strength)}</td>
-                      <td>{formatPlayerStatDecimal(row.moveCards)}</td>
-                      <td>{formatPlayerStatDecimal(row.weaponCards)}</td>
-                      <td>{formatPlayerStatDecimal(row.failureCards)}</td>
-                      <td>{formatPlayerStatDecimal(row.equivalentClovers)}</td>
+                      <td className={numericCellClassName}>{formatPlayerInteger(row.doctorDistance)}</td>
+                      <td className={numericCellClassName}>{formatPlayerInteger(row.strength)}</td>
+                      <td className={numericCellClassName}>
+                        {isNormalPlayerRow ? formatPlayerStatDecimal(row.moveCards) : ''}
+                      </td>
+                      <td className={numericCellClassName}>
+                        {isNormalPlayerRow ? formatPlayerStatDecimal(row.weaponCards) : ''}
+                      </td>
+                      <td className={numericCellClassName}>
+                        {isNormalPlayerRow ? formatPlayerStatDecimal(row.failureCards) : ''}
+                      </td>
+                      <td className={numericCellClassName}>
+                        {isNormalPlayerRow ? formatPlayerStatDecimal(row.equivalentClovers) : ''}
+                      </td>
                     </tr>
                   );
                 })}
