@@ -1588,7 +1588,7 @@ function PlayArea() {
                     : undefined;
                   return (
                     <span key={`preview-token-${token.text}-${index}`}>
-                      {index > 0 && <span className="planner-preview-sep"> | </span>}
+                      {index > 0 && <span className="planner-preview-sep">|</span>}
                       <span
                         className={
                           colorPieceId
