@@ -22,6 +22,51 @@ type TurnPlanPreviewResponse = {
   }>;
 };
 
+type PreviewToken = {
+  text: string;
+  colorPieceId: PieceId | null;
+};
+
+type PreviewDisplay = {
+  message: string | null;
+  tokens: PreviewToken[];
+};
+
+type BestTurnResponse = {
+  isValid: boolean;
+  validationMessage: string;
+  suggestedTurnText: string;
+  suggestedTurn: TurnPlanEntry[];
+  numStatesVisited: number;
+  elapsedMs: number;
+};
+
+type TreeSearchWorkerRequest = {
+  type: 'analyze';
+  runId: number;
+  stateJson: string;
+  analysisLevel: number;
+};
+
+type TreeSearchWorkerResponse =
+  | {
+      type: 'analysisResult';
+      runId: number;
+      analysisRaw: string;
+      previewRaw: string;
+    }
+  | {
+      type: 'analysisError';
+      runId: number;
+      message: string;
+    };
+
+type AiSuggestion = {
+  sourceTurnCounter: number;
+  bestTurn: BestTurnResponse;
+  previewRaw: string;
+};
+
 type BoardRoomRaw = {
   Id: string | number;
   Name?: string;
@@ -572,6 +617,65 @@ const blendHexColor = (from: string, to: string, ratio: number) => {
   return `#${blended.map((value) => value.toString(16).padStart(2, '0')).join('')}`;
 };
 
+const toPreviewDisplay = (rawPreview: string, invalidMessage: string): PreviewDisplay => {
+  const emptyTokens: PreviewToken[] = [];
+  let parsed: TurnPlanPreviewResponse;
+  try {
+    parsed = JSON.parse(rawPreview) as TurnPlanPreviewResponse;
+  } catch {
+    return {
+      message: 'Preview unavailable.',
+      tokens: emptyTokens,
+    };
+  }
+
+  if (!parsed.isValid) {
+    return {
+      message: parsed.validationMessage || invalidMessage,
+      tokens: emptyTokens,
+    };
+  }
+
+  const nextPieceId = isPieceId(parsed.nextPlayerPieceId) ? parsed.nextPlayerPieceId : null;
+  const nextText = nextPieceId ? pieceConfig[nextPieceId].label : parsed.nextPlayerPieceId || '??';
+  const tokens: PreviewToken[] = [{ text: `Next:${nextText}`, colorPieceId: nextPieceId }];
+
+  if (parsed.attackers.length > 0) {
+    const attackerLabels = parsed.attackers.map((pieceId) => (isPieceId(pieceId) ? pieceConfig[pieceId].label : pieceId));
+    tokens.push({ text: `Atk:${attackerLabels.join(',')}`, colorPieceId: null });
+  }
+
+  if (parsed.currentPlayerLoots) {
+    tokens.push({ text: 'Loot', colorPieceId: null });
+  }
+
+  parsed.movedStrangers.forEach((entry) => {
+    const pieceId = isPieceId(entry.pieceId) ? entry.pieceId : null;
+    const pieceText = pieceId ? pieceConfig[pieceId].label : entry.pieceId;
+    const roomText = Number.isFinite(entry.roomId) ? entry.roomId : '?';
+    const colorPieceId = pieceId === 'stranger1' || pieceId === 'stranger2' ? pieceId : null;
+    tokens.push({ text: `${pieceText}:R${roomText}`, colorPieceId });
+  });
+
+  const doctorRoomText = Number.isFinite(parsed.doctorRoomId) ? parsed.doctorRoomId : '?';
+  tokens.push({ text: `Dr:R${doctorRoomText}`, colorPieceId: null });
+
+  return {
+    message: null,
+    tokens,
+  };
+};
+
+const formatElapsedTime = (elapsedMs: number) => {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
+    return '0 ms';
+  }
+  if (elapsedMs < 1000) {
+    return `${Math.round(elapsedMs)} ms`;
+  }
+  return `${(elapsedMs / 1000).toFixed(2)} s`;
+};
+
 function PlayArea() {
   const [gameState] = useState<GameStateHandle | null>(() => {
     try {
@@ -600,7 +704,17 @@ function PlayArea() {
   const [setupPrefsDraft, setSetupPrefsDraft] = useState<SetupPrefsDraft>(() =>
     toSetupPrefsDraft(loadSetupPrefs(currentSetupPrefs)),
   );
-  const [, setTurnCounter] = useState(0);
+  const [turnCounter, setTurnCounter] = useState(0);
+  const turnCounterRef = useRef(turnCounter);
+  turnCounterRef.current = turnCounter;
+  const [analysisLevelDraft, setAnalysisLevelDraft] = useState('2');
+  const [analysisIsRunning, setAnalysisIsRunning] = useState(false);
+  const [analysisElapsedMs, setAnalysisElapsedMs] = useState(0);
+  const [analysisStatusMessage, setAnalysisStatusMessage] = useState<string | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null);
+  const analysisTimerRef = useRef<number | null>(null);
+  const analysisWorkerRef = useRef<Worker | null>(null);
+  const analysisRunIdRef = useRef(0);
   const [animationEnabled, setAnimationEnabled] = useState(() => loadAnimationPrefs().animationEnabled);
   const [animationSpeedIndex, setAnimationSpeedIndex] = useState(() => loadAnimationPrefs().animationSpeedIndex);
   const [actionOverlay, setActionOverlay] = useState<string | null>(null);
@@ -788,6 +902,29 @@ function PlayArea() {
     setValidationMessage(null);
   };
 
+  const stopAnalysisTimer = () => {
+    const timerId = analysisTimerRef.current;
+    if (timerId !== null) {
+      window.clearInterval(timerId);
+      analysisTimerRef.current = null;
+    }
+  };
+
+  const stopAnalysisWorker = () => {
+    if (!analysisWorkerRef.current) {
+      return;
+    }
+    analysisWorkerRef.current.terminate();
+    analysisWorkerRef.current = null;
+  };
+
+  const stopAnalysisRun = (statusMessage: string | null) => {
+    stopAnalysisTimer();
+    stopAnalysisWorker();
+    setAnalysisIsRunning(false);
+    setAnalysisStatusMessage(statusMessage);
+  };
+
   const submitPlan = (moves: Partial<Record<PieceId, number>>, order: PieceId[]) => {
     if (hasWinner) {
       return;
@@ -819,6 +956,10 @@ function PlayArea() {
     setPlanOrder([]);
     setSelectedPieceId(null);
     setValidationMessage(null);
+    if (analysisIsRunning) {
+      analysisRunIdRef.current += 1;
+      stopAnalysisRun('Analysis stopped because the position changed.');
+    }
     saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
     startAnimationFromState();
@@ -830,9 +971,159 @@ function PlayArea() {
     submitPlan(plannedMoves, planOrder);
   };
 
+  const entriesToMovesAndOrder = (entries: TurnPlanEntry[]) => {
+    const moves: Partial<Record<PieceId, number>> = {};
+    const order: PieceId[] = [];
+    entries.forEach((entry) => {
+      moves[entry.pieceId] = entry.roomId;
+      order.push(entry.pieceId);
+    });
+    return { moves, order };
+  };
+
+  const startBestTurnAnalysis = (autoSubmit: boolean) => {
+    if (!gameState) {
+      setAnalysisStatusMessage('Analysis unavailable.');
+      return;
+    }
+    if (hasWinner) {
+      setAnalysisStatusMessage('Game already has a winner.');
+      return;
+    }
+
+    const parsedLevel = Number(analysisLevelDraft);
+    if (!Number.isFinite(parsedLevel) || parsedLevel < 0) {
+      setAnalysisStatusMessage('Analysis level must be a number >= 0.');
+      return;
+    }
+
+    const analysisLevel = Math.trunc(parsedLevel);
+    setAnalysisLevelDraft(analysisLevel.toString());
+    analysisRunIdRef.current += 1;
+    const runId = analysisRunIdRef.current;
+    const sourceTurnCounter = turnCounterRef.current;
+
+    stopAnalysisTimer();
+    stopAnalysisWorker();
+    setAiSuggestion(null);
+    setAnalysisIsRunning(true);
+    setAnalysisStatusMessage(autoSubmit ? 'Analyzing and auto-submitting...' : 'Analyzing...');
+    setAnalysisElapsedMs(0);
+
+    const timerStart = performance.now();
+    analysisTimerRef.current = window.setInterval(() => {
+      setAnalysisElapsedMs(performance.now() - timerStart);
+    }, 100);
+
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL('../workers/treeSearchWorker.ts', import.meta.url), { type: 'module' });
+    } catch {
+      stopAnalysisRun('Failed to start analysis worker.');
+      return;
+    }
+    analysisWorkerRef.current = worker;
+
+    worker.onmessage = (event: MessageEvent<TreeSearchWorkerResponse>) => {
+      if (runId !== analysisRunIdRef.current) {
+        return;
+      }
+
+      const message = event.data;
+      if (message.type === 'analysisError') {
+        stopAnalysisRun(`Analysis failed: ${message.message}`);
+        return;
+      }
+
+      let bestTurn: BestTurnResponse;
+      try {
+        bestTurn = JSON.parse(message.analysisRaw) as BestTurnResponse;
+      } catch {
+        stopAnalysisRun('Analysis failed: invalid JSON response.');
+        return;
+      }
+
+      setAnalysisElapsedMs(bestTurn.elapsedMs);
+      if (!bestTurn.isValid) {
+        setAiSuggestion(null);
+        stopAnalysisRun(bestTurn.validationMessage || 'No suggested turn found.');
+        return;
+      }
+
+      setAiSuggestion({
+        sourceTurnCounter,
+        bestTurn,
+        previewRaw: message.previewRaw,
+      });
+
+      if (!autoSubmit) {
+        stopAnalysisRun('Analysis complete.');
+        return;
+      }
+
+      if (sourceTurnCounter !== turnCounterRef.current) {
+        stopAnalysisRun('Analysis complete. Auto-submit skipped because the position changed.');
+        return;
+      }
+
+      stopAnalysisRun('Analysis complete. Suggested turn submitted.');
+      const planned = entriesToMovesAndOrder(bestTurn.suggestedTurn);
+      submitPlan(planned.moves, planned.order);
+    };
+
+    worker.onerror = () => {
+      if (runId !== analysisRunIdRef.current) {
+        return;
+      }
+      stopAnalysisRun('Analysis worker failed.');
+    };
+
+    const request: TreeSearchWorkerRequest = {
+      type: 'analyze',
+      runId,
+      stateJson: gameState.exportStateJson(),
+      analysisLevel,
+    };
+    worker.postMessage(request);
+  };
+
+  const handleAnalysisCancel = () => {
+    if (!analysisIsRunning) {
+      return;
+    }
+    analysisRunIdRef.current += 1;
+    stopAnalysisRun('Analysis cancelled.');
+  };
+
+  const handleThink = () => {
+    startBestTurnAnalysis(false);
+  };
+
+  const handleThinkAndDo = () => {
+    startBestTurnAnalysis(true);
+  };
+
+  const handleDoSuggestedTurn = () => {
+    if (!aiSuggestion || analysisIsRunning || hasWinner) {
+      return;
+    }
+
+    if (aiSuggestion.sourceTurnCounter !== turnCounterRef.current) {
+      setAnalysisStatusMessage('Suggested turn is stale. Run Think again.');
+      return;
+    }
+
+    const planned = entriesToMovesAndOrder(aiSuggestion.bestTurn.suggestedTurn);
+    submitPlan(planned.moves, planned.order);
+  };
+
   const handleUndo = () => {
     if (!gameState) {
       return;
+    }
+    if (analysisIsRunning) {
+      analysisRunIdRef.current += 1;
+      stopAnalysisRun('Analysis stopped because the position changed.');
     }
     const didUndo = gameState.undoLastTurn();
     if (!didUndo) {
@@ -851,6 +1142,10 @@ function PlayArea() {
   const handleReset = () => {
     if (!gameState) {
       return;
+    }
+    if (analysisIsRunning) {
+      analysisRunIdRef.current += 1;
+      stopAnalysisRun('Analysis stopped because the position changed.');
     }
     gameState.resetGame();
     stopAnimation();
@@ -909,6 +1204,10 @@ function PlayArea() {
       return;
     }
 
+    if (analysisIsRunning) {
+      analysisRunIdRef.current += 1;
+      stopAnalysisRun('Analysis stopped because the position changed.');
+    }
     stopAnimation();
     setPlannedMoves({});
     setPlanOrder([]);
@@ -989,63 +1288,53 @@ function PlayArea() {
           })
           .join(', ');
   const previewDisplay = (() => {
-    const emptyTokens: Array<{ text: string; colorPieceId: PieceId | null }> = [];
     if (!gameState) {
       return {
         message: 'Preview unavailable.',
-        tokens: emptyTokens,
+        tokens: [] as PreviewToken[],
       };
     }
     const rawPreview = gameState.previewTurnPlan(JSON.stringify(plannedEntries));
-    let parsed: TurnPlanPreviewResponse;
-    try {
-      parsed = JSON.parse(rawPreview) as TurnPlanPreviewResponse;
-    } catch {
+    return toPreviewDisplay(rawPreview, 'Invalid plan.');
+  })();
+  const aiSuggestionIsCurrent = aiSuggestion ? aiSuggestion.sourceTurnCounter === turnCounter : false;
+  const aiPreviewDisplay = (() => {
+    if (!aiSuggestion) {
+      return {
+        message: analysisIsRunning ? 'Analyzing...' : 'Run Think to get a suggested turn.',
+        tokens: [] as PreviewToken[],
+      };
+    }
+
+    if (!aiSuggestion.bestTurn.isValid) {
+      return {
+        message: aiSuggestion.bestTurn.validationMessage || 'No suggested turn found.',
+        tokens: [] as PreviewToken[],
+      };
+    }
+
+    if (!aiSuggestion.previewRaw) {
       return {
         message: 'Preview unavailable.',
-        tokens: emptyTokens,
-      };
-    }
-    if (!parsed.isValid) {
-      return {
-        message: 'Invalid plan.',
-        tokens: emptyTokens,
+        tokens: [] as PreviewToken[],
       };
     }
 
-    const nextPieceId = isPieceId(parsed.nextPlayerPieceId) ? parsed.nextPlayerPieceId : null;
-    const nextText = nextPieceId ? pieceConfig[nextPieceId].label : parsed.nextPlayerPieceId || '??';
-    const tokens: Array<{ text: string; colorPieceId: PieceId | null }> = [
-      { text: `Next:${nextText}`, colorPieceId: nextPieceId },
-    ];
-
-    if (parsed.attackers.length > 0) {
-      const attackerLabels = parsed.attackers.map((pieceId) =>
-        isPieceId(pieceId) ? pieceConfig[pieceId].label : pieceId,
-      );
-      tokens.push({ text: `Atk:${attackerLabels.join(',')}`, colorPieceId: null });
-    }
-
-    if (parsed.currentPlayerLoots) {
-      tokens.push({ text: 'Loot', colorPieceId: null });
-    }
-
-    parsed.movedStrangers.forEach((entry) => {
-      const pieceId = isPieceId(entry.pieceId) ? entry.pieceId : null;
-      const pieceText = pieceId ? pieceConfig[pieceId].label : entry.pieceId;
-      const roomText = Number.isFinite(entry.roomId) ? entry.roomId : '?';
-      const colorPieceId = pieceId === 'stranger1' || pieceId === 'stranger2' ? pieceId : null;
-      tokens.push({ text: `${pieceText}:R${roomText}`, colorPieceId });
-    });
-
-    const doctorRoomText = Number.isFinite(parsed.doctorRoomId) ? parsed.doctorRoomId : '?';
-    tokens.push({ text: `Dr:R${doctorRoomText}`, colorPieceId: null });
-
-    return {
-      message: null as string | null,
-      tokens,
-    };
+    return toPreviewDisplay(aiSuggestion.previewRaw, 'Suggested preview unavailable.');
   })();
+  const aiStatusText = analysisIsRunning
+    ? `Analyzing... ${formatElapsedTime(analysisElapsedMs)}`
+    : analysisStatusMessage ?? (aiSuggestion ? 'Analysis ready.' : 'Idle');
+  const aiCanDoIt = Boolean(aiSuggestion && aiSuggestion.bestTurn.isValid && aiSuggestionIsCurrent && !analysisIsRunning);
+  const aiSuggestedTurnText =
+    aiSuggestion && aiSuggestion.bestTurn.isValid
+      ? aiSuggestion.bestTurn.suggestedTurnText || '(none)'
+      : 'No suggestion yet.';
+  const aiStatesVisitedText =
+    aiSuggestion && aiSuggestion.bestTurn.isValid ? aiSuggestion.bestTurn.numStatesVisited.toString() : '-';
+  const aiElapsedText =
+    aiSuggestion && aiSuggestion.bestTurn.isValid ? formatElapsedTime(aiSuggestion.bestTurn.elapsedMs) : '-';
+  const aiStaleMessage = aiSuggestion && !aiSuggestionIsCurrent ? 'Suggestion is stale. Run Think again.' : null;
 
   const selectedLabel = selectedPieceId ? pieceConfig[selectedPieceId].label : 'None';
   const selectedSuffix = selectedPieceId && plannedMoves[selectedPieceId] !== undefined ? ' (update)' : '';
@@ -1552,95 +1841,179 @@ function PlayArea() {
           </div>
         </div>
       </div>
-      <aside className="planner-panel">
-        <div className="planner-header">
-          <div>
-            <h2
-              className="planner-title"
-              style={{ backgroundColor: currentPlayerColor, color: currentPlayerTextColor }}
-            >
-              {hasWinner && winnerOverlayText
-                ? winnerOverlayText
-                : `Current: ${currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}`}
-            </h2>
+      <div className="side-column">
+        <aside className="planner-panel">
+          <div className="planner-header">
+            <div>
+              <h2
+                className="planner-title"
+                style={{ backgroundColor: currentPlayerColor, color: currentPlayerTextColor }}
+              >
+                {hasWinner && winnerOverlayText
+                  ? winnerOverlayText
+                  : `Current: ${currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}`}
+              </h2>
+            </div>
           </div>
-        </div>
-        <div className="planner-line">
-          <span className="planner-label">Selected</span>
-          <span className="planner-value">{selectedLabel + selectedSuffix}</span>
-        </div>
-        <div className="planner-line">
-          <span className="planner-label">Planned</span>
-          <span className="planner-value">{planSummary}</span>
-        </div>
-        <div className="planner-line">
-          <span className="planner-label">Preview</span>
-          <span className="planner-value planner-value--preview">
-            {previewDisplay.message
-              ? previewDisplay.message
-              : previewDisplay.tokens.map((token, index) => {
-                  const colorPieceId = token.colorPieceId;
-                  const previewTokenStyle = colorPieceId
-                    ? {
-                        backgroundColor: pieceConfig[colorPieceId].color,
-                        color: pieceConfig[colorPieceId].textColor,
-                      }
-                    : undefined;
-                  return (
-                    <span key={`preview-token-${token.text}-${index}`}>
-                      {index > 0 && <span className="planner-preview-sep">|</span>}
-                      <span
-                        className={
-                          colorPieceId
-                            ? 'planner-preview-token planner-preview-token--badge'
-                            : 'planner-preview-token'
+          <div className="planner-line">
+            <span className="planner-label">Selected</span>
+            <span className="planner-value">{selectedLabel + selectedSuffix}</span>
+          </div>
+          <div className="planner-line">
+            <span className="planner-label">Planned</span>
+            <span className="planner-value">{planSummary}</span>
+          </div>
+          <div className="planner-line">
+            <span className="planner-label">Preview</span>
+            <span className="planner-value planner-value--preview">
+              {previewDisplay.message
+                ? previewDisplay.message
+                : previewDisplay.tokens.map((token, index) => {
+                    const colorPieceId = token.colorPieceId;
+                    const previewTokenStyle = colorPieceId
+                      ? {
+                          backgroundColor: pieceConfig[colorPieceId].color,
+                          color: pieceConfig[colorPieceId].textColor,
                         }
-                        style={previewTokenStyle}
-                      >
-                        {token.text}
+                      : undefined;
+                    return (
+                      <span key={`preview-token-${token.text}-${index}`}>
+                        {index > 0 && <span className="planner-preview-sep">|</span>}
+                        <span
+                          className={
+                            colorPieceId
+                              ? 'planner-preview-token planner-preview-token--badge'
+                              : 'planner-preview-token'
+                          }
+                          style={previewTokenStyle}
+                        >
+                          {token.text}
+                        </span>
                       </span>
-                    </span>
-                  );
-                })}
-          </span>
-        </div>
-        <div className="planner-actions">
-          <button className="planner-button planner-button--primary" onClick={handleSubmit} disabled={hasWinner}>
-            Submit
-          </button>
-          <button className="planner-button" onClick={handleCancel}>
-            Cancel
-          </button>
-          <button className="planner-button" onClick={handleUndo}>
-            Undo
-          </button>
-        </div>
-        {validationMessage && <p className="planner-error">{validationMessage}</p>}
-        <div className="planner-animations">
-          <p className="planner-animations-title">Animations</p>
-          <div className="planner-animations-row">
-            <button
-              className={`planner-button ${animationEnabled ? '' : 'is-active'}`}
-              onClick={() => handleAnimationEnabled(false)}
-            >
-              Off
+                    );
+                  })}
+            </span>
+          </div>
+          <div className="planner-actions">
+            <button className="planner-button planner-button--primary" onClick={handleSubmit} disabled={hasWinner}>
+              Submit
             </button>
-            <button
-              className={`planner-button ${animationEnabled ? 'is-active' : ''}`}
-              onClick={() => handleAnimationEnabled(true)}
-            >
-              On
+            <button className="planner-button" onClick={handleCancel}>
+              Cancel
             </button>
-            <button className="planner-button" onClick={() => handleSpeedChange('slower')} aria-label="Slower">
-              -
-            </button>
-            <span className="planner-animations-speed">{animationSpeed.toFixed(2)}x</span>
-            <button className="planner-button" onClick={() => handleSpeedChange('faster')} aria-label="Faster">
-              +
+            <button className="planner-button" onClick={handleUndo}>
+              Undo
             </button>
           </div>
-        </div>
-      </aside>
+          {validationMessage && <p className="planner-error">{validationMessage}</p>}
+          <div className="planner-animations">
+            <p className="planner-animations-title">Animations</p>
+            <div className="planner-animations-row">
+              <button
+                className={`planner-button ${animationEnabled ? '' : 'is-active'}`}
+                onClick={() => handleAnimationEnabled(false)}
+              >
+                Off
+              </button>
+              <button
+                className={`planner-button ${animationEnabled ? 'is-active' : ''}`}
+                onClick={() => handleAnimationEnabled(true)}
+              >
+                On
+              </button>
+              <button className="planner-button" onClick={() => handleSpeedChange('slower')} aria-label="Slower">
+                -
+              </button>
+              <span className="planner-animations-speed">{animationSpeed.toFixed(2)}x</span>
+              <button className="planner-button" onClick={() => handleSpeedChange('faster')} aria-label="Faster">
+                +
+              </button>
+            </div>
+          </div>
+        </aside>
+        <aside className="planner-panel ai-panel">
+          <div className="planner-header">
+            <h2 className="planner-title">AI</h2>
+          </div>
+          <div className="planner-line ai-level-line">
+            <label className="planner-label" htmlFor="analysis-level">
+              Analysis
+            </label>
+            <input
+              id="analysis-level"
+              className="ai-level-input"
+              type="number"
+              min="0"
+              step="1"
+              value={analysisLevelDraft}
+              onChange={(event) => setAnalysisLevelDraft(event.target.value)}
+              disabled={analysisIsRunning}
+            />
+          </div>
+          <div className="planner-line">
+            <span className="planner-label">Status</span>
+            <span className="planner-value">{aiStatusText}</span>
+          </div>
+          <div className="planner-line">
+            <span className="planner-label">Suggested</span>
+            <span className="planner-value">{aiSuggestedTurnText}</span>
+          </div>
+          <div className="planner-line">
+            <span className="planner-label">States</span>
+            <span className="planner-value">{aiStatesVisitedText}</span>
+          </div>
+          <div className="planner-line">
+            <span className="planner-label">Time</span>
+            <span className="planner-value">{aiElapsedText}</span>
+          </div>
+          <div className="planner-line">
+            <span className="planner-label">Preview</span>
+            <span className="planner-value planner-value--preview">
+              {aiPreviewDisplay.message
+                ? aiPreviewDisplay.message
+                : aiPreviewDisplay.tokens.map((token, index) => {
+                    const colorPieceId = token.colorPieceId;
+                    const previewTokenStyle = colorPieceId
+                      ? {
+                          backgroundColor: pieceConfig[colorPieceId].color,
+                          color: pieceConfig[colorPieceId].textColor,
+                        }
+                      : undefined;
+                    return (
+                      <span key={`ai-preview-token-${token.text}-${index}`}>
+                        {index > 0 && <span className="planner-preview-sep">|</span>}
+                        <span
+                          className={
+                            colorPieceId
+                              ? 'planner-preview-token planner-preview-token--badge'
+                              : 'planner-preview-token'
+                          }
+                          style={previewTokenStyle}
+                        >
+                          {token.text}
+                        </span>
+                      </span>
+                    );
+                  })}
+            </span>
+          </div>
+          <div className="planner-actions ai-actions">
+            <button className="planner-button planner-button--primary" onClick={handleThink} disabled={hasWinner}>
+              Think
+            </button>
+            <button className="planner-button" onClick={handleThinkAndDo} disabled={hasWinner || analysisIsRunning}>
+              Think&Do
+            </button>
+            <button className="planner-button" onClick={handleAnalysisCancel} disabled={!analysisIsRunning}>
+              Cancel
+            </button>
+            <button className="planner-button planner-button--primary" onClick={handleDoSuggestedTurn} disabled={!aiCanDoIt || hasWinner}>
+              Do It
+            </button>
+          </div>
+          {aiStaleMessage && <p className="ai-note">{aiStaleMessage}</p>}
+        </aside>
+      </div>
       <div className="play-area-summary">
         <pre className="game-summary">{summary}</pre>
         {prevTurnSummary && <pre className="game-summary">{prevTurnSummary}</pre>}

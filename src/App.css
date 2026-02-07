@@ -58,6 +58,12 @@
   gap: 8px;
 }
 
+.side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .board-controls {
   display: flex;
   align-items: center;
@@ -306,6 +312,28 @@
   margin-top: 16px;
 }
 
+.ai-level-line {
+  align-items: center;
+}
+
+.ai-level-input {
+  width: 88px;
+  min-width: 0;
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+.ai-actions {
+  flex-wrap: wrap;
+}
+
+.ai-note {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+}
+
 .planner-button.is-active {
   background: var(--accent);
   color: #fefbf5;
@@ -503,7 +531,7 @@
     grid-template-columns: 1fr;
   }
 
-  .planner-panel {
+  .side-column {
     order: 1;
   }
 

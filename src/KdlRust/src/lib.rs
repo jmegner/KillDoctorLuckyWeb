@@ -136,6 +136,24 @@ struct PreviewPieceRoom {
     room_id: usize,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SuggestedTurnEntry {
+    piece_id: String,
+    room_id: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BestTurnAnalysisResponse {
+    is_valid: bool,
+    validation_message: String,
+    suggested_turn_text: String,
+    suggested_turn: Vec<SuggestedTurnEntry>,
+    num_states_visited: usize,
+    elapsed_ms: f64,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NormalSetup {
@@ -232,6 +250,42 @@ fn invalid_preview_json(message: String) -> String {
         doctor_room_id: 0,
         moved_strangers: Vec::new(),
     })
+}
+
+fn to_best_turn_analysis_json(response: &BestTurnAnalysisResponse) -> String {
+    serde_json::to_string(response).unwrap_or_else(|_| {
+        "{\"isValid\":false,\"validationMessage\":\"Best turn serialization failed.\",\"suggestedTurnText\":\"\",\"suggestedTurn\":[],\"numStatesVisited\":0,\"elapsedMs\":0}".to_string()
+    })
+}
+
+fn invalid_best_turn_analysis_json(
+    message: String,
+    num_states_visited: usize,
+    elapsed_ms: f64,
+) -> String {
+    to_best_turn_analysis_json(&BestTurnAnalysisResponse {
+        is_valid: false,
+        validation_message: message,
+        suggested_turn_text: String::new(),
+        suggested_turn: Vec::new(),
+        num_states_visited,
+        elapsed_ms,
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+fn now_ms() -> f64 {
+    js_sys::Date::now()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn now_ms() -> f64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs_f64() * 1000.0)
+        .unwrap_or(0.0)
 }
 
 fn current_player_loots_after_turn(
@@ -515,6 +569,59 @@ impl GameStateHandle {
             current_player_loots,
             doctor_room_id: preview_state.doctor_room_id.0,
             moved_strangers,
+        })
+    }
+
+    #[wasm_bindgen(js_name = "findBestTurn")]
+    pub fn find_best_turn(&self, analysis_level: i32) -> String {
+        if self.state.has_winner() {
+            return invalid_best_turn_analysis_json("Game already has a winner.".to_string(), 0, 0.0);
+        }
+
+        let analysis_level = analysis_level.max(0);
+        let token = util::cancellation::NeverCancelToken;
+        let mut num_states_visited = 0usize;
+        let started_ms = now_ms();
+        let appraised_turn = core::tree_search::TreeSearch::find_best_turn(
+            &self.state,
+            analysis_level,
+            &token,
+            &mut num_states_visited,
+        );
+        let elapsed_ms = (now_ms() - started_ms).max(0.0);
+
+        let Some(turn) = appraised_turn.turn.as_ref() else {
+            return invalid_best_turn_analysis_json(
+                "No legal turn found.".to_string(),
+                num_states_visited,
+                elapsed_ms,
+            );
+        };
+
+        let has_strangers = self.state.common.has_strangers();
+        let mut suggested_turn = Vec::with_capacity(turn.moves.len());
+        for player_move in &turn.moves {
+            let Some(piece_id) = PieceId::from_player_id(player_move.player_id, has_strangers) else {
+                return invalid_best_turn_analysis_json(
+                    format!("Could not map player {} to a piece id.", player_move.player_id.0),
+                    num_states_visited,
+                    elapsed_ms,
+                );
+            };
+
+            suggested_turn.push(SuggestedTurnEntry {
+                piece_id: piece_id.as_str().to_string(),
+                room_id: player_move.dest_room_id.0,
+            });
+        }
+
+        to_best_turn_analysis_json(&BestTurnAnalysisResponse {
+            is_valid: true,
+            validation_message: String::new(),
+            suggested_turn_text: turn.to_string(),
+            suggested_turn,
+            num_states_visited,
+            elapsed_ms,
         })
     }
 
