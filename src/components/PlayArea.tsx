@@ -954,10 +954,18 @@ function PlayArea() {
     setAnalysisStatusMessage(null);
   };
 
-  const submitPlan = (moves: Partial<Record<PieceId, number>>, order: PieceId[]) => {
+  const submitPlan = (
+    moves: Partial<Record<PieceId, number>>,
+    order: PieceId[],
+    options?: {
+      animateFromCurrentState?: boolean;
+    },
+  ) => {
     if (hasWinner) {
       return;
     }
+    const initialRoomsForAnimation =
+      options?.animateFromCurrentState && gameState ? Array.from(gameState.piecePositions(), (value) => Number(value)) : null;
     const planEntries = order
       .map((pieceId) => {
         const roomId = moves[pieceId];
@@ -993,7 +1001,7 @@ function PlayArea() {
     setRedoStateStack([]);
     saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
-    startAnimationFromState();
+    startAnimationFromState(initialRoomsForAnimation);
   };
   const handleSubmit = () => {
     if (!gameState || hasWinner) {
@@ -1107,7 +1115,7 @@ function PlayArea() {
 
       stopAnalysisRun('Analysis complete. Suggested turn submitted.', { terminateWorker: false });
       const planned = entriesToMovesAndOrder(bestTurn.suggestedTurn);
-      submitPlan(planned.moves, planned.order);
+      submitPlan(planned.moves, planned.order, { animateFromCurrentState: true });
     };
 
     worker.onerror = () => {
@@ -1153,7 +1161,7 @@ function PlayArea() {
     }
 
     const planned = entriesToMovesAndOrder(aiSuggestion.bestTurn.suggestedTurn);
-    submitPlan(planned.moves, planned.order);
+    submitPlan(planned.moves, planned.order, { animateFromCurrentState: true });
   };
 
   const handleUndo = () => {
@@ -1478,7 +1486,7 @@ function PlayArea() {
       );
   };
 
-  const startAnimationFromState = () => {
+  const startAnimationFromState = (initialRoomsOverride?: number[] | null) => {
     if (!gameState || !animationEnabled) {
       return;
     }
@@ -1549,6 +1557,21 @@ function PlayArea() {
       }
       if (!actionEqualsEnd) {
         segments.push({ from: actionFrame, to: endFrame, actionText: null, highlightPieceId: null });
+      }
+    }
+
+    if (initialRoomsOverride && initialRoomsOverride.length === pieceOrder.length) {
+      const hasAnyDiff = initialRoomsOverride.some((roomId, index) => roomId !== frameRooms[0][index]);
+      if (hasAnyDiff) {
+        const initialFrame = buildPositionsForRooms(initialRoomsOverride);
+        if (initialFrame.length > 0) {
+          segments.unshift({
+            from: initialFrame,
+            to: frames[0],
+            actionText: null,
+            highlightPieceId: null,
+          });
+        }
       }
     }
 
