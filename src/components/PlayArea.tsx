@@ -1762,11 +1762,52 @@ function PlayArea() {
   infoPopupTitle += ' (click anywhere to close)';
   const infoPopupContent =
     infoPopup === 'rules' ? (
-      <p>The rules: TODO</p>
+      <>
+        <p>
+          This is basically Kill Doctor Lucky but without any randomness and there are no ties; if the stranger before
+          you in the turn order kills the Dr, you win. The teams are [P1,p4] and [P2,p3]. P1 and P3 are normal players.
+          p3 and p4 are strangers.
+        </p>
+        <p>What the cards can do...</p>
+        <ul>
+          <li>Every move card gives 1 movement point and can be converted 1:1 into clovers for defense.</li>
+          <li>Every weapon card gives 2 attack points and can be converted 1:1 into clovers for defense.</li>
+          <li>Every failure card gives 2 clovers.</li>
+        </ul>
+        <p>How to gain and use the cards...</p>
+        <ul>
+          <li>
+            Every time you loot a room as your action, you gain 1/3 of a move card, 1/3 of a weapon card, and 1/3 of a
+            failure card.
+          </li>
+          <li>
+            Every time you attack as your action, you use 1 weapon card if you have 1 or more weapon cards. If you have
+            less than 1 weapon card, you use the fractional weapon card you have. You can't decline weapon card use.
+          </li>
+          <li>
+            Every time you defend, cards can be fractionally converted into clovers. Cards are converted to clovers as
+            needed in this order: failure, weapon, move.
+          </li>
+        </ul>
+        <p>
+          And again: if the stranger before you in the turn order kills the Dr, you win; the teams are [P1,p4] and
+          [P2,p3]. If P1 or p4 attack, P3 defends. If p2 or P3 attack, P4 defends. Strangers never contribute clovers to
+          defend any attack.
+        </p>
+      </>
     ) : infoPopup === 'ui' ? (
       <>
+        <p>There are a few ways to choose movements for your piece and the strangers.</p>
+        <ul>
+          <li>The most basic way is to click a piece and then click a destination room.</li>
+          <li>
+            You do not always have to click the piece to select it; if you click a room with movable pieces, it will
+            select the first piece from this list: [yourself, your allied stranger, the opposing stranger].
+          </li>
+          <li>If no piece is selected, middle-clicking in the board will submit the plan.</li>
+        </ul>
         <p>Select your piece or a stranger, then click a room to set a destination.</p>
-        <p>Click a planned piece again to update its destination. Submit validates the plan.</p>
+        <p>Click a planned piece again to update its destination. Submit button submits the plan.</p>
         <p>Opponent pieces and the doctor cannot be moved.</p>
       </>
     ) : null;
