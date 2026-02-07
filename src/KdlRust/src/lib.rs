@@ -150,6 +150,7 @@ struct BestTurnAnalysisResponse {
     validation_message: String,
     suggested_turn_text: String,
     suggested_turn: Vec<SuggestedTurnEntry>,
+    heuristic_score: f64,
     num_states_visited: usize,
     elapsed_ms: f64,
 }
@@ -254,7 +255,7 @@ fn invalid_preview_json(message: String) -> String {
 
 fn to_best_turn_analysis_json(response: &BestTurnAnalysisResponse) -> String {
     serde_json::to_string(response).unwrap_or_else(|_| {
-        "{\"isValid\":false,\"validationMessage\":\"Best turn serialization failed.\",\"suggestedTurnText\":\"\",\"suggestedTurn\":[],\"numStatesVisited\":0,\"elapsedMs\":0}".to_string()
+        "{\"isValid\":false,\"validationMessage\":\"Best turn serialization failed.\",\"suggestedTurnText\":\"\",\"suggestedTurn\":[],\"heuristicScore\":0,\"numStatesVisited\":0,\"elapsedMs\":0}".to_string()
     })
 }
 
@@ -268,6 +269,7 @@ fn invalid_best_turn_analysis_json(
         validation_message: message,
         suggested_turn_text: String::new(),
         suggested_turn: Vec::new(),
+        heuristic_score: 0.0,
         num_states_visited,
         elapsed_ms,
     })
@@ -620,6 +622,7 @@ impl GameStateHandle {
             validation_message: String::new(),
             suggested_turn_text: turn.to_string(),
             suggested_turn,
+            heuristic_score: appraised_turn.appraisal,
             num_states_visited,
             elapsed_ms,
         })

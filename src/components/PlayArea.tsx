@@ -37,6 +37,7 @@ type BestTurnResponse = {
   validationMessage: string;
   suggestedTurnText: string;
   suggestedTurn: TurnPlanEntry[];
+  heuristicScore: number;
   numStatesVisited: number;
   elapsedMs: number;
 };
@@ -65,6 +66,7 @@ type AiSuggestion = {
   sourceTurnCounter: number;
   bestTurn: BestTurnResponse;
   previewRaw: string;
+  elapsedMs: number;
 };
 
 type BoardRoomRaw = {
@@ -668,12 +670,22 @@ const toPreviewDisplay = (rawPreview: string, invalidMessage: string): PreviewDi
 
 const formatElapsedTime = (elapsedMs: number) => {
   if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
-    return '0 ms';
+    return '0ms';
   }
   if (elapsedMs < 1000) {
-    return `${Math.round(elapsedMs)} ms`;
+    return `${Math.round(elapsedMs)}ms`;
   }
-  return `${(elapsedMs / 1000).toFixed(2)} s`;
+  return `${(elapsedMs / 1000).toFixed(2)}s`;
+};
+
+const formatHeuristicScore = (score: number) => {
+  if (!Number.isFinite(score)) {
+    return '?';
+  }
+  if (Math.abs(score) > 1e12) {
+    return score > 0 ? 'WIN' : 'LOSE';
+  }
+  return `${score >= 0 ? '+' : ''}${score.toFixed(2)}`;
 };
 
 function PlayArea() {
@@ -918,11 +930,24 @@ function PlayArea() {
     analysisWorkerRef.current = null;
   };
 
-  const stopAnalysisRun = (statusMessage: string | null) => {
+  const stopAnalysisRun = (
+    statusMessage: string | null,
+    options?: {
+      terminateWorker?: boolean;
+    },
+  ) => {
     stopAnalysisTimer();
-    stopAnalysisWorker();
+    if (options?.terminateWorker ?? true) {
+      stopAnalysisWorker();
+    }
     setAnalysisIsRunning(false);
     setAnalysisStatusMessage(statusMessage);
+  };
+
+  const resetAiOutputs = () => {
+    setAiSuggestion(null);
+    setAnalysisElapsedMs(0);
+    setAnalysisStatusMessage(null);
   };
 
   const submitPlan = (moves: Partial<Record<PieceId, number>>, order: PieceId[]) => {
@@ -960,6 +985,7 @@ function PlayArea() {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
+    resetAiOutputs();
     saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
     startAnimationFromState();
@@ -1004,7 +1030,9 @@ function PlayArea() {
     const sourceTurnCounter = turnCounterRef.current;
 
     stopAnalysisTimer();
-    stopAnalysisWorker();
+    if (analysisIsRunning) {
+      stopAnalysisWorker();
+    }
     setAiSuggestion(null);
     setAnalysisIsRunning(true);
     setAnalysisStatusMessage(autoSubmit ? 'Analyzing and auto-submitting...' : 'Analyzing...');
@@ -1015,19 +1043,22 @@ function PlayArea() {
       setAnalysisElapsedMs(performance.now() - timerStart);
     }, 100);
 
-    let worker: Worker;
-    try {
-      worker = new Worker(new URL('../workers/treeSearchWorker.ts', import.meta.url), { type: 'module' });
-    } catch {
-      stopAnalysisRun('Failed to start analysis worker.');
-      return;
+    let worker = analysisWorkerRef.current;
+    if (!worker) {
+      try {
+        worker = new Worker(new URL('../workers/treeSearchWorker.ts', import.meta.url), { type: 'module' });
+      } catch {
+        stopAnalysisRun('Failed to start analysis worker.');
+        return;
+      }
+      analysisWorkerRef.current = worker;
     }
-    analysisWorkerRef.current = worker;
 
     worker.onmessage = (event: MessageEvent<TreeSearchWorkerResponse>) => {
       if (runId !== analysisRunIdRef.current) {
         return;
       }
+      const completedElapsedMs = Math.max(0, performance.now() - timerStart);
 
       const message = event.data;
       if (message.type === 'analysisError') {
@@ -1043,10 +1074,10 @@ function PlayArea() {
         return;
       }
 
-      setAnalysisElapsedMs(bestTurn.elapsedMs);
+      setAnalysisElapsedMs(completedElapsedMs);
       if (!bestTurn.isValid) {
         setAiSuggestion(null);
-        stopAnalysisRun(bestTurn.validationMessage || 'No suggested turn found.');
+        stopAnalysisRun(bestTurn.validationMessage || 'No suggested turn found.', { terminateWorker: false });
         return;
       }
 
@@ -1054,19 +1085,22 @@ function PlayArea() {
         sourceTurnCounter,
         bestTurn,
         previewRaw: message.previewRaw,
+        elapsedMs: completedElapsedMs,
       });
 
       if (!autoSubmit) {
-        stopAnalysisRun('Analysis complete.');
+        stopAnalysisRun('Analysis complete.', { terminateWorker: false });
         return;
       }
 
       if (sourceTurnCounter !== turnCounterRef.current) {
-        stopAnalysisRun('Analysis complete. Auto-submit skipped because the position changed.');
+        stopAnalysisRun('Analysis complete. Auto-submit skipped because the position changed.', {
+          terminateWorker: false,
+        });
         return;
       }
 
-      stopAnalysisRun('Analysis complete. Suggested turn submitted.');
+      stopAnalysisRun('Analysis complete. Suggested turn submitted.', { terminateWorker: false });
       const planned = entriesToMovesAndOrder(bestTurn.suggestedTurn);
       submitPlan(planned.moves, planned.order);
     };
@@ -1135,6 +1169,7 @@ function PlayArea() {
     setPlanOrder([]);
     setSelectedPieceId(null);
     setValidationMessage(null);
+    resetAiOutputs();
     saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
   };
@@ -1153,6 +1188,7 @@ function PlayArea() {
     setPlanOrder([]);
     setSelectedPieceId(null);
     setValidationMessage(null);
+    resetAiOutputs();
     saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
   };
@@ -1215,6 +1251,7 @@ function PlayArea() {
     setValidationMessage(null);
     setSetupPopupOpen(false);
     setSetupError(null);
+    resetAiOutputs();
     saveSetupPrefs(parsedSetup);
     saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
@@ -1330,10 +1367,10 @@ function PlayArea() {
     aiSuggestion && aiSuggestion.bestTurn.isValid
       ? aiSuggestion.bestTurn.suggestedTurnText || '(none)'
       : 'No suggestion yet.';
-  const aiStatesVisitedText =
-    aiSuggestion && aiSuggestion.bestTurn.isValid ? aiSuggestion.bestTurn.numStatesVisited.toString() : '-';
-  const aiElapsedText =
-    aiSuggestion && aiSuggestion.bestTurn.isValid ? formatElapsedTime(aiSuggestion.bestTurn.elapsedMs) : '-';
+  const aiStatsText =
+    aiSuggestion && aiSuggestion.bestTurn.isValid
+      ? `${formatHeuristicScore(aiSuggestion.bestTurn.heuristicScore)}, ${formatElapsedTime(aiSuggestion.elapsedMs)}, ${aiSuggestion.bestTurn.numStatesVisited} states`
+      : '-';
   const aiStaleMessage = aiSuggestion && !aiSuggestionIsCurrent ? 'Suggestion is stale. Run Think again.' : null;
 
   const selectedLabel = selectedPieceId ? pieceConfig[selectedPieceId].label : 'None';
@@ -1959,12 +1996,8 @@ function PlayArea() {
             <span className="planner-value">{aiSuggestedTurnText}</span>
           </div>
           <div className="planner-line">
-            <span className="planner-label">States</span>
-            <span className="planner-value">{aiStatesVisitedText}</span>
-          </div>
-          <div className="planner-line">
-            <span className="planner-label">Time</span>
-            <span className="planner-value">{aiElapsedText}</span>
+            <span className="planner-label">Stats</span>
+            <span className="planner-value">{aiStatsText}</span>
           </div>
           <div className="planner-line">
             <span className="planner-label">Preview</span>
@@ -1998,17 +2031,25 @@ function PlayArea() {
             </span>
           </div>
           <div className="planner-actions ai-actions">
-            <button className="planner-button planner-button--primary" onClick={handleThink} disabled={hasWinner}>
+            <button
+              className="planner-button planner-button--primary"
+              onClick={handleThink}
+              disabled={hasWinner || analysisIsRunning}
+            >
               Think
             </button>
+            <button
+              className="planner-button planner-button--primary"
+              onClick={handleDoSuggestedTurn}
+              disabled={!aiCanDoIt || hasWinner}
+            >
+              Do
+            </button>
             <button className="planner-button" onClick={handleThinkAndDo} disabled={hasWinner || analysisIsRunning}>
-              Think&Do
+              T&D
             </button>
             <button className="planner-button" onClick={handleAnalysisCancel} disabled={!analysisIsRunning}>
               Cancel
-            </button>
-            <button className="planner-button planner-button--primary" onClick={handleDoSuggestedTurn} disabled={!aiCanDoIt || hasWinner}>
-              Do It
             </button>
           </div>
           {aiStaleMessage && <p className="ai-note">{aiStaleMessage}</p>}
