@@ -180,11 +180,19 @@ impl MutableGameState {
 
     pub fn state_summary(&self, leading_text: &str) -> String {
         let mut sb = String::new();
+        let heuristic_score = self.heuristic_score(self.current_player_id);
+        let heuristic_score_text = if heuristic_score == rule_helper::HEURISTIC_SCORE_WIN {
+            "WIN".to_string()
+        } else if heuristic_score == rule_helper::HEURISTIC_SCORE_LOSS {
+            "LOSS".to_string()
+        } else {
+            format!("{:+0.2}", heuristic_score)
+        };
         sb.push_str(&format!(
-            "{leading_text}Turn {}, {}, HeuScore={:.2}",
+            "{leading_text}Turn {}, {}, HeuScore={}",
             self.turn_id,
             self.player_text(),
-            self.heuristic_score(self.current_player_id)
+            heuristic_score_text,
         ));
 
         let attacker_hist = self
