@@ -158,6 +158,8 @@ type SetupPrefsDraft = {
   failureCards: string;
 };
 
+type StepDirection = 'down' | 'up';
+
 const clampAnimationSpeedIndex = (value: number) => Math.min(animationSpeeds.length - 1, Math.max(0, value));
 const isFiniteNonNegative = (value: number) => Number.isFinite(value) && value >= 0;
 const toSetupPrefsDraft = (prefs: SetupPrefs): SetupPrefsDraft => ({
@@ -177,8 +179,16 @@ const parseSetupPrefsDraft = (draft: SetupPrefsDraft): SetupPrefs | null => {
     ? parsed
     : null;
 };
+const stepNonNegativeIntegerText = (raw: string, direction: StepDirection) => {
+  const parsed = Number(raw);
+  const base = Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0;
+  const next = direction === 'down' ? Math.max(0, base - 1) : base + 1;
+  return next.toString();
+};
 const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs): SetupPrefs => {
-  const moveCards = isFiniteNonNegative(candidate.moveCards ?? NaN) ? (candidate.moveCards as number) : fallback.moveCards;
+  const moveCards = isFiniteNonNegative(candidate.moveCards ?? NaN)
+    ? (candidate.moveCards as number)
+    : fallback.moveCards;
   const weaponCards = isFiniteNonNegative(candidate.weaponCards ?? NaN)
     ? (candidate.weaponCards as number)
     : fallback.weaponCards;
@@ -221,10 +231,7 @@ const saveSetupPrefs = (prefs: SetupPrefs) => {
   }
 
   try {
-    window.localStorage.setItem(
-      setupPrefsStorageKey,
-      JSON.stringify(sanitizeSetupPrefs(prefs, fallbackSetupPrefs)),
-    );
+    window.localStorage.setItem(setupPrefsStorageKey, JSON.stringify(sanitizeSetupPrefs(prefs, fallbackSetupPrefs)));
   } catch {
     // Ignore persistence failures (e.g. private mode / quota).
   }
@@ -643,7 +650,9 @@ const toPreviewDisplay = (rawPreview: string, invalidMessage: string): PreviewDi
   const tokens: PreviewToken[] = [{ text: `Next:${nextText}`, colorPieceId: nextPieceId }];
 
   if (parsed.attackers.length > 0) {
-    const attackerLabels = parsed.attackers.map((pieceId) => (isPieceId(pieceId) ? pieceConfig[pieceId].label : pieceId));
+    const attackerLabels = parsed.attackers.map((pieceId) =>
+      isPieceId(pieceId) ? pieceConfig[pieceId].label : pieceId,
+    );
     tokens.push({ text: `Atk:${attackerLabels.join(',')}`, colorPieceId: null });
   }
 
@@ -965,7 +974,9 @@ function PlayArea() {
       return;
     }
     const initialRoomsForAnimation =
-      options?.animateFromCurrentState && gameState ? Array.from(gameState.piecePositions(), (value) => Number(value)) : null;
+      options?.animateFromCurrentState && gameState
+        ? Array.from(gameState.piecePositions(), (value) => Number(value))
+        : null;
     const planEntries = order
       .map((pieceId) => {
         const roomId = moves[pieceId];
@@ -1261,6 +1272,17 @@ function PlayArea() {
     }
   };
 
+  const handleAnalysisLevelStep = (direction: StepDirection) => {
+    if (analysisIsRunning) {
+      return;
+    }
+    setAnalysisLevelDraft((prev) => stepNonNegativeIntegerText(prev, direction));
+  };
+
+  const handleSetupStep = (field: keyof SetupPrefsDraft, direction: StepDirection) => {
+    handleSetupDraftChange(field, stepNonNegativeIntegerText(setupPrefsDraft[field], direction));
+  };
+
   const handleRestoreSetupDefaults = () => {
     setSetupPrefsDraft(toSetupPrefsDraft(defaultSetupPrefs));
     saveSetupPrefs(defaultSetupPrefs);
@@ -1409,8 +1431,10 @@ function PlayArea() {
   })();
   const aiStatusText = analysisIsRunning
     ? `Analyzing... ${formatElapsedTime(analysisElapsedMs)}`
-    : analysisStatusMessage ?? (aiSuggestion ? 'Analysis ready.' : 'Idle');
-  const aiCanDoIt = Boolean(aiSuggestion && aiSuggestion.bestTurn.isValid && aiSuggestionIsCurrent && !analysisIsRunning);
+    : (analysisStatusMessage ?? (aiSuggestion ? 'Analysis ready.' : 'Idle'));
+  const aiCanDoIt = Boolean(
+    aiSuggestion && aiSuggestion.bestTurn.isValid && aiSuggestionIsCurrent && !analysisIsRunning,
+  );
   const aiSuggestedTurnText =
     aiSuggestion && aiSuggestion.bestTurn.isValid
       ? aiSuggestion.bestTurn.suggestedTurnText || '(none)'
@@ -1681,7 +1705,7 @@ function PlayArea() {
   const currentPlayerColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].color : 'var(--line)';
   const currentPlayerTextColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].textColor : 'var(--ink)';
   const boardOutlineColor = animatedPieces ? '#8c8c8c' : currentPlayerColor;
-  let infoPopupTitle = infoPopup === 'rules' ? 'Rule Info' : infoPopup === 'ui' ? 'UI Info' : 'UNKNOWN3854';
+  let infoPopupTitle = infoPopup === 'rules' ? 'Rules' : infoPopup === 'ui' ? 'UI Info' : 'UNKNOWN3854';
   infoPopupTitle += ' (click anywhere to close)';
   const infoPopupContent =
     infoPopup === 'rules' ? (
@@ -1705,7 +1729,7 @@ function PlayArea() {
             Setup
           </button>
           <button className="board-control-button" onClick={() => handleInfoToggle('rules')}>
-            Rule Info
+            Rules
           </button>
           <button className="board-control-button" onClick={() => handleInfoToggle('ui')}>
             UI Info
@@ -2027,10 +2051,10 @@ function PlayArea() {
               <button className="planner-button" onClick={() => handleSpeedChange('slower')} aria-label="Slower">
                 -
               </button>
-              <span className="planner-animations-speed">{animationSpeed.toFixed(2)}x</span>
               <button className="planner-button" onClick={() => handleSpeedChange('faster')} aria-label="Faster">
                 +
               </button>
+              <span className="planner-animations-speed">{animationSpeed.toFixed(2)}x</span>
             </div>
           </div>
         </aside>
@@ -2042,16 +2066,37 @@ function PlayArea() {
             <label className="planner-label" htmlFor="analysis-level">
               Analysis
             </label>
-            <input
-              id="analysis-level"
-              className="ai-level-input"
-              type="number"
-              min="0"
-              step="1"
-              value={analysisLevelDraft}
-              onChange={(event) => setAnalysisLevelDraft(event.target.value)}
-              disabled={analysisIsRunning}
-            />
+            {/* Firefox Android hides native number spinners; explicit steppers keep increment/decrement available on mobile. */}
+            <div className="number-stepper">
+              <input
+                id="analysis-level"
+                className="ai-level-input number-stepper-input"
+                type="number"
+                min="0"
+                step="1"
+                value={analysisLevelDraft}
+                onChange={(event) => setAnalysisLevelDraft(event.target.value)}
+                disabled={analysisIsRunning}
+              />
+              <button
+                type="button"
+                className="number-stepper-button"
+                onClick={() => handleAnalysisLevelStep('down')}
+                aria-label="Decrease analysis level"
+                disabled={analysisIsRunning}
+              >
+                -
+              </button>
+              <button
+                type="button"
+                className="number-stepper-button"
+                onClick={() => handleAnalysisLevelStep('up')}
+                aria-label="Increase analysis level"
+                disabled={analysisIsRunning}
+              >
+                +
+              </button>
+            </div>
           </div>
           <div className="planner-line">
             <span className="planner-label">Status</span>
@@ -2133,33 +2178,93 @@ function PlayArea() {
             <div className="setup-popup-form">
               <label className="setup-popup-row">
                 <span>Move Cards (Normal)</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={setupPrefsDraft.moveCards}
-                  onChange={(event) => handleSetupDraftChange('moveCards', event.target.value)}
-                />
+                <div className="number-stepper">
+                  <input
+                    className="number-stepper-input"
+                    aria-label="Move cards"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={setupPrefsDraft.moveCards}
+                    onChange={(event) => handleSetupDraftChange('moveCards', event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="number-stepper-button"
+                    onClick={() => handleSetupStep('moveCards', 'down')}
+                    aria-label="Decrease move cards"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    className="number-stepper-button"
+                    onClick={() => handleSetupStep('moveCards', 'up')}
+                    aria-label="Increase move cards"
+                  >
+                    +
+                  </button>
+                </div>
               </label>
               <label className="setup-popup-row">
                 <span>Weapon Cards (Normal)</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={setupPrefsDraft.weaponCards}
-                  onChange={(event) => handleSetupDraftChange('weaponCards', event.target.value)}
-                />
+                <div className="number-stepper">
+                  <input
+                    className="number-stepper-input"
+                    aria-label="Weapon cards"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={setupPrefsDraft.weaponCards}
+                    onChange={(event) => handleSetupDraftChange('weaponCards', event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="number-stepper-button"
+                    onClick={() => handleSetupStep('weaponCards', 'down')}
+                    aria-label="Decrease weapon cards"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    className="number-stepper-button"
+                    onClick={() => handleSetupStep('weaponCards', 'up')}
+                    aria-label="Increase weapon cards"
+                  >
+                    +
+                  </button>
+                </div>
               </label>
               <label className="setup-popup-row">
                 <span>Failure Cards (Normal)</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={setupPrefsDraft.failureCards}
-                  onChange={(event) => handleSetupDraftChange('failureCards', event.target.value)}
-                />
+                <div className="number-stepper">
+                  <input
+                    className="number-stepper-input"
+                    aria-label="Failure cards"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={setupPrefsDraft.failureCards}
+                    onChange={(event) => handleSetupDraftChange('failureCards', event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="number-stepper-button"
+                    onClick={() => handleSetupStep('failureCards', 'down')}
+                    aria-label="Decrease failure cards"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    className="number-stepper-button"
+                    onClick={() => handleSetupStep('failureCards', 'up')}
+                    aria-label="Increase failure cards"
+                  >
+                    +
+                  </button>
+                </div>
               </label>
             </div>
             {setupError && <p className="setup-popup-error">{setupError}</p>}

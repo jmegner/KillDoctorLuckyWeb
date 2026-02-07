@@ -330,10 +330,41 @@
 }
 
 .ai-level-input {
-  width: 88px;
+  width: 4.1rem;
   min-width: 0;
   text-align: right;
   font-family: var(--font-mono);
+}
+
+.number-stepper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.number-stepper-button {
+  width: 1.95rem;
+  min-width: 1.95rem;
+  min-height: 1.95rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.number-stepper-input {
+  text-align: right;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.number-stepper-input::-webkit-outer-spin-button,
+.number-stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .ai-actions {
@@ -453,7 +484,7 @@
 
 .setup-popup-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 130px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
 }
@@ -467,7 +498,7 @@
 }
 
 .setup-popup-row input {
-  width: 100%;
+  width: 4.1rem;
   min-width: 0;
 }
 
