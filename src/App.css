@@ -270,7 +270,8 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 0;
+  margin: 1px 0;
+  padding: 1px 0;
   border-bottom: 1px dashed var(--line);
 }
 
@@ -336,7 +337,15 @@
 }
 
 .ai-actions {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.ai-actions .planner-button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.38rem 0.4rem;
+  font-size: 0.78rem;
 }
 
 .ai-note {
