@@ -86,14 +86,102 @@ const animationSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
 const defaultSpeedIndex = 8;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 const animationPrefsStorageKey = 'kdl.settings.v1';
+const setupPrefsStorageKey = 'kdl.setup.v1';
 const gameStateStorageKey = 'kdl.gameState.v1';
+const fallbackSetupPrefs = {
+  moveCards: 2,
+  weaponCards: 2,
+  failureCards: 4,
+};
 
 type AnimationPrefs = {
   animationEnabled: boolean;
   animationSpeedIndex: number;
 };
 
+type SetupPrefs = {
+  moveCards: number;
+  weaponCards: number;
+  failureCards: number;
+};
+
+type SetupPrefsDraft = {
+  moveCards: string;
+  weaponCards: string;
+  failureCards: string;
+};
+
 const clampAnimationSpeedIndex = (value: number) => Math.min(animationSpeeds.length - 1, Math.max(0, value));
+const isFiniteNonNegative = (value: number) => Number.isFinite(value) && value >= 0;
+const toSetupPrefsDraft = (prefs: SetupPrefs): SetupPrefsDraft => ({
+  moveCards: prefs.moveCards.toString(),
+  weaponCards: prefs.weaponCards.toString(),
+  failureCards: prefs.failureCards.toString(),
+});
+const parseSetupPrefsDraft = (draft: SetupPrefsDraft): SetupPrefs | null => {
+  const parsed = {
+    moveCards: Number(draft.moveCards),
+    weaponCards: Number(draft.weaponCards),
+    failureCards: Number(draft.failureCards),
+  };
+  return isFiniteNonNegative(parsed.moveCards) &&
+    isFiniteNonNegative(parsed.weaponCards) &&
+    isFiniteNonNegative(parsed.failureCards)
+    ? parsed
+    : null;
+};
+const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs): SetupPrefs => {
+  const moveCards = isFiniteNonNegative(candidate.moveCards ?? NaN) ? (candidate.moveCards as number) : fallback.moveCards;
+  const weaponCards = isFiniteNonNegative(candidate.weaponCards ?? NaN)
+    ? (candidate.weaponCards as number)
+    : fallback.weaponCards;
+  const failureCards = isFiniteNonNegative(candidate.failureCards ?? NaN)
+    ? (candidate.failureCards as number)
+    : fallback.failureCards;
+  return {
+    moveCards,
+    weaponCards,
+    failureCards,
+  };
+};
+const parseSetupPrefsJson = (raw: string, fallback: SetupPrefs): SetupPrefs => {
+  try {
+    const parsed = JSON.parse(raw) as Partial<SetupPrefs>;
+    return sanitizeSetupPrefs(parsed, fallback);
+  } catch {
+    return fallback;
+  }
+};
+const loadSetupPrefs = (fallback: SetupPrefs): SetupPrefs => {
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(setupPrefsStorageKey);
+    if (!raw) {
+      return fallback;
+    }
+    const parsed = JSON.parse(raw) as Partial<SetupPrefs>;
+    return sanitizeSetupPrefs(parsed, fallback);
+  } catch {
+    return fallback;
+  }
+};
+const saveSetupPrefs = (prefs: SetupPrefs) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      setupPrefsStorageKey,
+      JSON.stringify(sanitizeSetupPrefs(prefs, fallbackSetupPrefs)),
+    );
+  } catch {
+    // Ignore persistence failures (e.g. private mode / quota).
+  }
+};
 
 const loadAnimationPrefs = (): AnimationPrefs => {
   const defaults: AnimationPrefs = { animationEnabled: true, animationSpeedIndex: defaultSpeedIndex };
@@ -166,7 +254,10 @@ const loadGameStateSnapshot = (gameState: GameStateHandle) => {
     if (importError) {
       window.localStorage.removeItem(gameStateStorageKey);
       console.warn(`Saved game ignored: ${importError}`);
+      return;
     }
+    const setupFromGame = parseSetupPrefsJson(gameState.currentNormalSetupJson(), fallbackSetupPrefs);
+    saveSetupPrefs(setupFromGame);
   } catch {
     try {
       window.localStorage.removeItem(gameStateStorageKey);
@@ -486,16 +577,29 @@ function PlayArea() {
     try {
       const freshState = newDefaultGameState();
       loadGameStateSnapshot(freshState);
+      const setupFromGame = parseSetupPrefsJson(freshState.currentNormalSetupJson(), fallbackSetupPrefs);
+      saveSetupPrefs(setupFromGame);
       return freshState;
     } catch {
       return null;
     }
   });
+  const defaultSetupPrefs = gameState
+    ? parseSetupPrefsJson(gameState.defaultNormalSetupJson(), fallbackSetupPrefs)
+    : fallbackSetupPrefs;
+  const currentSetupPrefs = gameState
+    ? parseSetupPrefsJson(gameState.currentNormalSetupJson(), defaultSetupPrefs)
+    : defaultSetupPrefs;
   const [selectedPieceId, setSelectedPieceId] = useState<PieceId | null>(null);
   const [plannedMoves, setPlannedMoves] = useState<Partial<Record<PieceId, number>>>({});
   const [planOrder, setPlanOrder] = useState<PieceId[]>([]);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [infoPopup, setInfoPopup] = useState<'rules' | 'ui' | null>(null);
+  const [setupPopupOpen, setSetupPopupOpen] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [setupPrefsDraft, setSetupPrefsDraft] = useState<SetupPrefsDraft>(() =>
+    toSetupPrefsDraft(loadSetupPrefs(currentSetupPrefs)),
+  );
   const [, setTurnCounter] = useState(0);
   const [animationEnabled, setAnimationEnabled] = useState(() => loadAnimationPrefs().animationEnabled);
   const [animationSpeedIndex, setAnimationSpeedIndex] = useState(() => loadAnimationPrefs().animationSpeedIndex);
@@ -754,6 +858,65 @@ function PlayArea() {
     setPlanOrder([]);
     setSelectedPieceId(null);
     setValidationMessage(null);
+    saveGameStateSnapshot(gameState);
+    setTurnCounter((prev) => prev + 1);
+  };
+
+  const handleSetupOpen = () => {
+    setInfoPopup(null);
+    setSetupPopupOpen(true);
+    setSetupError(null);
+  };
+
+  const handleSetupCancel = () => {
+    setSetupPopupOpen(false);
+    setSetupError(null);
+  };
+
+  const handleSetupDraftChange = (field: keyof SetupPrefsDraft, value: string) => {
+    const nextDraft = { ...setupPrefsDraft, [field]: value };
+    setSetupPrefsDraft(nextDraft);
+    setSetupError(null);
+    const nextPrefs = parseSetupPrefsDraft(nextDraft);
+    if (nextPrefs) {
+      saveSetupPrefs(nextPrefs);
+    }
+  };
+
+  const handleRestoreSetupDefaults = () => {
+    setSetupPrefsDraft(toSetupPrefsDraft(defaultSetupPrefs));
+    saveSetupPrefs(defaultSetupPrefs);
+    setSetupError(null);
+  };
+
+  const handleStartNewGameWithSetup = () => {
+    if (!gameState) {
+      return;
+    }
+    const parsedSetup = parseSetupPrefsDraft(setupPrefsDraft);
+    if (!parsedSetup) {
+      setSetupError('Setup values must be numbers >= 0.');
+      return;
+    }
+
+    const startError = gameState.startNewGameWithSetup(
+      parsedSetup.moveCards,
+      parsedSetup.weaponCards,
+      parsedSetup.failureCards,
+    );
+    if (startError) {
+      setSetupError(startError);
+      return;
+    }
+
+    stopAnimation();
+    setPlannedMoves({});
+    setPlanOrder([]);
+    setSelectedPieceId(null);
+    setValidationMessage(null);
+    setSetupPopupOpen(false);
+    setSetupError(null);
+    saveSetupPrefs(parsedSetup);
     saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
   };
@@ -1149,6 +1312,9 @@ function PlayArea() {
           <button className="board-control-button" onClick={handleReset}>
             Reset
           </button>
+          <button className="board-control-button" onClick={handleSetupOpen}>
+            Setup
+          </button>
           <button className="board-control-button" onClick={() => handleInfoToggle('rules')}>
             Rule Info
           </button>
@@ -1480,6 +1646,57 @@ function PlayArea() {
         {prevTurnSummary && <pre className="game-summary">{prevTurnSummary}</pre>}
         {history && <pre className="game-summary game-summary--history">{history}</pre>}
       </div>
+      {setupPopupOpen && (
+        <div className="info-overlay" role="dialog" aria-modal="true" onClick={handleSetupCancel}>
+          <div className="info-popup setup-popup" onClick={(event) => event.stopPropagation()}>
+            <h3>Setup</h3>
+            <div className="setup-popup-form">
+              <label className="setup-popup-row">
+                <span>Move Cards (Normal)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={setupPrefsDraft.moveCards}
+                  onChange={(event) => handleSetupDraftChange('moveCards', event.target.value)}
+                />
+              </label>
+              <label className="setup-popup-row">
+                <span>Weapon Cards (Normal)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={setupPrefsDraft.weaponCards}
+                  onChange={(event) => handleSetupDraftChange('weaponCards', event.target.value)}
+                />
+              </label>
+              <label className="setup-popup-row">
+                <span>Failure Cards (Normal)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={setupPrefsDraft.failureCards}
+                  onChange={(event) => handleSetupDraftChange('failureCards', event.target.value)}
+                />
+              </label>
+            </div>
+            {setupError && <p className="setup-popup-error">{setupError}</p>}
+            <div className="setup-popup-actions">
+              <button className="planner-button planner-button--primary" onClick={handleStartNewGameWithSetup}>
+                Start New Game
+              </button>
+              <button className="planner-button" onClick={handleSetupCancel}>
+                Cancel
+              </button>
+              <button className="planner-button" onClick={handleRestoreSetupDefaults}>
+                Restore Defaults
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {infoPopup && infoPopupContent && (
         <div className="info-overlay" role="dialog" aria-modal="true" onClick={() => setInfoPopup(null)}>
           <div className="info-popup">

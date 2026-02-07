@@ -390,6 +390,51 @@
   margin-bottom: 0;
 }
 
+.setup-popup {
+  max-width: 560px;
+}
+
+.setup-popup-form {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.setup-popup-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  align-items: center;
+  gap: 12px;
+}
+
+.setup-popup-row span {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+.setup-popup-row input {
+  width: 100%;
+  min-width: 0;
+}
+
+.setup-popup-error {
+  margin: 12px 0 0;
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.setup-popup-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .planner-animations {
   margin-top: 12px;
   display: flex;

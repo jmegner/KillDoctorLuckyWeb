@@ -136,15 +136,75 @@ struct PreviewPieceRoom {
     room_id: usize,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NormalSetup {
+    move_cards: f64,
+    weapon_cards: f64,
+    failure_cards: f64,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PersistedGameState {
     version: u32,
     board_name: String,
+    #[serde(default = "default_normal_setup")]
+    normal_setup: NormalSetup,
     normal_turns: Vec<core::simple_turn::SimpleTurn>,
 }
 
 const PERSISTED_GAME_STATE_VERSION: u32 = 1;
+
+fn default_normal_setup() -> NormalSetup {
+    NormalSetup {
+        move_cards: core::rule_helper::simple::PLAYER_STARTING_MOVE_CARDS,
+        weapon_cards: core::rule_helper::simple::PLAYER_STARTING_WEAPONS,
+        failure_cards: core::rule_helper::simple::PLAYER_STARTING_FAILURES,
+    }
+}
+
+fn validate_normal_setup(setup: &NormalSetup) -> Result<(), String> {
+    let checks = [
+        ("moveCards", setup.move_cards),
+        ("weaponCards", setup.weapon_cards),
+        ("failureCards", setup.failure_cards),
+    ];
+    for (label, value) in checks {
+        if !value.is_finite() {
+            return Err(format!("{label} must be a finite number."));
+        }
+        if value < 0.0 {
+            return Err(format!("{label} must be >= 0."));
+        }
+    }
+    Ok(())
+}
+
+fn apply_normal_setup_to_state(
+    state: &mut core::mutable_game_state::MutableGameState,
+    normal_setup: &NormalSetup,
+) {
+    for player_id in state.common.player_ids() {
+        if state.common.get_player_type(player_id) != core::player::PlayerType::Normal {
+            continue;
+        }
+
+        let idx = player_id.0;
+        state.player_move_cards[idx] = normal_setup.move_cards;
+        state.player_weapons[idx] = normal_setup.weapon_cards;
+        state.player_failures[idx] = normal_setup.failure_cards;
+    }
+}
+
+fn new_state_with_normal_setup(
+    common: core::common_game_state::CommonGameState,
+    normal_setup: &NormalSetup,
+) -> core::mutable_game_state::MutableGameState {
+    let mut state = core::mutable_game_state::MutableGameState::at_start(common);
+    apply_normal_setup_to_state(&mut state, normal_setup);
+    state
+}
 
 fn normal_piece_id_for_state(state: &core::mutable_game_state::MutableGameState) -> PieceId {
     let normal_id =
@@ -223,6 +283,7 @@ fn collect_normal_turns(state: &core::mutable_game_state::MutableGameState) -> V
 #[wasm_bindgen]
 pub struct GameStateHandle {
     state: core::mutable_game_state::MutableGameState,
+    normal_setup: NormalSetup,
 }
 
 #[wasm_bindgen]
@@ -342,7 +403,7 @@ impl GameStateHandle {
     #[wasm_bindgen(js_name = "resetGame")]
     pub fn reset_game(&mut self) {
         let common = self.state.common.clone();
-        self.state = core::mutable_game_state::MutableGameState::at_start(common);
+        self.state = new_state_with_normal_setup(common, &self.normal_setup);
     }
 
     #[wasm_bindgen(js_name = "normalTurnHistory")]
@@ -457,16 +518,53 @@ impl GameStateHandle {
         })
     }
 
+    #[wasm_bindgen(js_name = "defaultNormalSetupJson")]
+    pub fn default_normal_setup_json(&self) -> String {
+        serde_json::to_string(&default_normal_setup()).unwrap_or_else(|_| {
+            "{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4}".to_string()
+        })
+    }
+
+    #[wasm_bindgen(js_name = "currentNormalSetupJson")]
+    pub fn current_normal_setup_json(&self) -> String {
+        serde_json::to_string(&self.normal_setup).unwrap_or_else(|_| {
+            "{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4}".to_string()
+        })
+    }
+
+    #[wasm_bindgen(js_name = "startNewGameWithSetup")]
+    pub fn start_new_game_with_setup(
+        &mut self,
+        move_cards: f64,
+        weapon_cards: f64,
+        failure_cards: f64,
+    ) -> String {
+        let setup = NormalSetup {
+            move_cards,
+            weapon_cards,
+            failure_cards,
+        };
+        if let Err(message) = validate_normal_setup(&setup) {
+            return message;
+        }
+
+        let common = self.state.common.clone();
+        self.normal_setup = setup;
+        self.state = new_state_with_normal_setup(common, &self.normal_setup);
+        String::new()
+    }
+
     #[wasm_bindgen(js_name = "exportStateJson")]
     pub fn export_state_json(&self) -> String {
         let snapshot = PersistedGameState {
             version: PERSISTED_GAME_STATE_VERSION,
             board_name: self.state.common.board.name.clone(),
+            normal_setup: self.normal_setup.clone(),
             normal_turns: collect_normal_turns(&self.state),
         };
 
         serde_json::to_string(&snapshot).unwrap_or_else(|_| {
-            "{\"version\":1,\"boardName\":\"\",\"normalTurns\":[]}".to_string()
+            "{\"version\":1,\"boardName\":\"\",\"normalSetup\":{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4},\"normalTurns\":[]}".to_string()
         })
     }
 
@@ -491,8 +589,12 @@ impl GameStateHandle {
             );
         }
 
+        if let Err(message) = validate_normal_setup(&snapshot.normal_setup) {
+            return format!("Saved game has invalid setup: {message}");
+        }
+
         let common = self.state.common.clone();
-        let mut restored = core::mutable_game_state::MutableGameState::at_start(common);
+        let mut restored = new_state_with_normal_setup(common, &snapshot.normal_setup);
 
         for (turn_idx, turn) in snapshot.normal_turns.into_iter().enumerate() {
             if let Err(message) = restored.check_normal_turn(&turn) {
@@ -504,6 +606,7 @@ impl GameStateHandle {
             restored.after_normal_turn(turn, true);
         }
 
+        self.normal_setup = snapshot.normal_setup;
         self.state = restored;
         String::new()
     }
@@ -514,8 +617,9 @@ pub fn new_default_game_state() -> Result<GameStateHandle, JsValue> {
     let board = core::board::Board::from_embedded_json("BoardAltDown")
         .map_err(|err| JsValue::from_str(&err.to_string()))?;
     let common = core::common_game_state::CommonGameState::from_num_normal_players(true, board, 2);
-    let state = core::mutable_game_state::MutableGameState::at_start(common);
-    Ok(GameStateHandle { state })
+    let normal_setup = default_normal_setup();
+    let state = new_state_with_normal_setup(common, &normal_setup);
+    Ok(GameStateHandle { state, normal_setup })
 }
 
 fn parse_turn_plan(turn_plan_json: &str) -> Result<core::simple_turn::SimpleTurn, String> {
