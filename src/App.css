@@ -312,6 +312,18 @@
   margin-top: 16px;
 }
 
+.planner-actions--turn {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.planner-actions--turn .planner-button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.42rem 0.52rem;
+  font-size: 0.84rem;
+}
+
 .ai-level-line {
   align-items: center;
 }

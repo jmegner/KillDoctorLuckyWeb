@@ -716,6 +716,7 @@ function PlayArea() {
   const [setupPrefsDraft, setSetupPrefsDraft] = useState<SetupPrefsDraft>(() =>
     toSetupPrefsDraft(loadSetupPrefs(currentSetupPrefs)),
   );
+  const [redoStateStack, setRedoStateStack] = useState<string[]>([]);
   const [turnCounter, setTurnCounter] = useState(0);
   const turnCounterRef = useRef(turnCounter);
   turnCounterRef.current = turnCounter;
@@ -756,6 +757,9 @@ function PlayArea() {
   const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
   const history = gameState ? gameState.normalTurnHistory() : '';
   const hasWinner = gameState ? gameState.hasWinner() : false;
+  const canUndo = history.trim().length > 0;
+  const canRedo = redoStateStack.length > 0;
+  const canCancelTurnPlan = selectedPieceId !== null || planOrder.length > 0 || validationMessage !== null;
   const winnerPieceIdRaw = gameState ? gameState.winnerPieceId() : '';
   const winnerPieceId =
     winnerPieceIdRaw === 'player1' || winnerPieceIdRaw === 'player2' ? (winnerPieceIdRaw as PieceId) : null;
@@ -986,6 +990,7 @@ function PlayArea() {
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
     resetAiOutputs();
+    setRedoStateStack([]);
     saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
     startAnimationFromState();
@@ -1159,11 +1164,44 @@ function PlayArea() {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
+    const snapshotBeforeUndo = gameState.exportStateJson();
     const didUndo = gameState.undoLastTurn();
     if (!didUndo) {
       setValidationMessage('No previous turn to undo.');
       return;
     }
+    setRedoStateStack((prev) => [...prev, snapshotBeforeUndo]);
+    stopAnimation();
+    setPlannedMoves({});
+    setPlanOrder([]);
+    setSelectedPieceId(null);
+    setValidationMessage(null);
+    resetAiOutputs();
+    saveGameStateSnapshot(gameState);
+    setTurnCounter((prev) => prev + 1);
+  };
+
+  const handleRedo = () => {
+    if (!gameState) {
+      return;
+    }
+    if (redoStateStack.length === 0) {
+      setValidationMessage('No undone turn to redo.');
+      return;
+    }
+    if (analysisIsRunning) {
+      analysisRunIdRef.current += 1;
+      stopAnalysisRun('Analysis stopped because the position changed.');
+    }
+
+    const redoSnapshot = redoStateStack[redoStateStack.length - 1];
+    const importError = gameState.importStateJson(redoSnapshot);
+    if (importError) {
+      setValidationMessage(`Redo failed: ${importError}`);
+      return;
+    }
+
+    setRedoStateStack((prev) => prev.slice(0, -1));
     stopAnimation();
     setPlannedMoves({});
     setPlanOrder([]);
@@ -1189,6 +1227,7 @@ function PlayArea() {
     setSelectedPieceId(null);
     setValidationMessage(null);
     resetAiOutputs();
+    setRedoStateStack([]);
     saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
   };
@@ -1253,6 +1292,7 @@ function PlayArea() {
     setSetupError(null);
     resetAiOutputs();
     saveSetupPrefs(parsedSetup);
+    setRedoStateStack([]);
     saveGameStateSnapshot(gameState);
     setTurnCounter((prev) => prev + 1);
   };
@@ -1931,15 +1971,18 @@ function PlayArea() {
                   })}
             </span>
           </div>
-          <div className="planner-actions">
+          <div className="planner-actions planner-actions--turn">
             <button className="planner-button planner-button--primary" onClick={handleSubmit} disabled={hasWinner}>
               Submit
             </button>
-            <button className="planner-button" onClick={handleCancel}>
+            <button className="planner-button" onClick={handleCancel} disabled={!canCancelTurnPlan}>
               Cancel
             </button>
-            <button className="planner-button" onClick={handleUndo}>
+            <button className="planner-button" onClick={handleUndo} disabled={!canUndo}>
               Undo
+            </button>
+            <button className="planner-button" onClick={handleRedo} disabled={!canRedo}>
+              Redo
             </button>
           </div>
           {validationMessage && <p className="planner-error">{validationMessage}</p>}
