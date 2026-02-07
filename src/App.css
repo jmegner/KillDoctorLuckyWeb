@@ -386,6 +386,50 @@
   color: var(--ink-muted);
 }
 
+.player-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.player-stats-table th,
+.player-stats-table td {
+  padding: 3px 4px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-stats-table thead th {
+  color: var(--ink-muted);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border-bottom: 1px dashed var(--line);
+}
+
+.player-stats-table thead th:first-child {
+  text-align: left;
+  width: 2.3rem;
+}
+
+.player-stats-table tbody tr + tr th,
+.player-stats-table tbody tr + tr td {
+  border-top: 4px solid var(--panel);
+}
+
+.player-stats-table tbody th {
+  text-align: left;
+  font-weight: 700;
+}
+
+.player-stats-empty {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+}
+
 .planner-button.is-active {
   background: var(--accent);
   color: #fefbf5;

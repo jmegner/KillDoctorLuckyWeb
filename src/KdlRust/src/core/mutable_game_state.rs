@@ -117,6 +117,42 @@ impl MutableGameState {
         self.common.player_text(player_id)
     }
 
+    pub fn doctor_moves_until_room(&self, room_id: RoomId) -> i32 {
+        let room_ids = &self.common.board.room_ids;
+        let room_count = room_ids.len();
+        if room_count == 0 {
+            return 0;
+        }
+
+        let doctor_idx = room_ids
+            .iter()
+            .position(|candidate| *candidate == self.doctor_room_id)
+            .expect("doctor room id not found in board room ids");
+        let target_idx = room_ids
+            .iter()
+            .position(|candidate| *candidate == room_id)
+            .expect("target room id not found in board room ids");
+
+        let distance = if target_idx >= doctor_idx {
+            target_idx - doctor_idx
+        } else {
+            room_count - (doctor_idx - target_idx)
+        };
+
+        distance as i32
+    }
+
+    pub fn doctor_moves_until_player_room(&self, player_id: PlayerId) -> i32 {
+        self.doctor_moves_until_room(self.player_room_ids[player_id.0])
+    }
+
+    pub fn player_equivalent_clovers(&self, player_id: PlayerId) -> f64 {
+        let idx = player_id.0;
+        self.player_failures[idx] * rule_helper::simple::CLOVERS_PER_FAILURE
+            + self.player_weapons[idx] * rule_helper::simple::CLOVERS_PER_WEAPON
+            + self.player_move_cards[idx] * rule_helper::simple::CLOVERS_PER_MOVE_CARD
+    }
+
     pub fn player_text_long(&self, player_id: PlayerId) -> String {
         let idx = player_id.0;
         let mut text = format!(
@@ -127,9 +163,7 @@ impl MutableGameState {
         );
 
         if self.common.get_player_type(player_id) == PlayerType::Normal {
-            let clovers = self.player_failures[idx] * rule_helper::simple::CLOVERS_PER_FAILURE
-                + self.player_weapons[idx] * rule_helper::simple::CLOVERS_PER_WEAPON
-                + self.player_move_cards[idx] * rule_helper::simple::CLOVERS_PER_MOVE_CARD;
+            let clovers = self.player_equivalent_clovers(player_id);
             text.push_str(&format!(
                 ",M{:.1},W{:.1},F{:.1},C{:.1}",
                 self.player_move_cards[idx],
@@ -1332,5 +1366,14 @@ mod tests {
         game.current_player_id = PlayerId(1);
         let action = game.best_action_allowed(false);
         assert_eq!(action, PlayerAction::None);
+    }
+
+    #[test]
+    fn doctor_moves_until_room_wraps_in_visit_order() {
+        let mut game = sample_game_state();
+        game.doctor_room_id = RoomId(2);
+        assert_eq!(game.doctor_moves_until_room(RoomId(2)), 0);
+        assert_eq!(game.doctor_moves_until_room(RoomId(3)), 1);
+        assert_eq!(game.doctor_moves_until_room(RoomId(1)), 2);
     }
 }

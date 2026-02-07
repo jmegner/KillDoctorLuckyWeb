@@ -155,6 +155,18 @@ struct BestTurnAnalysisResponse {
     elapsed_ms: f64,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PlayerStats {
+    piece_id: String,
+    doctor_distance: i32,
+    strength: i32,
+    move_cards: f64,
+    weapon_cards: f64,
+    failure_cards: f64,
+    equivalent_clovers: f64,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NormalSetup {
@@ -382,6 +394,31 @@ impl GameStateHandle {
             self.state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_FIRST.0].0 as u32,
             self.state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_SECOND.0].0 as u32,
         ]
+    }
+
+    #[wasm_bindgen(js_name = "playerStatsJson")]
+    pub fn player_stats_json(&self) -> String {
+        let has_strangers = self.state.common.has_strangers();
+        let stats = self
+            .state
+            .common
+            .player_ids()
+            .filter_map(|player_id| {
+                let piece_id = PieceId::from_player_id(player_id, has_strangers)?;
+                let idx = player_id.0;
+                Some(PlayerStats {
+                    piece_id: piece_id.as_str().to_string(),
+                    doctor_distance: self.state.doctor_moves_until_player_room(player_id),
+                    strength: self.state.player_strengths[idx],
+                    move_cards: self.state.player_move_cards[idx],
+                    weapon_cards: self.state.player_weapons[idx],
+                    failure_cards: self.state.player_failures[idx],
+                    equivalent_clovers: self.state.player_equivalent_clovers(player_id),
+                })
+            })
+            .collect::<Vec<_>>();
+
+        serde_json::to_string(&stats).unwrap_or_else(|_| "[]".to_string())
     }
 
     #[wasm_bindgen(js_name = "boardRoomsJson")]

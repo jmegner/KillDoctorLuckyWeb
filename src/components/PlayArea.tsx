@@ -32,6 +32,26 @@ type PreviewDisplay = {
   tokens: PreviewToken[];
 };
 
+type PlayerStatsResponseRow = {
+  pieceId: string;
+  doctorDistance: number;
+  strength: number;
+  moveCards: number;
+  weaponCards: number;
+  failureCards: number;
+  equivalentClovers: number;
+};
+
+type PlayerStatsRow = {
+  pieceId: Exclude<PieceId, 'doctor'>;
+  doctorDistance: number;
+  strength: number;
+  moveCards: number;
+  weaponCards: number;
+  failureCards: number;
+  equivalentClovers: number;
+};
+
 type BestTurnResponse = {
   isValid: boolean;
   validationMessage: string;
@@ -129,6 +149,7 @@ const boardRooms: BoardRoom[] = boardLayout.Rooms.map((room) => ({
 const boardRoomById = new Map<number, BoardRoom>(boardRooms.map((room) => [room.id, room] as const));
 
 const pieceOrder: PieceId[] = ['doctor', 'player1', 'player2', 'stranger1', 'stranger2'];
+const playerStatsRowOrder: Array<Exclude<PieceId, 'doctor'>> = ['stranger2', 'player1', 'stranger1', 'player2'];
 const animationSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
 const defaultSpeedIndex = 8;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
@@ -697,6 +718,10 @@ const formatHeuristicScore = (score: number) => {
   return `${score >= 0 ? '+' : ''}${score.toFixed(2)}`;
 };
 
+const formatPlayerStatDecimal = (value: number) => (Number.isFinite(value) ? value.toFixed(1) : '?');
+
+const formatPlayerInteger = (value: number) => (Number.isFinite(value) ? Math.trunc(value).toString() : '?');
+
 function PlayArea() {
   const [gameState] = useState<GameStateHandle | null>(() => {
     try {
@@ -786,6 +811,34 @@ function PlayArea() {
       }
     });
     return map;
+  })();
+  const playerStatsRows = (() => {
+    if (!gameState) {
+      return [] as PlayerStatsRow[];
+    }
+    let parsedRows: PlayerStatsResponseRow[];
+    try {
+      parsedRows = JSON.parse(gameState.playerStatsJson()) as PlayerStatsResponseRow[];
+    } catch {
+      return [] as PlayerStatsRow[];
+    }
+    return parsedRows
+      .map((row) => {
+        if (!isPieceId(row.pieceId) || row.pieceId === 'doctor') {
+          return null;
+        }
+        return {
+          pieceId: row.pieceId,
+          doctorDistance: row.doctorDistance,
+          strength: row.strength,
+          moveCards: row.moveCards,
+          weaponCards: row.weaponCards,
+          failureCards: row.failureCards,
+          equivalentClovers: row.equivalentClovers,
+        };
+      })
+      .filter((row): row is PlayerStatsRow => row !== null)
+      .sort((a, b) => playerStatsRowOrder.indexOf(a.pieceId) - playerStatsRowOrder.indexOf(b.pieceId));
   })();
   const plannedEntries = pieceOrder
     .map((pieceId) => {
@@ -2057,6 +2110,44 @@ function PlayArea() {
               <span className="planner-animations-speed">{animationSpeed.toFixed(2)}x</span>
             </div>
           </div>
+        </aside>
+        <aside className="planner-panel player-stats-panel">
+          {playerStatsRows.length === 0 ? (
+            <p className="player-stats-empty">Stats unavailable.</p>
+          ) : (
+            <table className="player-stats-table" aria-label="Player stats">
+              <thead>
+                <tr>
+                  <th scope="col">P</th>
+                  <th scope="col">D</th>
+                  <th scope="col">S</th>
+                  <th scope="col">M</th>
+                  <th scope="col">W</th>
+                  <th scope="col">F</th>
+                  <th scope="col">C</th>
+                </tr>
+              </thead>
+              <tbody>
+                {playerStatsRows.map((row) => {
+                  const config = pieceConfig[row.pieceId];
+                  return (
+                    <tr
+                      key={`player-stats-${row.pieceId}`}
+                      style={{ backgroundColor: config.color, color: config.textColor }}
+                    >
+                      <th scope="row">{config.label}</th>
+                      <td>{formatPlayerInteger(row.doctorDistance)}</td>
+                      <td>{formatPlayerInteger(row.strength)}</td>
+                      <td>{formatPlayerStatDecimal(row.moveCards)}</td>
+                      <td>{formatPlayerStatDecimal(row.weaponCards)}</td>
+                      <td>{formatPlayerStatDecimal(row.failureCards)}</td>
+                      <td>{formatPlayerStatDecimal(row.equivalentClovers)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </aside>
         <aside className="planner-panel ai-panel">
           <div className="planner-header">
