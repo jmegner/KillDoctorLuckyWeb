@@ -1811,9 +1811,18 @@ function PlayArea() {
         <p>Opponent pieces and the doctor cannot be moved.</p>
       </>
     ) : null;
+  const modalOverlayOpen = setupPopupOpen || Boolean(infoPopup && infoPopupContent);
 
   return (
     <section className="play-area">
+      {modalOverlayOpen && (
+        <style>{`
+          html, body {
+            overflow: hidden;
+            overscroll-behavior: none;
+          }
+        `}</style>
+      )}
       <div className="board-column">
         <div className="board-controls">
           <button className="board-control-button" onClick={handleReset}>

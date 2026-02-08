@@ -485,11 +485,13 @@
   position: fixed;
   inset: 0;
   background: rgba(22, 15, 8, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   z-index: 30;
   padding: 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   cursor: pointer;
 }
 
@@ -500,7 +502,13 @@
   padding: 18px 22px;
   max-width: 520px;
   width: min(520px, 100%);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   color: var(--ink);
+  cursor: default;
 }
 
 .info-popup h3 {
@@ -521,6 +529,21 @@
 
 .setup-popup {
   max-width: 560px;
+}
+
+body:has(.info-overlay) {
+  overflow: hidden;
+}
+
+@media (max-height: 560px) {
+  .info-overlay {
+    padding: 12px;
+  }
+
+  .info-popup {
+    max-height: calc(100dvh - 24px);
+    padding: 14px 16px;
+  }
 }
 
 .setup-popup-form {
