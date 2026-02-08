@@ -1797,18 +1797,55 @@ function PlayArea() {
       </>
     ) : infoPopup === 'ui' ? (
       <>
-        <p>There are a few ways to choose movements for your piece and the strangers.</p>
+        <h4>Movement / Turn Planning</h4>
+        <p>
+          There are a few ways to choose movements for your piece and the strangers. You can click the "Submit" button
+          to submit your plan, but there are other ways via middle clicks and double clicks to submit your plan.
+        </p>
         <ul>
-          <li>The most basic way is to click a piece and then click a destination room.</li>
           <li>
-            You do not always have to click the piece to select it; if you click a room with movable pieces, it will
-            select the first piece from this list: [yourself, your allied stranger, the opposing stranger].
+            The most basic way to choose a movement is to click a piece and then click a destination room. You can
+            select pieces and change their destinations multiple times.
+          </li>
+          <li>
+            Once a piece has a planned destination, you will see a "ghost" version of that piece in the destination room
+            and the original piece is grayed out a bit.
+          </li>
+          <li>
+            You do not always have to click a piece to select it; if no piece is selected and you click a room with
+            movable pieces, it will select the first piece from this list: [yourself, your allied stranger, the opposing
+            stranger].
           </li>
           <li>If no piece is selected, middle-clicking in the board will submit the plan.</li>
+          <li>
+            If a piece is selected, middle-clicking in a room will choose that room as the piece's destination and
+            submit your plan.
+          </li>
+          <li>
+            If no piece is selected, double-clicking on a room is the same as choosing that room as the destination for
+            your normal player piece and submitting the plan, which can include previously planned moves.
+            Double-clicking a room while a piece is selected is interpreted as 2 single clicks.
+          </li>
+          <li>Reminder: you can not move or select the Dr or the normal opponent piece.</li>
         </ul>
-        <p>Select your piece or a stranger, then click a room to set a destination.</p>
-        <p>Click a planned piece again to update its destination. Submit button submits the plan.</p>
-        <p>Opponent pieces and the doctor cannot be moved.</p>
+        <h4>Undo/Redo</h4>
+        <p>
+          Clicking the Undo button will undo everything up to the last submitted plan, which includes all Dr movement
+          and stranger turns. Clicking Redo will redo the last undone plan, and you can redo multiple times if you had
+          undone multiple times.
+        </p>
+        <h4>Player Info Box</h4>
+        <p>
+          The box with 4 colorful rows, one for each player, shows vital information about each player. The columns...
+        </p>
+        <ul>
+          <li>D: number of rooms/turns until the Dr arrives at the player's current room.</li>
+          <li>S: player strength/natural-attack-power.</li>
+          <li>M: number of move cards, each one granting 1 move point and convertable to 1 clover.</li>
+          <li>W: number of weapon cards, each one granting 2 attack points and convertable to 1 clover.</li>
+          <li>F: number of failure cards, each one convertable to 2 clovers.</li>
+          <li>C: number of clovers if you were to convert all their cards.</li>
+        </ul>
       </>
     ) : null;
   const modalOverlayOpen = setupPopupOpen || Boolean(infoPopup && infoPopupContent);
