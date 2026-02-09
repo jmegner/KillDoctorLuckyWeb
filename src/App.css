@@ -374,6 +374,13 @@
   font-family: var(--font-mono);
 }
 
+.ai-max-time-select {
+  width: 5.4rem;
+  min-width: 5.4rem;
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
 .number-stepper {
   display: inline-flex;
   align-items: center;
@@ -408,6 +415,11 @@
 .ai-actions {
   flex-wrap: nowrap;
   gap: 6px;
+}
+
+.ai-actions--header {
+  margin-top: 0;
+  margin-bottom: 10px;
 }
 
 .ai-actions .planner-button {
