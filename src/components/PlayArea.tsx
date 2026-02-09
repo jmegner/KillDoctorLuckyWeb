@@ -13,6 +13,8 @@ type TurnPlanPreviewResponse = {
   isValid: boolean;
   validationMessage: string;
   nextPlayerPieceId: string;
+  hasWinner: boolean;
+  winnerPieceId: string;
   attackers: string[];
   currentPlayerLoots: boolean;
   doctorRoomId: number;
@@ -22,10 +24,17 @@ type TurnPlanPreviewResponse = {
   }>;
 };
 
-type PreviewToken = {
-  text: string;
-  colorPieceId: PieceId | null;
-};
+type PreviewToken =
+  | {
+      kind: 'text';
+      text: string;
+      colorPieceId: PieceId | null;
+    }
+  | {
+      kind: 'winner';
+      winnerPieceId: PieceId | null;
+      winnerText: string;
+    };
 
 type PreviewDisplay = {
   message: string | null;
@@ -668,17 +677,23 @@ const toPreviewDisplay = (rawPreview: string, invalidMessage: string): PreviewDi
 
   const nextPieceId = isPieceId(parsed.nextPlayerPieceId) ? parsed.nextPlayerPieceId : null;
   const nextText = nextPieceId ? pieceConfig[nextPieceId].label : parsed.nextPlayerPieceId || '??';
-  const tokens: PreviewToken[] = [{ text: `Next:${nextText}`, colorPieceId: nextPieceId }];
+  const winnerPieceId = isPieceId(parsed.winnerPieceId) ? parsed.winnerPieceId : null;
+  const winnerText = winnerPieceId
+    ? pieceConfig[winnerPieceId].label
+    : parsed.winnerPieceId || (nextPieceId ? pieceConfig[nextPieceId].label : '??');
+  const tokens: PreviewToken[] = parsed.hasWinner
+    ? [{ kind: 'winner', winnerPieceId, winnerText }]
+    : [{ kind: 'text', text: `Next:${nextText}`, colorPieceId: nextPieceId }];
 
   if (parsed.attackers.length > 0) {
     const attackerLabels = parsed.attackers.map((pieceId) =>
       isPieceId(pieceId) ? pieceConfig[pieceId].label : pieceId,
     );
-    tokens.push({ text: `Atk:${attackerLabels.join(',')}`, colorPieceId: null });
+    tokens.push({ kind: 'text', text: `Atk:${attackerLabels.join(',')}`, colorPieceId: null });
   }
 
   if (parsed.currentPlayerLoots) {
-    tokens.push({ text: 'Loot', colorPieceId: null });
+    tokens.push({ kind: 'text', text: 'Loot', colorPieceId: null });
   }
 
   parsed.movedStrangers.forEach((entry) => {
@@ -686,11 +701,11 @@ const toPreviewDisplay = (rawPreview: string, invalidMessage: string): PreviewDi
     const pieceText = pieceId ? pieceConfig[pieceId].label : entry.pieceId;
     const roomText = Number.isFinite(entry.roomId) ? entry.roomId : '?';
     const colorPieceId = pieceId === 'stranger1' || pieceId === 'stranger2' ? pieceId : null;
-    tokens.push({ text: `${pieceText}:R${roomText}`, colorPieceId });
+    tokens.push({ kind: 'text', text: `${pieceText}:R${roomText}`, colorPieceId });
   });
 
   const doctorRoomText = Number.isFinite(parsed.doctorRoomId) ? parsed.doctorRoomId : '?';
-  tokens.push({ text: `Dr:R${doctorRoomText}`, colorPieceId: null });
+  tokens.push({ kind: 'text', text: `Dr:R${doctorRoomText}`, colorPieceId: null });
 
   return {
     message: null,
@@ -2133,6 +2148,32 @@ function PlayArea() {
               {previewDisplay.message
                 ? previewDisplay.message
                 : previewDisplay.tokens.map((token, index) => {
+                    if (token.kind === 'winner') {
+                      const winnerPieceStyle = token.winnerPieceId
+                        ? {
+                            backgroundColor: pieceConfig[token.winnerPieceId].color,
+                            color: pieceConfig[token.winnerPieceId].textColor,
+                          }
+                        : undefined;
+                      return (
+                        <span key={`preview-token-win-${token.winnerText}-${index}`}>
+                          {index > 0 && <span className="planner-preview-sep">|</span>}
+                          <span className="planner-preview-token planner-preview-token--badge planner-preview-token--win">
+                            WIN:
+                          </span>
+                          <span
+                            className={
+                              token.winnerPieceId
+                                ? 'planner-preview-token planner-preview-token--badge'
+                                : 'planner-preview-token'
+                            }
+                            style={winnerPieceStyle}
+                          >
+                            {token.winnerText}
+                          </span>
+                        </span>
+                      );
+                    }
                     const colorPieceId = token.colorPieceId;
                     const previewTokenStyle = colorPieceId
                       ? {
@@ -2141,7 +2182,7 @@ function PlayArea() {
                         }
                       : undefined;
                     return (
-                      <span key={`preview-token-${token.text}-${index}`}>
+                      <span key={`preview-token-text-${token.text}-${index}`}>
                         {index > 0 && <span className="planner-preview-sep">|</span>}
                         <span
                           className={
@@ -2304,6 +2345,32 @@ function PlayArea() {
               {aiPreviewDisplay.message
                 ? aiPreviewDisplay.message
                 : aiPreviewDisplay.tokens.map((token, index) => {
+                    if (token.kind === 'winner') {
+                      const winnerPieceStyle = token.winnerPieceId
+                        ? {
+                            backgroundColor: pieceConfig[token.winnerPieceId].color,
+                            color: pieceConfig[token.winnerPieceId].textColor,
+                          }
+                        : undefined;
+                      return (
+                        <span key={`ai-preview-token-win-${token.winnerText}-${index}`}>
+                          {index > 0 && <span className="planner-preview-sep">|</span>}
+                          <span className="planner-preview-token planner-preview-token--badge planner-preview-token--win">
+                            WIN:
+                          </span>
+                          <span
+                            className={
+                              token.winnerPieceId
+                                ? 'planner-preview-token planner-preview-token--badge'
+                                : 'planner-preview-token'
+                            }
+                            style={winnerPieceStyle}
+                          >
+                            {token.winnerText}
+                          </span>
+                        </span>
+                      );
+                    }
                     const colorPieceId = token.colorPieceId;
                     const previewTokenStyle = colorPieceId
                       ? {
@@ -2312,7 +2379,7 @@ function PlayArea() {
                         }
                       : undefined;
                     return (
-                      <span key={`ai-preview-token-${token.text}-${index}`}>
+                      <span key={`ai-preview-token-text-${token.text}-${index}`}>
                         {index > 0 && <span className="planner-preview-sep">|</span>}
                         <span
                           className={

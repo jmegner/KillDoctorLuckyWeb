@@ -123,6 +123,8 @@ struct TurnPlanPreview {
     is_valid: bool,
     validation_message: String,
     next_player_piece_id: String,
+    has_winner: bool,
+    winner_piece_id: String,
     attackers: Vec<String>,
     current_player_loots: bool,
     doctor_room_id: usize,
@@ -247,9 +249,22 @@ fn normal_piece_id_for_state(state: &core::mutable_game_state::MutableGameState)
     }
 }
 
+fn winner_piece_id_for_state(state: &core::mutable_game_state::MutableGameState) -> Option<PieceId> {
+    if !state.has_winner() {
+        return None;
+    }
+
+    let normal_id = core::rule_helper::to_normal_player_id(state.winner, state.common.num_normal_players);
+    Some(if normal_id == core::rule_helper::SIDE_A_NORMAL_PLAYER_ID {
+        PieceId::Player1
+    } else {
+        PieceId::Player2
+    })
+}
+
 fn to_preview_json(preview: &TurnPlanPreview) -> String {
     serde_json::to_string(preview).unwrap_or_else(|_| {
-        "{\"isValid\":false,\"validationMessage\":\"Preview serialization failed.\",\"nextPlayerPieceId\":\"\",\"attackers\":[],\"currentPlayerLoots\":false,\"doctorRoomId\":0,\"movedStrangers\":[]}".to_string()
+        "{\"isValid\":false,\"validationMessage\":\"Preview serialization failed.\",\"nextPlayerPieceId\":\"\",\"hasWinner\":false,\"winnerPieceId\":\"\",\"attackers\":[],\"currentPlayerLoots\":false,\"doctorRoomId\":0,\"movedStrangers\":[]}".to_string()
     })
 }
 
@@ -258,6 +273,8 @@ fn invalid_preview_json(message: String) -> String {
         is_valid: false,
         validation_message: message,
         next_player_piece_id: String::new(),
+        has_winner: false,
+        winner_piece_id: String::new(),
         attackers: Vec::new(),
         current_player_loots: false,
         doctor_room_id: 0,
@@ -372,17 +389,9 @@ impl GameStateHandle {
 
     #[wasm_bindgen(js_name = "winnerPieceId")]
     pub fn winner_piece_id(&self) -> String {
-        if !self.state.has_winner() {
-            return String::new();
-        }
-
-        let normal_id = core::rule_helper::to_normal_player_id(self.state.winner, self.state.common.num_normal_players);
-        let piece_id = if normal_id == core::rule_helper::SIDE_A_NORMAL_PLAYER_ID {
-            PieceId::Player1
-        } else {
-            PieceId::Player2
-        };
-        piece_id.as_str().to_string()
+        winner_piece_id_for_state(&self.state)
+            .map(|piece_id| piece_id.as_str().to_string())
+            .unwrap_or_default()
     }
 
     #[wasm_bindgen(js_name = "piecePositions")]
@@ -599,11 +608,16 @@ impl GameStateHandle {
                 }
             }
         }
+        let winner_piece_id = winner_piece_id_for_state(&preview_state);
 
         to_preview_json(&TurnPlanPreview {
             is_valid: true,
             validation_message: String::new(),
             next_player_piece_id: normal_piece_id_for_state(&preview_state).as_str().to_string(),
+            has_winner: winner_piece_id.is_some(),
+            winner_piece_id: winner_piece_id
+                .map(|piece_id| piece_id.as_str().to_string())
+                .unwrap_or_default(),
             attackers,
             current_player_loots,
             doctor_room_id: preview_state.doctor_room_id.0,

@@ -302,6 +302,11 @@
   padding: 0 4px;
 }
 
+.planner-preview-token--win {
+  background: #ffe740;
+  color: #000000;
+}
+
 .planner-preview-sep {
   color: var(--ink-muted);
   margin: 0 2px;
