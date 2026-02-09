@@ -41,7 +41,7 @@ type PreviewDisplay = {
   tokens: PreviewToken[];
 };
 
-type InfoPopupKind = 'rules' | 'ui' | 'turnPlanner' | 'ai';
+type InfoPopupKind = 'rules' | 'ui' | 'turnPlanner' | 'ai' | 'playerInfoBox';
 
 type PlayerStatsResponseRow = {
   pieceId: string;
@@ -1784,6 +1784,8 @@ function PlayArea() {
           ? 'Turn Planner Help'
           : infoPopup === 'ai'
             ? 'AI Help'
+            : infoPopup === 'playerInfoBox'
+              ? 'Player Info Box Help'
           : 'UNKNOWN3854';
   infoPopupTitle += ' (click anywhere to close)';
   const infoPopupContent =
@@ -1877,6 +1879,8 @@ function PlayArea() {
       <p>TURN PLANNER HELP</p>
     ) : infoPopup === 'ai' ? (
       <p>AI HELP HERE</p>
+    ) : infoPopup === 'playerInfoBox' ? (
+      <p>PLAYER INFO BOX HELP HERE</p>
     ) : null;
   const modalOverlayOpen = setupPopupOpen || Boolean(infoPopup && infoPopupContent);
 
@@ -2265,7 +2269,7 @@ function PlayArea() {
             </div>
           </div>
         </aside>
-        <aside className="planner-panel player-stats-panel">
+        <aside className="planner-panel player-stats-panel" onClick={() => handleInfoToggle('playerInfoBox')}>
           {playerStatsRows.length === 0 ? (
             <p className="player-stats-empty">Stats unavailable.</p>
           ) : (

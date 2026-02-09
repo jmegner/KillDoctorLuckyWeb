@@ -255,6 +255,7 @@
   min-width: 1.75rem;
   height: 1.75rem;
   padding: 0;
+  cursor: help;
   border: 1px solid #1f4aa8;
   border-radius: 999px;
   display: inline-flex;
@@ -269,6 +270,7 @@
 }
 
 .planner-help-icon-button:hover {
+  cursor: help;
   background: #245ec6;
   border-color: #1a4698;
 }
@@ -428,6 +430,11 @@
   table-layout: fixed;
   font-family: var(--font-mono);
   font-size: 0.78rem;
+}
+
+.player-stats-panel,
+.player-stats-panel * {
+  cursor: help;
 }
 
 .player-stats-table th,
