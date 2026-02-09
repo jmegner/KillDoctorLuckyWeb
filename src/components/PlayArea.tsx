@@ -41,6 +41,8 @@ type PreviewDisplay = {
   tokens: PreviewToken[];
 };
 
+type InfoPopupKind = 'rules' | 'ui' | 'turnPlanner' | 'ai';
+
 type PlayerStatsResponseRow = {
   pieceId: string;
   doctorDistance: number;
@@ -759,7 +761,7 @@ function PlayArea() {
   const [plannedMoves, setPlannedMoves] = useState<Partial<Record<PieceId, number>>>({});
   const [planOrder, setPlanOrder] = useState<PieceId[]>([]);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
-  const [infoPopup, setInfoPopup] = useState<'rules' | 'ui' | null>(null);
+  const [infoPopup, setInfoPopup] = useState<InfoPopupKind | null>(null);
   const [setupPopupOpen, setSetupPopupOpen] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupPrefsDraft, setSetupPrefsDraft] = useState<SetupPrefsDraft>(() =>
@@ -1403,7 +1405,7 @@ function PlayArea() {
     setValidationMessage(null);
   };
 
-  const handleInfoToggle = (kind: 'rules' | 'ui') => {
+  const handleInfoToggle = (kind: InfoPopupKind) => {
     setInfoPopup((prev) => (prev === kind ? null : kind));
   };
 
@@ -1773,7 +1775,16 @@ function PlayArea() {
   const currentPlayerColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].color : 'var(--line)';
   const currentPlayerTextColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].textColor : 'var(--ink)';
   const boardOutlineColor = animatedPieces ? '#8c8c8c' : currentPlayerColor;
-  let infoPopupTitle = infoPopup === 'rules' ? 'Rules' : infoPopup === 'ui' ? 'UI Info' : 'UNKNOWN3854';
+  let infoPopupTitle =
+    infoPopup === 'rules'
+      ? 'Rules'
+      : infoPopup === 'ui'
+        ? 'UI Info'
+        : infoPopup === 'turnPlanner'
+          ? 'Turn Planner Help'
+          : infoPopup === 'ai'
+            ? 'AI Help'
+          : 'UNKNOWN3854';
   infoPopupTitle += ' (click anywhere to close)';
   const infoPopupContent =
     infoPopup === 'rules' ? (
@@ -1862,6 +1873,10 @@ function PlayArea() {
           <li>C: number of clovers if you were to convert all their cards.</li>
         </ul>
       </>
+    ) : infoPopup === 'turnPlanner' ? (
+      <p>TURN PLANNER HELP</p>
+    ) : infoPopup === 'ai' ? (
+      <p>AI HELP HERE</p>
     ) : null;
   const modalOverlayOpen = setupPopupOpen || Boolean(infoPopup && infoPopupContent);
 
@@ -2133,6 +2148,17 @@ function PlayArea() {
                   : `Current: ${currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}`}
               </h2>
             </div>
+            <div className="planner-header-actions">
+              <button
+                type="button"
+                className="planner-help-icon-button"
+                onClick={() => handleInfoToggle('turnPlanner')}
+                aria-label="Turn planner help"
+                title="Turn planner help"
+              >
+                ?
+              </button>
+            </div>
           </div>
           <div className="planner-line">
             <span className="planner-label">Selected</span>
@@ -2290,6 +2316,17 @@ function PlayArea() {
         <aside className="planner-panel ai-panel">
           <div className="planner-header">
             <h2 className="planner-title">AI</h2>
+            <div className="planner-header-actions">
+              <button
+                type="button"
+                className="planner-help-icon-button"
+                onClick={() => handleInfoToggle('ai')}
+                aria-label="AI help"
+                title="AI help"
+              >
+                ?
+              </button>
+            </div>
           </div>
           <div className="planner-line ai-level-line">
             <label className="planner-label" htmlFor="analysis-level">
