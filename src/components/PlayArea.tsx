@@ -180,8 +180,10 @@ const analysisMaxTimeOptions = [
   { label: '8min', ms: 480000 },
 ] as const;
 const defaultAnalysisMaxTimeIndex = 1;
+const defaultMinAnalysisLevel = 2;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 const animationPrefsStorageKey = 'kdl.settings.v1';
+const aiPrefsStorageKey = 'kdl.ai.v1';
 const setupPrefsStorageKey = 'kdl.setup.v1';
 const gameStateStorageKey = 'kdl.gameState.v1';
 const fallbackSetupPrefs = {
@@ -193,6 +195,11 @@ const fallbackSetupPrefs = {
 type AnimationPrefs = {
   animationEnabled: boolean;
   animationSpeedIndex: number;
+};
+
+type AiPrefs = {
+  minAnalysisLevel: number;
+  analysisMaxTimeIndex: number;
 };
 
 type SetupPrefs = {
@@ -212,6 +219,13 @@ type StepDirection = 'down' | 'up';
 const clampAnimationSpeedIndex = (value: number) => Math.min(animationSpeeds.length - 1, Math.max(0, value));
 const clampAnalysisMaxTimeIndex = (value: number) => Math.min(analysisMaxTimeOptions.length - 1, Math.max(0, value));
 const isFiniteNonNegative = (value: number) => Number.isFinite(value) && value >= 0;
+const parseMinAnalysisLevelDraft = (draft: string) => {
+  const parsed = Number(draft);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return Math.trunc(parsed);
+};
 const toSetupPrefsDraft = (prefs: SetupPrefs): SetupPrefsDraft => ({
   moveCards: prefs.moveCards.toString(),
   weaponCards: prefs.weaponCards.toString(),
@@ -326,6 +340,53 @@ const saveAnimationPrefs = (prefs: AnimationPrefs) => {
         animationSpeedIndex: clampAnimationSpeedIndex(prefs.animationSpeedIndex),
       }),
     );
+  } catch {
+    // Ignore persistence failures (e.g. private mode / quota).
+  }
+};
+
+const sanitizeAiPrefs = (candidate: Partial<AiPrefs>): AiPrefs => {
+  const minAnalysisLevel = isFiniteNonNegative(candidate.minAnalysisLevel ?? NaN)
+    ? Math.trunc(candidate.minAnalysisLevel as number)
+    : defaultMinAnalysisLevel;
+  const rawMaxTimeIndex =
+    typeof candidate.analysisMaxTimeIndex === 'number' && Number.isFinite(candidate.analysisMaxTimeIndex)
+      ? Math.trunc(candidate.analysisMaxTimeIndex)
+      : defaultAnalysisMaxTimeIndex;
+  return {
+    minAnalysisLevel,
+    analysisMaxTimeIndex: clampAnalysisMaxTimeIndex(rawMaxTimeIndex),
+  };
+};
+
+const loadAiPrefs = (): AiPrefs => {
+  const defaults = {
+    minAnalysisLevel: defaultMinAnalysisLevel,
+    analysisMaxTimeIndex: defaultAnalysisMaxTimeIndex,
+  };
+  if (typeof window === 'undefined') {
+    return defaults;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(aiPrefsStorageKey);
+    if (!raw) {
+      return defaults;
+    }
+    const parsed = JSON.parse(raw) as Partial<AiPrefs>;
+    return sanitizeAiPrefs(parsed);
+  } catch {
+    return defaults;
+  }
+};
+
+const saveAiPrefs = (prefs: AiPrefs) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(aiPrefsStorageKey, JSON.stringify(sanitizeAiPrefs(prefs)));
   } catch {
     // Ignore persistence failures (e.g. private mode / quota).
   }
@@ -829,8 +890,8 @@ function PlayArea() {
   const turnCounterRef = useRef(turnCounter);
   turnCounterRef.current = turnCounter;
   const initialAutoAnalysisQueuedRef = useRef(false);
-  const [minAnalysisLevelDraft, setMinAnalysisLevelDraft] = useState('2');
-  const [analysisMaxTimeIndex, setAnalysisMaxTimeIndex] = useState(defaultAnalysisMaxTimeIndex);
+  const [minAnalysisLevelDraft, setMinAnalysisLevelDraft] = useState(() => loadAiPrefs().minAnalysisLevel.toString());
+  const [analysisMaxTimeIndex, setAnalysisMaxTimeIndex] = useState(() => loadAiPrefs().analysisMaxTimeIndex);
   const [analysisIsRunning, setAnalysisIsRunning] = useState(false);
   const [analysisRunningLevel, setAnalysisRunningLevel] = useState<number | null>(null);
   const analysisRunningLevelRef = useRef<number | null>(analysisRunningLevel);
@@ -1206,6 +1267,10 @@ function PlayArea() {
 
     const minAnalysisLevel = Math.trunc(parsedLevel);
     setMinAnalysisLevelDraft(minAnalysisLevel.toString());
+    saveAiPrefs({
+      minAnalysisLevel,
+      analysisMaxTimeIndex,
+    });
     const maxTimeOption = analysisMaxTimeOptions[analysisMaxTimeIndex] ?? analysisMaxTimeOptions[0];
     const maxTimeMs = maxTimeOption.ms;
     analysisRunIdRef.current += 1;
@@ -1536,14 +1601,41 @@ function PlayArea() {
     if (analysisIsRunning) {
       return;
     }
-    setMinAnalysisLevelDraft((prev) => stepNonNegativeIntegerText(prev, direction));
+    setMinAnalysisLevelDraft((prev) => {
+      const next = stepNonNegativeIntegerText(prev, direction);
+      saveAiPrefs({
+        minAnalysisLevel: Number(next),
+        analysisMaxTimeIndex,
+      });
+      return next;
+    });
+  };
+
+  const handleAnalysisLevelChange = (rawLevel: string) => {
+    setMinAnalysisLevelDraft(rawLevel);
+    const parsedMinAnalysisLevel = parseMinAnalysisLevelDraft(rawLevel);
+    if (parsedMinAnalysisLevel === null) {
+      return;
+    }
+    saveAiPrefs({
+      minAnalysisLevel: parsedMinAnalysisLevel,
+      analysisMaxTimeIndex,
+    });
   };
 
   const handleAnalysisMaxTimeStep = (direction: StepDirection) => {
     if (analysisIsRunning) {
       return;
     }
-    setAnalysisMaxTimeIndex((prev) => clampAnalysisMaxTimeIndex(direction === 'down' ? prev - 1 : prev + 1));
+    const minAnalysisLevel = parseMinAnalysisLevelDraft(minAnalysisLevelDraft) ?? loadAiPrefs().minAnalysisLevel;
+    setAnalysisMaxTimeIndex((prev) => {
+      const nextIndex = clampAnalysisMaxTimeIndex(direction === 'down' ? prev - 1 : prev + 1);
+      saveAiPrefs({
+        minAnalysisLevel,
+        analysisMaxTimeIndex: nextIndex,
+      });
+      return nextIndex;
+    });
   };
 
   const handleAnalysisMaxTimeChange = (rawIndex: string) => {
@@ -1553,6 +1645,11 @@ function PlayArea() {
     const parsed = Number(rawIndex);
     const nextIndex = Number.isFinite(parsed) ? clampAnalysisMaxTimeIndex(Math.trunc(parsed)) : analysisMaxTimeIndex;
     setAnalysisMaxTimeIndex(nextIndex);
+    const minAnalysisLevel = parseMinAnalysisLevelDraft(minAnalysisLevelDraft) ?? loadAiPrefs().minAnalysisLevel;
+    saveAiPrefs({
+      minAnalysisLevel,
+      analysisMaxTimeIndex: nextIndex,
+    });
   };
 
   const handleSetupStep = (field: keyof SetupPrefsDraft, direction: StepDirection) => {
@@ -2593,7 +2690,7 @@ function PlayArea() {
                 min="0"
                 step="1"
                 value={minAnalysisLevelDraft}
-                onChange={(event) => setMinAnalysisLevelDraft(event.target.value)}
+                onChange={(event) => handleAnalysisLevelChange(event.target.value)}
                 disabled={analysisIsRunning}
               />
               <button
