@@ -1412,7 +1412,7 @@ function PlayArea() {
   };
 
   const handleDoSuggestedTurn = () => {
-    if (!aiSuggestion || analysisIsRunning || hasWinner) {
+    if (!aiSuggestion || hasWinner) {
       return;
     }
 
@@ -1599,7 +1599,10 @@ function PlayArea() {
     saveSetupPrefs(parsedSetup);
     setRedoStateStack([]);
     saveGameStateSnapshot(gameState);
-    advanceTurnCounter();
+    const nextTurnCounter = advanceTurnCounter();
+    if (!gameState.hasWinner()) {
+      startBestTurnAnalysis(false, nextTurnCounter);
+    }
   };
 
   const handleCancel = () => {
@@ -1708,7 +1711,7 @@ function PlayArea() {
     ? `L${analysisRunningLevel ?? '?'}, ${formatWholeSeconds(analysisCurrentLevelElapsedMs)}/${formatWholeSeconds(analysisElapsedMs)}`
     : (analysisStatusMessage ?? (aiSuggestion ? 'Analysis ready.' : 'Idle'));
   const aiCanDoIt = Boolean(
-    aiSuggestion && aiSuggestion.bestTurn.isValid && aiSuggestionIsCurrent && !analysisIsRunning,
+    aiSuggestion && aiSuggestion.bestTurn.isValid && aiSuggestionIsCurrent,
   );
   const aiSuggestedTurnText =
     aiSuggestion && aiSuggestion.bestTurn.isValid
