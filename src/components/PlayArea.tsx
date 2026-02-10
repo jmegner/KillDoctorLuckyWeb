@@ -168,6 +168,7 @@ const analysisMaxTimeOptions = [
   { label: '2s', ms: 2000 },
   { label: '6s', ms: 6000 },
   { label: '10s', ms: 10000 },
+  { label: '15s', ms: 15000 },
   { label: '30s', ms: 30000 },
   { label: '45s', ms: 45000 },
   { label: '1min', ms: 60000 },
@@ -1710,9 +1711,7 @@ function PlayArea() {
   const aiStatusText = analysisIsRunning
     ? `L${analysisRunningLevel ?? '?'}, ${formatWholeSeconds(analysisCurrentLevelElapsedMs)}/${formatWholeSeconds(analysisElapsedMs)}`
     : (analysisStatusMessage ?? (aiSuggestion ? 'Analysis ready.' : 'Idle'));
-  const aiCanDoIt = Boolean(
-    aiSuggestion && aiSuggestion.bestTurn.isValid && aiSuggestionIsCurrent,
-  );
+  const aiCanDoIt = Boolean(aiSuggestion && aiSuggestion.bestTurn.isValid && aiSuggestionIsCurrent);
   const aiSuggestedTurnText =
     aiSuggestion && aiSuggestion.bestTurn.isValid
       ? formatSuggestedTurnText(aiSuggestion.bestTurn)
