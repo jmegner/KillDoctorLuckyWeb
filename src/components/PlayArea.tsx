@@ -2391,15 +2391,15 @@ function PlayArea() {
             </div>
           </div>
           <div className="planner-line">
-            <span className="planner-label">Selected</span>
+            <span className="planner-label planner-label--small">Selected</span>
             <span className="planner-value">{selectedLabel + selectedSuffix}</span>
           </div>
           <div className="planner-line">
-            <span className="planner-label">Planned</span>
+            <span className="planner-label planner-label--small">Planned</span>
             <span className="planner-value">{planSummary}</span>
           </div>
           <div className="planner-line">
-            <span className="planner-label">Preview</span>
+            <span className="planner-label planner-label--small">Preview</span>
             <span className="planner-value planner-value--preview">
               {previewDisplay.message
                 ? previewDisplay.message

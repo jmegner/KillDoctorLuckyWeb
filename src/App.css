@@ -79,6 +79,7 @@
   background: var(--paper);
   border: 4px solid var(--line);
   border-radius: 0;
+  margin-inline: 1px;
   padding: 4px;
   box-shadow: var(--shadow);
 }
@@ -236,6 +237,11 @@
   box-shadow: var(--shadow-soft);
 }
 
+.side-column > .planner-panel:first-child,
+.ai-panel {
+  margin-inline: 1px;
+}
+
 .planner-header {
   display: flex;
   justify-content: space-between;
@@ -318,6 +324,10 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--ink-muted);
+}
+
+.planner-label--small {
+  font-size: 0.72rem;
 }
 
 .planner-value {
