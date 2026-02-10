@@ -178,7 +178,7 @@ const analysisMaxTimeOptions = [
   { label: '5min', ms: 300000 },
   { label: '8min', ms: 480000 },
 ] as const;
-const defaultAnalysisMaxTimeIndex = 2;
+const defaultAnalysisMaxTimeIndex = 1;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 const animationPrefsStorageKey = 'kdl.settings.v1';
 const setupPrefsStorageKey = 'kdl.setup.v1';
@@ -827,6 +827,7 @@ function PlayArea() {
   const [turnCounter, setTurnCounter] = useState(0);
   const turnCounterRef = useRef(turnCounter);
   turnCounterRef.current = turnCounter;
+  const initialAutoAnalysisQueuedRef = useRef(false);
   const [minAnalysisLevelDraft, setMinAnalysisLevelDraft] = useState('2');
   const [analysisMaxTimeIndex, setAnalysisMaxTimeIndex] = useState(defaultAnalysisMaxTimeIndex);
   const [analysisIsRunning, setAnalysisIsRunning] = useState(false);
@@ -1156,7 +1157,10 @@ function PlayArea() {
     resetAiOutputs();
     setRedoStateStack([]);
     saveGameStateSnapshot(gameState);
-    setTurnCounter((prev) => prev + 1);
+    const nextTurnCounter = advanceTurnCounter();
+    if (!(gameState?.hasWinner() ?? true)) {
+      startBestTurnAnalysis(false, nextTurnCounter);
+    }
     startAnimationFromState(initialRoomsForAnimation);
   };
   const handleSubmit = () => {
@@ -1176,12 +1180,19 @@ function PlayArea() {
     return { moves, order };
   };
 
-  const startBestTurnAnalysis = (autoSubmit: boolean) => {
+  const advanceTurnCounter = () => {
+    const nextTurnCounter = turnCounterRef.current + 1;
+    turnCounterRef.current = nextTurnCounter;
+    setTurnCounter(nextTurnCounter);
+    return nextTurnCounter;
+  };
+
+  const startBestTurnAnalysis = (autoSubmit: boolean, sourceTurnCounterOverride?: number) => {
     if (!gameState) {
       setAnalysisStatusMessage('Analysis unavailable.');
       return;
     }
-    if (hasWinner) {
+    if (gameState.hasWinner()) {
       setAnalysisStatusMessage('Game already has a winner.');
       return;
     }
@@ -1198,7 +1209,7 @@ function PlayArea() {
     const maxTimeMs = maxTimeOption.ms;
     analysisRunIdRef.current += 1;
     const runId = analysisRunIdRef.current;
-    const sourceTurnCounter = turnCounterRef.current;
+    const sourceTurnCounter = sourceTurnCounterOverride ?? turnCounterRef.current;
     const sourceStateJson = gameState.exportStateJson();
 
     stopAnalysisTimer();
@@ -1241,6 +1252,7 @@ function PlayArea() {
 
     let currentLevel = minAnalysisLevel;
     let deepestCompletedSuggestion: AiSuggestion | null = null;
+    let timeLimitReached = false;
 
     const completeAndMaybeSubmit = (
       completionMessage: string,
@@ -1276,7 +1288,12 @@ function PlayArea() {
       const now = performance.now();
       const elapsedMs = Math.max(0, now - timerStart);
       setAnalysisElapsedMs(elapsedMs);
-      if (elapsedMs >= maxTimeMs) {
+      if (timeLimitReached) {
+        const levelAtTimeout = analysisRunningLevelRef.current ?? currentLevel;
+        completeAndMaybeSubmit(`Time limit during L${levelAtTimeout}.`, { terminateWorker: true });
+        return;
+      }
+      if (currentLevel > minAnalysisLevel && elapsedMs >= maxTimeMs) {
         const levelAtTimeout = analysisRunningLevelRef.current ?? currentLevel;
         completeAndMaybeSubmit(`Time limit during L${levelAtTimeout}.`, { terminateWorker: true });
         return;
@@ -1301,7 +1318,11 @@ function PlayArea() {
       if (runId !== analysisRunIdRef.current) {
         return;
       }
+      timeLimitReached = true;
       const levelAtTimeout = analysisRunningLevelRef.current ?? currentLevel;
+      if (levelAtTimeout <= minAnalysisLevel) {
+        return;
+      }
       analysisRunIdRef.current += 1;
       completeAndMaybeSubmit(`Time limit during L${levelAtTimeout}.`, { terminateWorker: true });
     }, maxTimeMs);
@@ -1379,7 +1400,7 @@ function PlayArea() {
     }
     const levelAtCancel = analysisRunningLevelRef.current;
     analysisRunIdRef.current += 1;
-    stopAnalysisRun(`Cancelled during L${levelAtCancel ?? '?'}.`);
+    stopAnalysisRun(`cancelled during L${levelAtCancel ?? '?'}`);
   };
 
   const handleThink = () => {
@@ -1426,7 +1447,10 @@ function PlayArea() {
     setValidationMessage(null);
     resetAiOutputs();
     saveGameStateSnapshot(gameState);
-    setTurnCounter((prev) => prev + 1);
+    const nextTurnCounter = advanceTurnCounter();
+    if (!(gameState?.hasWinner() ?? true)) {
+      startBestTurnAnalysis(false, nextTurnCounter);
+    }
   };
 
   const handleRedo = () => {
@@ -1457,7 +1481,10 @@ function PlayArea() {
     setValidationMessage(null);
     resetAiOutputs();
     saveGameStateSnapshot(gameState);
-    setTurnCounter((prev) => prev + 1);
+    const nextTurnCounter = advanceTurnCounter();
+    if (!(gameState?.hasWinner() ?? true)) {
+      startBestTurnAnalysis(false, nextTurnCounter);
+    }
   };
 
   const handleReset = () => {
@@ -1477,7 +1504,10 @@ function PlayArea() {
     resetAiOutputs();
     setRedoStateStack([]);
     saveGameStateSnapshot(gameState);
-    setTurnCounter((prev) => prev + 1);
+    const nextTurnCounter = advanceTurnCounter();
+    if (!gameState.hasWinner()) {
+      startBestTurnAnalysis(false, nextTurnCounter);
+    }
   };
 
   const handleSetupOpen = () => {
@@ -1569,7 +1599,7 @@ function PlayArea() {
     saveSetupPrefs(parsedSetup);
     setRedoStateStack([]);
     saveGameStateSnapshot(gameState);
-    setTurnCounter((prev) => prev + 1);
+    advanceTurnCounter();
   };
 
   const handleCancel = () => {
@@ -1689,6 +1719,13 @@ function PlayArea() {
       ? `L${aiSuggestion.analysisLevel}, ${formatHeuristicScore(aiSuggestion.bestTurn.heuristicScore)}, ${formatElapsedTime(aiSuggestion.elapsedMs)}`
       : '-';
   const aiStaleMessage = aiSuggestion && !aiSuggestionIsCurrent ? 'Suggestion is stale. Run Think again.' : null;
+
+  if (!initialAutoAnalysisQueuedRef.current && gameState && !hasWinner) {
+    initialAutoAnalysisQueuedRef.current = true;
+    queueMicrotask(() => {
+      startBestTurnAnalysis(false, turnCounterRef.current);
+    });
+  }
 
   const selectedLabel = selectedPieceId ? pieceConfig[selectedPieceId].label : 'None';
   const selectedSuffix = selectedPieceId && plannedMoves[selectedPieceId] !== undefined ? ' (update)' : '';
