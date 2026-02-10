@@ -2000,6 +2000,19 @@ function PlayArea() {
       </>
     ) : infoPopup === 'ui' ? (
       <>
+        <p>
+          You click the pieces, the rooms, and the "Submit" button to plan and submit your turn. For more info, see the
+          help in the turn planner box.
+        </p>
+        <p>The colorful player info box has a help popup if you click anywhere in the box.</p>
+        <p>The AI box can be used to get AI suggestions and execute the suggested moves.</p>
+        <p>
+          The boxes of text at the bottom are a CLI style... 1) current game state summary, 2) recent moves and actions,
+          and 3) terse history of all normal player turns.
+        </p>
+      </>
+    ) : infoPopup === 'turnPlanner' ? (
+      <>
         <h4>Movement / Turn Planning</h4>
         <p>
           There are a few ways to choose movements for your piece and the strangers. You can click the "Submit" button
@@ -2037,9 +2050,14 @@ function PlayArea() {
           and stranger turns. Clicking Redo will redo the last undone plan, and you can redo multiple times if you had
           undone multiple times.
         </p>
+      </>
+    ) : infoPopup === 'ai' ? (
+      <p>AI HELP HERE</p>
+    ) : infoPopup === 'playerInfoBox' ? (
+      <>
         <h4>Player Info Box</h4>
         <p>
-          The box with 4 colorful rows, one for each player, shows vital information about each player. The columns...
+          This box with 4 colorful rows, one for each player, shows vital information about each player. The columns...
         </p>
         <ul>
           <li>D: number of rooms/turns until the Dr arrives at the player's current room.</li>
@@ -2050,12 +2068,6 @@ function PlayArea() {
           <li>C: number of clovers if you were to convert all their cards.</li>
         </ul>
       </>
-    ) : infoPopup === 'turnPlanner' ? (
-      <p>TURN PLANNER HELP</p>
-    ) : infoPopup === 'ai' ? (
-      <p>AI HELP HERE</p>
-    ) : infoPopup === 'playerInfoBox' ? (
-      <p>PLAYER INFO BOX HELP HERE</p>
     ) : null;
   const modalOverlayOpen = setupPopupOpen || Boolean(infoPopup && infoPopupContent);
 
