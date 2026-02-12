@@ -1832,6 +1832,7 @@ function PlayArea() {
   const distanceByRoom = selectedRoomId !== undefined ? buildRoomDistanceMap(selectedRoomId) : null;
   const actionOverlayLayout = actionOverlay ? buildActionOverlayLayout(actionOverlay) : null;
   const winnerOverlayLayout = winnerOverlayText ? buildWinnerOverlayLayout(winnerOverlayText) : null;
+  const showWinnerOverlay = hasWinner && !animatedPieces;
 
   const stopAnimation = () => {
     const current = animationRef.current;
@@ -2444,7 +2445,7 @@ function PlayArea() {
                   </text>
                 </g>
               )}
-              {hasWinner && winnerOverlayText && winnerOverlayLayout && (
+              {showWinnerOverlay && winnerOverlayText && winnerOverlayLayout && (
                 <g className="winner-overlay" aria-hidden>
                   <rect
                     className="winner-overlay-box"
