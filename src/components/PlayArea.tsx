@@ -99,6 +99,7 @@ type AiSuggestion = {
   bestTurn: BestTurnResponse;
   previewRaw: string;
   elapsedMs: number;
+  levelElapsedMs: number;
 };
 
 type BoardRoomRaw = {
@@ -1318,6 +1319,7 @@ function PlayArea() {
 
     let currentLevel = minAnalysisLevel;
     let deepestCompletedSuggestion: AiSuggestion | null = null;
+    let mostRecentCompletedLevelElapsedMs: number | null = null;
     let timeLimitReached = false;
 
     const completeAndMaybeSubmit = (
@@ -1363,6 +1365,17 @@ function PlayArea() {
         const levelAtTimeout = analysisRunningLevelRef.current ?? currentLevel;
         completeAndMaybeSubmit(`Time limit during L${levelAtTimeout}.`, { terminateWorker: true });
         return;
+      }
+      if (currentLevel > minAnalysisLevel && mostRecentCompletedLevelElapsedMs !== null) {
+        const remainingMs = Math.max(0, maxTimeMs - elapsedMs);
+        if (remainingMs < mostRecentCompletedLevelElapsedMs) {
+          const deepestCompletedLevel = deepestCompletedSuggestion?.analysisLevel ?? currentLevel - 1;
+          completeAndMaybeSubmit(
+            `smart stop at L${deepestCompletedLevel}`,
+            { terminateWorker: true },
+          );
+          return;
+        }
       }
       analysisTimingRef.current = {
         runStartMs: timerStart,
@@ -1416,7 +1429,8 @@ function PlayArea() {
 
       setAnalysisElapsedMs(completedElapsedMs);
       const timing = analysisTimingRef.current;
-      setAnalysisCurrentLevelElapsedMs(Math.max(0, now - (timing?.levelStartMs ?? now)));
+      const completedLevelElapsedMs = Math.max(0, now - (timing?.levelStartMs ?? now));
+      setAnalysisCurrentLevelElapsedMs(completedLevelElapsedMs);
       if (!bestTurn.isValid) {
         const invalidMessage = bestTurn.validationMessage || 'No suggested turn found.';
         if (!deepestCompletedSuggestion) {
@@ -1433,7 +1447,9 @@ function PlayArea() {
         bestTurn,
         previewRaw: message.previewRaw,
         elapsedMs: completedElapsedMs,
+        levelElapsedMs: completedLevelElapsedMs,
       };
+      mostRecentCompletedLevelElapsedMs = completedLevelElapsedMs;
       setAiSuggestion(deepestCompletedSuggestion);
 
       if (isWinningHeuristicScore(bestTurn.heuristicScore)) {
@@ -1815,7 +1831,7 @@ function PlayArea() {
       : 'No suggestion yet.';
   const aiStatsText =
     aiSuggestion && aiSuggestion.bestTurn.isValid
-      ? `L${aiSuggestion.analysisLevel}, ${formatHeuristicScore(aiSuggestion.bestTurn.heuristicScore)}, ${formatElapsedTime(aiSuggestion.elapsedMs)}`
+      ? `L${aiSuggestion.analysisLevel}, ${formatHeuristicScore(aiSuggestion.bestTurn.heuristicScore)}, ${formatElapsedTime(aiSuggestion.levelElapsedMs)}`
       : '-';
   const aiStaleMessage = aiSuggestion && !aiSuggestionIsCurrent ? 'Suggestion is stale. Run Think again.' : null;
 
