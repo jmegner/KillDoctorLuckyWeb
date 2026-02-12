@@ -187,6 +187,7 @@ const animationPrefsStorageKey = 'kdl.settings.v1';
 const aiPrefsStorageKey = 'kdl.ai.v1';
 const setupPrefsStorageKey = 'kdl.setup.v1';
 const gameStateStorageKey = 'kdl.gameState.v1';
+const redoStateStackStorageKey = 'kdl.redoStack.v1';
 const fallbackSetupPrefs = {
   moveCards: 2,
   weaponCards: 2,
@@ -413,6 +414,56 @@ const saveGameStateSnapshot = (gameState: GameStateHandle | null) => {
   }
 };
 
+const loadRedoStateStack = (): string[] => {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    const hasGameStateSnapshot = window.localStorage.getItem(gameStateStorageKey) !== null;
+    if (!hasGameStateSnapshot) {
+      window.localStorage.removeItem(redoStateStackStorageKey);
+      return [];
+    }
+
+    const raw = window.localStorage.getItem(redoStateStackStorageKey);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      window.localStorage.removeItem(redoStateStackStorageKey);
+      return [];
+    }
+    return parsed.filter((snapshot): snapshot is string => typeof snapshot === 'string');
+  } catch {
+    try {
+      window.localStorage.removeItem(redoStateStackStorageKey);
+    } catch {
+      // Ignore cleanup failures.
+    }
+    return [];
+  }
+};
+
+const saveRedoStateStack = (redoStateStack: string[]) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const snapshots = redoStateStack.filter((snapshot): snapshot is string => typeof snapshot === 'string');
+    if (snapshots.length === 0) {
+      window.localStorage.removeItem(redoStateStackStorageKey);
+      return;
+    }
+    window.localStorage.setItem(redoStateStackStorageKey, JSON.stringify(snapshots));
+  } catch {
+    // Ignore persistence failures (e.g. private mode / quota).
+  }
+};
+
 const loadGameStateSnapshot = (gameState: GameStateHandle) => {
   if (typeof window === 'undefined') {
     return;
@@ -427,6 +478,7 @@ const loadGameStateSnapshot = (gameState: GameStateHandle) => {
     const importError = gameState.importStateJson(rawSnapshot);
     if (importError) {
       window.localStorage.removeItem(gameStateStorageKey);
+      window.localStorage.removeItem(redoStateStackStorageKey);
       console.warn(`Saved game ignored: ${importError}`);
       return;
     }
@@ -435,6 +487,7 @@ const loadGameStateSnapshot = (gameState: GameStateHandle) => {
   } catch {
     try {
       window.localStorage.removeItem(gameStateStorageKey);
+      window.localStorage.removeItem(redoStateStackStorageKey);
     } catch {
       // Ignore cleanup failures.
     }
@@ -894,7 +947,7 @@ function PlayArea() {
   const [setupPrefsDraft, setSetupPrefsDraft] = useState<SetupPrefsDraft>(() =>
     toSetupPrefsDraft(loadSetupPrefs(currentSetupPrefs)),
   );
-  const [redoStateStack, setRedoStateStack] = useState<string[]>([]);
+  const [redoStateStack, setRedoStateStack] = useState<string[]>(() => (gameState ? loadRedoStateStack() : []));
   const [turnCounter, setTurnCounter] = useState(0);
   const turnCounterRef = useRef(turnCounter);
   turnCounterRef.current = turnCounter;
@@ -1243,6 +1296,7 @@ function PlayArea() {
     }
     resetAiOutputs();
     setRedoStateStack([]);
+    saveRedoStateStack([]);
     saveGameStateSnapshot(gameState);
     const nextTurnCounter = advanceTurnCounter();
     if (!gameState.hasWinner()) {
@@ -1559,7 +1613,9 @@ function PlayArea() {
       setValidationMessage('No previous turn to undo.');
       return;
     }
-    setRedoStateStack((prev) => [...prev, snapshotBeforeUndo]);
+    const nextRedoStateStack = [...redoStateStack, snapshotBeforeUndo];
+    setRedoStateStack(nextRedoStateStack);
+    saveRedoStateStack(nextRedoStateStack);
     stopAnimation();
     setPlannedMoves({});
     setPlanOrder([]);
@@ -1593,7 +1649,9 @@ function PlayArea() {
       return;
     }
 
-    setRedoStateStack((prev) => prev.slice(0, -1));
+    const nextRedoStateStack = redoStateStack.slice(0, -1);
+    setRedoStateStack(nextRedoStateStack);
+    saveRedoStateStack(nextRedoStateStack);
     stopAnimation();
     setPlannedMoves({});
     setPlanOrder([]);
@@ -1623,6 +1681,7 @@ function PlayArea() {
     setValidationMessage(null);
     resetAiOutputs();
     setRedoStateStack([]);
+    saveRedoStateStack([]);
     saveGameStateSnapshot(gameState);
     const nextTurnCounter = advanceTurnCounter();
     if (!gameState.hasWinner()) {
@@ -1760,6 +1819,7 @@ function PlayArea() {
     resetAiOutputs();
     saveSetupPrefs(parsedSetup);
     setRedoStateStack([]);
+    saveRedoStateStack([]);
     saveGameStateSnapshot(gameState);
     const nextTurnCounter = advanceTurnCounter();
     if (!gameState.hasWinner()) {
