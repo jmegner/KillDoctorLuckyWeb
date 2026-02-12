@@ -43,7 +43,7 @@
 
 .play-area {
   width: 100%;
-  max-width: none;
+  max-width: 1200px;
   margin: 1px auto;
   padding: 6px 1px 8px;
   display: grid;
