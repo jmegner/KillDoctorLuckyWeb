@@ -14,9 +14,9 @@
 
 .app-header {
   width: 100%;
-  max-width: 1200px;
+  max-width: none;
   margin: 0 auto;
-  padding: 6px 8px 0;
+  padding: 6px 1px 0;
 }
 
 .app-kicker {
@@ -43,9 +43,9 @@
 
 .play-area {
   width: 100%;
-  max-width: 1200px;
+  max-width: none;
   margin: 1px auto;
-  padding: 6px 8px 8px;
+  padding: 6px 1px 8px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 8px;
@@ -717,6 +717,7 @@ body:has(.info-overlay) {
 @media (max-width: 980px) {
   .play-area {
     grid-template-columns: 1fr;
+    padding-inline: 0;
   }
 
   .side-column {
