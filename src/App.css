@@ -377,6 +377,29 @@
   align-items: center;
 }
 
+.ai-control-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.ai-control-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.ai-control-option input {
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .ai-level-input {
   width: 4.1rem;
   min-width: 0;

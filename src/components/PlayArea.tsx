@@ -201,6 +201,8 @@ type AnimationPrefs = {
 type AiPrefs = {
   minAnalysisLevel: number;
   analysisMaxTimeIndex: number;
+  controlP1: boolean;
+  controlP3: boolean;
 };
 
 type SetupPrefs = {
@@ -354,9 +356,13 @@ const sanitizeAiPrefs = (candidate: Partial<AiPrefs>): AiPrefs => {
     typeof candidate.analysisMaxTimeIndex === 'number' && Number.isFinite(candidate.analysisMaxTimeIndex)
       ? Math.trunc(candidate.analysisMaxTimeIndex)
       : defaultAnalysisMaxTimeIndex;
+  const controlP1 = typeof candidate.controlP1 === 'boolean' ? candidate.controlP1 : false;
+  const controlP3 = typeof candidate.controlP3 === 'boolean' ? candidate.controlP3 : false;
   return {
     minAnalysisLevel,
     analysisMaxTimeIndex: clampAnalysisMaxTimeIndex(rawMaxTimeIndex),
+    controlP1,
+    controlP3,
   };
 };
 
@@ -364,6 +370,8 @@ const loadAiPrefs = (): AiPrefs => {
   const defaults = {
     minAnalysisLevel: defaultMinAnalysisLevel,
     analysisMaxTimeIndex: defaultAnalysisMaxTimeIndex,
+    controlP1: false,
+    controlP3: false,
   };
   if (typeof window === 'undefined') {
     return defaults;
@@ -893,6 +901,8 @@ function PlayArea() {
   const initialAutoAnalysisQueuedRef = useRef(false);
   const [minAnalysisLevelDraft, setMinAnalysisLevelDraft] = useState(() => loadAiPrefs().minAnalysisLevel.toString());
   const [analysisMaxTimeIndex, setAnalysisMaxTimeIndex] = useState(() => loadAiPrefs().analysisMaxTimeIndex);
+  const [aiControlP1, setAiControlP1] = useState(() => loadAiPrefs().controlP1);
+  const [aiControlP3, setAiControlP3] = useState(() => loadAiPrefs().controlP3);
   const [analysisIsRunning, setAnalysisIsRunning] = useState(false);
   const [analysisRunningLevel, setAnalysisRunningLevel] = useState<number | null>(null);
   const analysisRunningLevelRef = useRef<number | null>(analysisRunningLevel);
@@ -930,6 +940,11 @@ function PlayArea() {
     speed: number;
     rafId: number | null;
   } | null>(null);
+  const queuedAutoSubmitRef = useRef<{
+    moves: Partial<Record<PieceId, number>>;
+    order: PieceId[];
+    sourceTurnCounter: number;
+  } | null>(null);
   const animationSpeed = animationSpeeds[animationSpeedIndex];
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
   const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
@@ -943,6 +958,16 @@ function PlayArea() {
     winnerPieceIdRaw === 'player1' || winnerPieceIdRaw === 'player2' ? (winnerPieceIdRaw as PieceId) : null;
   const winnerOverlayText = winnerPieceId ? `${pieceConfig[winnerPieceId].label} wins!` : null;
   const currentPlayerPieceId = gameState ? (gameState.currentPlayerPieceId() as PieceId) : null;
+  const saveCurrentAiPrefs = (overrides?: Partial<AiPrefs>) => {
+    const fallbackAiPrefs = loadAiPrefs();
+    saveAiPrefs({
+      minAnalysisLevel: parseMinAnalysisLevelDraft(minAnalysisLevelDraft) ?? fallbackAiPrefs.minAnalysisLevel,
+      analysisMaxTimeIndex,
+      controlP1: aiControlP1,
+      controlP3: aiControlP3,
+      ...overrides,
+    });
+  };
   const pieceRooms = gameState ? gameState.piecePositions() : null;
   const pieceRoomMap = (() => {
     const map = new Map<PieceId, number>();
@@ -1179,12 +1204,11 @@ function PlayArea() {
       animateFromCurrentState?: boolean;
     },
   ) => {
-    if (hasWinner) {
+    if (!gameState || gameState.hasWinner()) {
       return;
     }
     const initialRoomsForAnimation =
-      options?.animateFromCurrentState && gameState
-        ? Array.from(gameState.piecePositions(), (value) => Number(value))
+      options?.animateFromCurrentState ? Array.from(gameState.piecePositions(), (value) => Number(value))
         : null;
     const planEntries = order
       .map((pieceId) => {
@@ -1195,14 +1219,14 @@ function PlayArea() {
         return { pieceId, roomId };
       })
       .filter((entry): entry is TurnPlanEntry => entry !== null);
-    const validation = gameState?.validateTurnPlan(JSON.stringify(planEntries));
+    const validation = gameState.validateTurnPlan(JSON.stringify(planEntries));
     if (validation) {
       setPlannedMoves(moves);
       setPlanOrder(order);
       setValidationMessage(validation);
       return;
     }
-    const applyError = gameState?.applyTurnPlan(JSON.stringify(planEntries)) ?? '';
+    const applyError = gameState.applyTurnPlan(JSON.stringify(planEntries));
     if (applyError) {
       setPlannedMoves(moves);
       setPlanOrder(order);
@@ -1221,7 +1245,7 @@ function PlayArea() {
     setRedoStateStack([]);
     saveGameStateSnapshot(gameState);
     const nextTurnCounter = advanceTurnCounter();
-    if (!(gameState?.hasWinner() ?? true)) {
+    if (!gameState.hasWinner()) {
       startBestTurnAnalysis(false, nextTurnCounter);
     }
     startAnimationFromState(initialRoomsForAnimation);
@@ -1268,7 +1292,7 @@ function PlayArea() {
 
     const minAnalysisLevel = Math.trunc(parsedLevel);
     setMinAnalysisLevelDraft(minAnalysisLevel.toString());
-    saveAiPrefs({
+    saveCurrentAiPrefs({
       minAnalysisLevel,
       analysisMaxTimeIndex,
     });
@@ -1278,6 +1302,11 @@ function PlayArea() {
     const runId = analysisRunIdRef.current;
     const sourceTurnCounter = sourceTurnCounterOverride ?? turnCounterRef.current;
     const sourceStateJson = gameState.exportStateJson();
+    const sourceCurrentPlayerPieceIdRaw = gameState.currentPlayerPieceId();
+    const sourceCurrentPlayerPieceId = isPieceId(sourceCurrentPlayerPieceIdRaw) ? sourceCurrentPlayerPieceIdRaw : null;
+    const autoSubmitFromControl =
+      sourceCurrentPlayerPieceId === 'player1' ? aiControlP1 : sourceCurrentPlayerPieceId === 'player2' ? aiControlP3 : false;
+    const shouldAutoSubmit = autoSubmit || autoSubmitFromControl;
 
     stopAnalysisTimer();
     if (analysisIsRunning) {
@@ -1288,7 +1317,7 @@ function PlayArea() {
     analysisRunningLevelRef.current = minAnalysisLevel;
     setAnalysisRunningLevel(minAnalysisLevel);
     setAnalysisCurrentLevelElapsedMs(0);
-    setAnalysisStatusMessage(autoSubmit ? 'Analyzing and auto-submitting...' : 'Analyzing...');
+    setAnalysisStatusMessage(shouldAutoSubmit ? 'Analyzing and auto-submitting...' : 'Analyzing...');
     setAnalysisElapsedMs(0);
 
     const timerStart = performance.now();
@@ -1329,7 +1358,7 @@ function PlayArea() {
       },
     ) => {
       const terminateWorker = options?.terminateWorker ?? false;
-      if (!autoSubmit) {
+      if (!shouldAutoSubmit) {
         stopAnalysisRun(completionMessage, { terminateWorker });
         return;
       }
@@ -1344,8 +1373,17 @@ function PlayArea() {
         return;
       }
 
-      stopAnalysisRun(`${completionMessage} Suggested turn submitted.`, { terminateWorker });
       const planned = entriesToMovesAndOrder(deepestCompletedSuggestion.bestTurn.suggestedTurn);
+      if (animationRef.current) {
+        queuedAutoSubmitRef.current = {
+          moves: planned.moves,
+          order: planned.order,
+          sourceTurnCounter,
+        };
+        stopAnalysisRun(`${completionMessage} Suggested turn queued.`, { terminateWorker });
+        return;
+      }
+      stopAnalysisRun(`${completionMessage} Suggested turn submitted.`, { terminateWorker });
       submitPlan(planned.moves, planned.order, { animateFromCurrentState: true });
     };
 
@@ -1619,7 +1657,7 @@ function PlayArea() {
     }
     setMinAnalysisLevelDraft((prev) => {
       const next = stepNonNegativeIntegerText(prev, direction);
-      saveAiPrefs({
+      saveCurrentAiPrefs({
         minAnalysisLevel: Number(next),
         analysisMaxTimeIndex,
       });
@@ -1633,7 +1671,7 @@ function PlayArea() {
     if (parsedMinAnalysisLevel === null) {
       return;
     }
-    saveAiPrefs({
+    saveCurrentAiPrefs({
       minAnalysisLevel: parsedMinAnalysisLevel,
       analysisMaxTimeIndex,
     });
@@ -1643,11 +1681,9 @@ function PlayArea() {
     if (analysisIsRunning) {
       return;
     }
-    const minAnalysisLevel = parseMinAnalysisLevelDraft(minAnalysisLevelDraft) ?? loadAiPrefs().minAnalysisLevel;
     setAnalysisMaxTimeIndex((prev) => {
       const nextIndex = clampAnalysisMaxTimeIndex(direction === 'down' ? prev - 1 : prev + 1);
-      saveAiPrefs({
-        minAnalysisLevel,
+      saveCurrentAiPrefs({
         analysisMaxTimeIndex: nextIndex,
       });
       return nextIndex;
@@ -1661,10 +1697,22 @@ function PlayArea() {
     const parsed = Number(rawIndex);
     const nextIndex = Number.isFinite(parsed) ? clampAnalysisMaxTimeIndex(Math.trunc(parsed)) : analysisMaxTimeIndex;
     setAnalysisMaxTimeIndex(nextIndex);
-    const minAnalysisLevel = parseMinAnalysisLevelDraft(minAnalysisLevelDraft) ?? loadAiPrefs().minAnalysisLevel;
-    saveAiPrefs({
-      minAnalysisLevel,
+    saveCurrentAiPrefs({
       analysisMaxTimeIndex: nextIndex,
+    });
+  };
+
+  const handleAiControlChange = (player: 'player1' | 'player2', checked: boolean) => {
+    if (player === 'player1') {
+      setAiControlP1(checked);
+      saveCurrentAiPrefs({
+        controlP1: checked,
+      });
+      return;
+    }
+    setAiControlP3(checked);
+    saveCurrentAiPrefs({
+      controlP3: checked,
     });
   };
 
@@ -1850,7 +1898,9 @@ function PlayArea() {
   const winnerOverlayLayout = winnerOverlayText ? buildWinnerOverlayLayout(winnerOverlayText) : null;
   const showWinnerOverlay = hasWinner && !animatedPieces;
 
-  const stopAnimation = () => {
+  const stopAnimation = (options?: { executeQueuedAutoSubmit?: boolean }) => {
+    const queuedAutoSubmit = options?.executeQueuedAutoSubmit ? queuedAutoSubmitRef.current : null;
+    queuedAutoSubmitRef.current = null;
     const current = animationRef.current;
     if (current && current.rafId !== null) {
       cancelAnimationFrame(current.rafId);
@@ -1859,6 +1909,13 @@ function PlayArea() {
     setAnimatedPieces(null);
     setActionOverlay(null);
     setActionHighlightPieceId(null);
+    if (!queuedAutoSubmit) {
+      return;
+    }
+    if (queuedAutoSubmit.sourceTurnCounter !== turnCounterRef.current) {
+      return;
+    }
+    submitPlan(queuedAutoSubmit.moves, queuedAutoSubmit.order, { animateFromCurrentState: true });
   };
 
   const buildPositionsForRooms = (roomIds: number[]) => {
@@ -2037,7 +2094,7 @@ function PlayArea() {
       if (progress >= 1) {
         const nextIndex = current.segmentIndex + 1;
         if (nextIndex >= current.segments.length) {
-          stopAnimation();
+          stopAnimation({ executeQueuedAutoSubmit: true });
           return;
         }
         current.segmentIndex = nextIndex;
@@ -2659,7 +2716,9 @@ function PlayArea() {
         </aside>
         <aside className="planner-panel ai-panel">
           <div className="planner-header">
-            <h2 className="planner-title">AI</h2>
+            <h2 className="planner-title" style={{ backgroundColor: currentPlayerColor, color: currentPlayerTextColor }}>
+              AI
+            </h2>
             <div className="planner-header-actions">
               <button
                 type="button"
@@ -2693,6 +2752,27 @@ function PlayArea() {
             <button className="planner-button" onClick={handleAnalysisCancel} disabled={!analysisIsRunning}>
               Cancel
             </button>
+          </div>
+          <div className="planner-line">
+            <span className="planner-label">Control</span>
+            <span className="planner-value ai-control-value">
+              <label className="ai-control-option">
+                <input
+                  type="checkbox"
+                  checked={aiControlP1}
+                  onChange={(event) => handleAiControlChange('player1', event.target.checked)}
+                />
+                P1
+              </label>
+              <label className="ai-control-option">
+                <input
+                  type="checkbox"
+                  checked={aiControlP3}
+                  onChange={(event) => handleAiControlChange('player2', event.target.checked)}
+                />
+                P3
+              </label>
+            </span>
           </div>
           <div className="planner-line ai-level-line">
             <label className="planner-label" htmlFor="analysis-min-level">
