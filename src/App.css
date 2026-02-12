@@ -14,7 +14,7 @@
 
 .app-header {
   width: 100%;
-  max-width: none;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 6px 1px 0;
 }
