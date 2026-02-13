@@ -956,6 +956,10 @@ function PlayArea() {
   const [analysisMaxTimeIndex, setAnalysisMaxTimeIndex] = useState(() => loadAiPrefs().analysisMaxTimeIndex);
   const [aiControlP1, setAiControlP1] = useState(() => loadAiPrefs().controlP1);
   const [aiControlP3, setAiControlP3] = useState(() => loadAiPrefs().controlP3);
+  const aiControlP1Ref = useRef(aiControlP1);
+  aiControlP1Ref.current = aiControlP1;
+  const aiControlP3Ref = useRef(aiControlP3);
+  aiControlP3Ref.current = aiControlP3;
   const [analysisIsRunning, setAnalysisIsRunning] = useState(false);
   const [analysisRunningLevel, setAnalysisRunningLevel] = useState<number | null>(null);
   const analysisRunningLevelRef = useRef<number | null>(analysisRunningLevel);
@@ -1016,9 +1020,19 @@ function PlayArea() {
     saveAiPrefs({
       minAnalysisLevel: parseMinAnalysisLevelDraft(minAnalysisLevelDraft) ?? fallbackAiPrefs.minAnalysisLevel,
       analysisMaxTimeIndex,
-      controlP1: aiControlP1,
-      controlP3: aiControlP3,
+      controlP1: aiControlP1Ref.current,
+      controlP3: aiControlP3Ref.current,
       ...overrides,
+    });
+  };
+  const updateAiControlPrefs = (nextControlP1: boolean, nextControlP3: boolean) => {
+    aiControlP1Ref.current = nextControlP1;
+    aiControlP3Ref.current = nextControlP3;
+    setAiControlP1(nextControlP1);
+    setAiControlP3(nextControlP3);
+    saveCurrentAiPrefs({
+      controlP1: nextControlP1,
+      controlP3: nextControlP3,
     });
   };
   const pieceRooms = gameState ? gameState.piecePositions() : null;
@@ -1359,7 +1373,11 @@ function PlayArea() {
     const sourceCurrentPlayerPieceIdRaw = gameState.currentPlayerPieceId();
     const sourceCurrentPlayerPieceId = isPieceId(sourceCurrentPlayerPieceIdRaw) ? sourceCurrentPlayerPieceIdRaw : null;
     const autoSubmitFromControl =
-      sourceCurrentPlayerPieceId === 'player1' ? aiControlP1 : sourceCurrentPlayerPieceId === 'player2' ? aiControlP3 : false;
+      sourceCurrentPlayerPieceId === 'player1'
+        ? aiControlP1Ref.current
+        : sourceCurrentPlayerPieceId === 'player2'
+          ? aiControlP3Ref.current
+          : false;
     const shouldAutoSubmit = autoSubmit || autoSubmitFromControl;
 
     stopAnalysisTimer();
@@ -1616,6 +1634,13 @@ function PlayArea() {
     const nextRedoStateStack = [...redoStateStack, snapshotBeforeUndo];
     setRedoStateStack(nextRedoStateStack);
     saveRedoStateStack(nextRedoStateStack);
+    const undonePlayerPieceIdRaw = gameState.currentPlayerPieceId();
+    const undonePlayerPieceId = isPieceId(undonePlayerPieceIdRaw) ? undonePlayerPieceIdRaw : null;
+    const nextAiControlP1 = undonePlayerPieceId === 'player1' ? false : aiControlP1Ref.current;
+    const nextAiControlP3 = undonePlayerPieceId === 'player2' ? false : aiControlP3Ref.current;
+    if (nextAiControlP1 !== aiControlP1Ref.current || nextAiControlP3 !== aiControlP3Ref.current) {
+      updateAiControlPrefs(nextAiControlP1, nextAiControlP3);
+    }
     stopAnimation();
     setPlannedMoves({});
     setPlanOrder([]);
@@ -1763,16 +1788,10 @@ function PlayArea() {
 
   const handleAiControlChange = (player: 'player1' | 'player2', checked: boolean) => {
     if (player === 'player1') {
-      setAiControlP1(checked);
-      saveCurrentAiPrefs({
-        controlP1: checked,
-      });
+      updateAiControlPrefs(checked, aiControlP3Ref.current);
       return;
     }
-    setAiControlP3(checked);
-    saveCurrentAiPrefs({
-      controlP3: checked,
-    });
+    updateAiControlPrefs(aiControlP1Ref.current, checked);
   };
 
   const handleSetupStep = (field: keyof SetupPrefsDraft, direction: StepDirection) => {
