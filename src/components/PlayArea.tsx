@@ -895,23 +895,13 @@ const formatWholeSeconds = (elapsedMs: number) => {
 
 const isWinningHeuristicScore = (score: number) => Number.isFinite(score) && score > 1e12;
 
-const pieceIdToSuggestedText = (pieceId: PieceId) => {
-  if (pieceId === 'player1') {
-    return '1';
-  }
-  if (pieceId === 'stranger1') {
-    return '2';
-  }
-  if (pieceId === 'player2') {
-    return '3';
-  }
-  if (pieceId === 'stranger2') {
-    return '4';
-  }
-  return 'Dr';
-};
-
 const formatSuggestedTurnText = (bestTurn: BestTurnResponse) => {
+  if (bestTurn.suggestedTurn.length > 0) {
+    return bestTurn.suggestedTurn
+      .map((entry) => `${pieceConfig[entry.pieceId].label}@R${entry.roomId}`)
+      .join(', ');
+  }
+
   const normalized = bestTurn.suggestedTurnText
     .split(/[\s,;]+/)
     .map((token) => token.trim())
@@ -919,10 +909,7 @@ const formatSuggestedTurnText = (bestTurn: BestTurnResponse) => {
   if (normalized.length > 0) {
     return normalized.join(', ');
   }
-  if (bestTurn.suggestedTurn.length === 0) {
-    return '(none)';
-  }
-  return bestTurn.suggestedTurn.map((entry) => `${pieceIdToSuggestedText(entry.pieceId)}@${entry.roomId}`).join(', ');
+  return '(none)';
 };
 
 const formatHeuristicScore = (score: number) => {
