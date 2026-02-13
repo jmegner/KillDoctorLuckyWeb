@@ -121,6 +121,7 @@ test('undo clears AI control for the undone player before analysis can auto-subm
   const undoButton = page.getByRole('button', { name: 'Undo' });
   const redoButton = page.getByRole('button', { name: 'Redo' });
   const p1ControlCheckbox = page.getByRole('checkbox', { name: 'P1' });
+  const turnPlannerTitle = page.locator('.planner-panel .planner-title').first();
 
   await expect(undoButton).toBeEnabled();
   await expect(p1ControlCheckbox).toBeChecked();
@@ -128,6 +129,7 @@ test('undo clears AI control for the undone player before analysis can auto-subm
   await undoButton.click();
 
   await expect(p1ControlCheckbox).not.toBeChecked();
+  await expect(turnPlannerTitle).toContainText('Turn 1/2: P1');
   await expect(redoButton).toBeEnabled();
   await page.waitForTimeout(2500);
   await expect(redoButton).toBeEnabled();

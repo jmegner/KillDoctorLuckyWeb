@@ -220,6 +220,26 @@ type SetupPrefsDraft = {
 
 type StepDirection = 'down' | 'up';
 
+const parseNormalTurnCountFromSnapshotJson = (snapshotJson: string): number | null => {
+  try {
+    const parsed = JSON.parse(snapshotJson) as {
+      normalTurns?: unknown;
+      normal_turns?: unknown;
+    };
+    const turns = Array.isArray(parsed.normalTurns)
+      ? parsed.normalTurns
+      : Array.isArray(parsed.normal_turns)
+        ? parsed.normal_turns
+        : null;
+    if (!turns) {
+      return null;
+    }
+    return turns.length + 1;
+  } catch {
+    return null;
+  }
+};
+
 const clampAnimationSpeedIndex = (value: number) => Math.min(animationSpeeds.length - 1, Math.max(0, value));
 const clampAnalysisMaxTimeIndex = (value: number) => Math.min(analysisMaxTimeOptions.length - 1, Math.max(0, value));
 const isFiniteNonNegative = (value: number) => Number.isFinite(value) && value >= 0;
@@ -1006,6 +1026,17 @@ function PlayArea() {
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
   const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
   const history = gameState ? gameState.normalTurnHistory() : '';
+  const currentPlayerPieceId = gameState ? (gameState.currentPlayerPieceId() as PieceId) : null;
+  const currentNormalTurnCount =
+    gameState ? (parseNormalTurnCountFromSnapshotJson(gameState.exportStateJson()) ?? 1) : 1;
+  const highestRememberedUndoneTurnCount = redoStateStack.reduce((highest, snapshot) => {
+    const snapshotNormalTurnCount = parseNormalTurnCountFromSnapshotJson(snapshot);
+    return snapshotNormalTurnCount === null ? highest : Math.max(highest, snapshotNormalTurnCount);
+  }, currentNormalTurnCount);
+  const currentTurnCountText = highestRememberedUndoneTurnCount === currentNormalTurnCount
+    ? `${currentNormalTurnCount}`
+    : `${currentNormalTurnCount}/${highestRememberedUndoneTurnCount}`;
+  const currentTurnTitleText = `Turn ${currentTurnCountText}: ${currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}`;
   const hasWinner = gameState ? gameState.hasWinner() : false;
   const canUndo = history.trim().length > 0;
   const canRedo = redoStateStack.length > 0;
@@ -1014,7 +1045,9 @@ function PlayArea() {
   const winnerPieceId =
     winnerPieceIdRaw === 'player1' || winnerPieceIdRaw === 'player2' ? (winnerPieceIdRaw as PieceId) : null;
   const winnerOverlayText = winnerPieceId ? `${pieceConfig[winnerPieceId].label} wins!` : null;
-  const currentPlayerPieceId = gameState ? (gameState.currentPlayerPieceId() as PieceId) : null;
+  const winnerTurnTitleText = winnerPieceId
+    ? `Turn ${currentNormalTurnCount}: ${pieceConfig[winnerPieceId].label} wins!`
+    : null;
   const saveCurrentAiPrefs = (overrides?: Partial<AiPrefs>) => {
     const fallbackAiPrefs = loadAiPrefs();
     saveAiPrefs({
@@ -2623,9 +2656,9 @@ function PlayArea() {
                 className="planner-title"
                 style={{ backgroundColor: currentPlayerColor, color: currentPlayerTextColor }}
               >
-                {hasWinner && winnerOverlayText
-                  ? winnerOverlayText
-                  : `Current: ${currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}`}
+                {hasWinner && winnerTurnTitleText
+                  ? winnerTurnTitleText
+                  : currentTurnTitleText}
               </h2>
             </div>
             <div className="planner-header-actions">
