@@ -142,6 +142,10 @@
   fill: #ffe740;
 }
 
+.action-overlay-box--ai-suggestion {
+  fill: #ffffff;
+}
+
 .action-overlay-text {
   font-family: var(--font-mono);
   font-weight: 700;

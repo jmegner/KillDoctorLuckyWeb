@@ -120,7 +120,8 @@ test('undo clears AI control for the undone player before analysis can auto-subm
 
   const undoButton = page.getByRole('button', { name: 'Undo' });
   const redoButton = page.getByRole('button', { name: 'Redo' });
-  const p1ControlCheckbox = page.getByRole('checkbox', { name: 'P1' });
+  const controlRow = page.locator('.planner-line').filter({ hasText: 'Control' }).first();
+  const p1ControlCheckbox = controlRow.getByRole('checkbox', { name: 'P1' });
   const turnPlannerTitle = page.locator('.planner-panel .planner-title').first();
 
   await expect(undoButton).toBeEnabled();

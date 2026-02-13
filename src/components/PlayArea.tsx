@@ -204,6 +204,8 @@ type AiPrefs = {
   analysisMaxTimeIndex: number;
   controlP1: boolean;
   controlP3: boolean;
+  showOnBoardP1: boolean;
+  showOnBoardP3: boolean;
 };
 
 type SetupPrefs = {
@@ -379,11 +381,15 @@ const sanitizeAiPrefs = (candidate: Partial<AiPrefs>): AiPrefs => {
       : defaultAnalysisMaxTimeIndex;
   const controlP1 = typeof candidate.controlP1 === 'boolean' ? candidate.controlP1 : false;
   const controlP3 = typeof candidate.controlP3 === 'boolean' ? candidate.controlP3 : false;
+  const showOnBoardP1 = typeof candidate.showOnBoardP1 === 'boolean' ? candidate.showOnBoardP1 : false;
+  const showOnBoardP3 = typeof candidate.showOnBoardP3 === 'boolean' ? candidate.showOnBoardP3 : false;
   return {
     minAnalysisLevel,
     analysisMaxTimeIndex: clampAnalysisMaxTimeIndex(rawMaxTimeIndex),
     controlP1,
     controlP3,
+    showOnBoardP1,
+    showOnBoardP3,
   };
 };
 
@@ -393,6 +399,8 @@ const loadAiPrefs = (): AiPrefs => {
     analysisMaxTimeIndex: defaultAnalysisMaxTimeIndex,
     controlP1: false,
     controlP3: false,
+    showOnBoardP1: false,
+    showOnBoardP3: false,
   };
   if (typeof window === 'undefined') {
     return defaults;
@@ -897,9 +905,7 @@ const isWinningHeuristicScore = (score: number) => Number.isFinite(score) && sco
 
 const formatSuggestedTurnText = (bestTurn: BestTurnResponse) => {
   if (bestTurn.suggestedTurn.length > 0) {
-    return bestTurn.suggestedTurn
-      .map((entry) => `${pieceConfig[entry.pieceId].label}@R${entry.roomId}`)
-      .join(', ');
+    return bestTurn.suggestedTurn.map((entry) => `${pieceConfig[entry.pieceId].label}@R${entry.roomId}`).join(', ');
   }
 
   const normalized = bestTurn.suggestedTurnText
@@ -910,6 +916,13 @@ const formatSuggestedTurnText = (bestTurn: BestTurnResponse) => {
     return normalized.join(', ');
   }
   return '(none)';
+};
+
+const formatSuggestedTurnTextForBoard = (bestTurn: BestTurnResponse) => {
+  if (bestTurn.suggestedTurn.length > 0) {
+    return bestTurn.suggestedTurn.map((entry) => `${pieceConfig[entry.pieceId].label}@${entry.roomId}`).join(', ');
+  }
+  return null;
 };
 
 const formatHeuristicScore = (score: number) => {
@@ -963,10 +976,16 @@ function PlayArea() {
   const [analysisMaxTimeIndex, setAnalysisMaxTimeIndex] = useState(() => loadAiPrefs().analysisMaxTimeIndex);
   const [aiControlP1, setAiControlP1] = useState(() => loadAiPrefs().controlP1);
   const [aiControlP3, setAiControlP3] = useState(() => loadAiPrefs().controlP3);
+  const [aiShowOnBoardP1, setAiShowOnBoardP1] = useState(() => loadAiPrefs().showOnBoardP1);
+  const [aiShowOnBoardP3, setAiShowOnBoardP3] = useState(() => loadAiPrefs().showOnBoardP3);
   const aiControlP1Ref = useRef(aiControlP1);
   aiControlP1Ref.current = aiControlP1;
   const aiControlP3Ref = useRef(aiControlP3);
   aiControlP3Ref.current = aiControlP3;
+  const aiShowOnBoardP1Ref = useRef(aiShowOnBoardP1);
+  aiShowOnBoardP1Ref.current = aiShowOnBoardP1;
+  const aiShowOnBoardP3Ref = useRef(aiShowOnBoardP3);
+  aiShowOnBoardP3Ref.current = aiShowOnBoardP3;
   const [analysisIsRunning, setAnalysisIsRunning] = useState(false);
   const [analysisRunningLevel, setAnalysisRunningLevel] = useState<number | null>(null);
   const analysisRunningLevelRef = useRef<number | null>(analysisRunningLevel);
@@ -1044,6 +1063,8 @@ function PlayArea() {
       analysisMaxTimeIndex,
       controlP1: aiControlP1Ref.current,
       controlP3: aiControlP3Ref.current,
+      showOnBoardP1: aiShowOnBoardP1Ref.current,
+      showOnBoardP3: aiShowOnBoardP3Ref.current,
       ...overrides,
     });
   };
@@ -1055,6 +1076,16 @@ function PlayArea() {
     saveCurrentAiPrefs({
       controlP1: nextControlP1,
       controlP3: nextControlP3,
+    });
+  };
+  const updateAiShowOnBoardPrefs = (nextShowOnBoardP1: boolean, nextShowOnBoardP3: boolean) => {
+    aiShowOnBoardP1Ref.current = nextShowOnBoardP1;
+    aiShowOnBoardP3Ref.current = nextShowOnBoardP3;
+    setAiShowOnBoardP1(nextShowOnBoardP1);
+    setAiShowOnBoardP3(nextShowOnBoardP3);
+    saveCurrentAiPrefs({
+      showOnBoardP1: nextShowOnBoardP1,
+      showOnBoardP3: nextShowOnBoardP3,
     });
   };
   const pieceRooms = gameState ? gameState.piecePositions() : null;
@@ -1813,6 +1844,14 @@ function PlayArea() {
     updateAiControlPrefs(aiControlP1Ref.current, checked);
   };
 
+  const handleAiShowOnBoardChange = (player: 'player1' | 'player2', checked: boolean) => {
+    if (player === 'player1') {
+      updateAiShowOnBoardPrefs(checked, aiShowOnBoardP3Ref.current);
+      return;
+    }
+    updateAiShowOnBoardPrefs(aiShowOnBoardP1Ref.current, checked);
+  };
+
   const handleSetupStep = (field: keyof SetupPrefsDraft, direction: StepDirection) => {
     handleSetupDraftChange(field, stepNonNegativeIntegerText(setupPrefsDraft[field], direction));
   };
@@ -1980,6 +2019,22 @@ function PlayArea() {
       ? `L${aiSuggestion.analysisLevel}, ${formatHeuristicScore(aiSuggestion.bestTurn.heuristicScore)}, ${formatElapsedTime(aiSuggestion.levelElapsedMs)}`
       : '-';
   const aiStaleMessage = aiSuggestion && !aiSuggestionIsCurrent ? 'Suggestion is stale. Run Think again.' : null;
+  const aiShowOnBoardEnabledForCurrentPlayer =
+    currentPlayerPieceId === 'player1' ? aiShowOnBoardP1 : currentPlayerPieceId === 'player2' ? aiShowOnBoardP3 : false;
+  const aiSuggestionBoardText = (() => {
+    if (hasWinner || !aiShowOnBoardEnabledForCurrentPlayer || !aiSuggestion || !aiSuggestionIsCurrent) {
+      return null;
+    }
+    if (!aiSuggestion.bestTurn.isValid) {
+      return null;
+    }
+    const suggestedTurnTextForBoard = formatSuggestedTurnTextForBoard(aiSuggestion.bestTurn);
+    if (!suggestedTurnTextForBoard) {
+      return null;
+    }
+    const statusText = analysisIsRunning ? '...' : '(done)';
+    return `L${aiSuggestion.analysisLevel}: ${suggestedTurnTextForBoard} ${statusText}`;
+  })();
 
   if (!initialAutoAnalysisQueuedRef.current && gameState && !hasWinner) {
     initialAutoAnalysisQueuedRef.current = true;
@@ -1992,7 +2047,13 @@ function PlayArea() {
   const selectedSuffix = selectedPieceId && plannedMoves[selectedPieceId] !== undefined ? ' (update)' : '';
   const selectedRoomId = selectedPieceId ? pieceRoomMap.get(selectedPieceId) : undefined;
   const distanceByRoom = selectedRoomId !== undefined ? buildRoomDistanceMap(selectedRoomId) : null;
-  const actionOverlayLayout = actionOverlay ? buildActionOverlayLayout(actionOverlay) : null;
+  const aiSuggestionOverlayVisible = Boolean(aiSuggestionBoardText && !animatedPieces && !animationRef.current);
+  const boardOverlayText = actionOverlay ?? (aiSuggestionOverlayVisible ? aiSuggestionBoardText : null);
+  const actionOverlayLayout = boardOverlayText ? buildActionOverlayLayout(boardOverlayText) : null;
+  const actionOverlayBoxClassName =
+    actionOverlay === null && aiSuggestionOverlayVisible
+      ? 'action-overlay-box action-overlay-box--ai-suggestion'
+      : 'action-overlay-box';
   const winnerOverlayLayout = winnerOverlayText ? buildWinnerOverlayLayout(winnerOverlayText) : null;
   const showWinnerOverlay = hasWinner && !animatedPieces;
 
@@ -2602,17 +2663,17 @@ function PlayArea() {
                     );
                   })}
               </g>
-              {actionOverlay && actionOverlayLayout && (
+              {boardOverlayText && actionOverlayLayout && (
                 <g className="action-overlay">
                   <rect
-                    className="action-overlay-box"
+                    className={actionOverlayBoxClassName}
                     x={actionOverlayLayout.boxX}
                     y={actionOverlayLayout.boxY}
                     width={actionOverlayLayout.boxWidth}
                     height={actionOverlayLayout.boxHeight}
                   />
                   <text className="action-overlay-text" x={actionOverlayLayout.textX} y={actionOverlayLayout.textY}>
-                    {actionOverlay}
+                    {boardOverlayText}
                   </text>
                 </g>
               )}
@@ -2868,6 +2929,29 @@ function PlayArea() {
                   type="checkbox"
                   checked={aiControlP3}
                   onChange={(event) => handleAiControlChange('player2', event.target.checked)}
+                />
+                P3
+              </label>
+            </span>
+          </div>
+          <div className="planner-line">
+            <span className="planner-label">Show On Board</span>
+            <span className="planner-value ai-control-value">
+              <label className="ai-control-option">
+                <input
+                  type="checkbox"
+                  aria-label="ShowOnBoard P1"
+                  checked={aiShowOnBoardP1}
+                  onChange={(event) => handleAiShowOnBoardChange('player1', event.target.checked)}
+                />
+                P1
+              </label>
+              <label className="ai-control-option">
+                <input
+                  type="checkbox"
+                  aria-label="ShowOnBoard P3"
+                  checked={aiShowOnBoardP3}
+                  onChange={(event) => handleAiShowOnBoardChange('player2', event.target.checked)}
                 />
                 P3
               </label>
