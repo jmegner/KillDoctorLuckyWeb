@@ -1315,6 +1315,25 @@ mod tests {
         MutableGameState::at_start(common)
     }
 
+    fn tiny_two_player_game_state() -> MutableGameState {
+        let board = Board::from_embedded_json("Tiny").expect("Tiny board should be available");
+        let common = CommonGameState::from_num_normal_players(true, board, 2);
+        MutableGameState::at_start(common)
+    }
+
+    fn turn_by_text(state: &MutableGameState, turn_text: &str) -> SimpleTurn {
+        state
+            .possible_turns()
+            .into_iter()
+            .find(|turn| turn.to_string() == turn_text)
+            .unwrap_or_else(|| {
+                panic!(
+                    "expected to find turn '{turn_text}', current player {}",
+                    state.player_text()
+                )
+            })
+    }
+
     #[test]
     fn at_start_initializes_arrays() {
         let game = sample_game_state();
@@ -1375,5 +1394,144 @@ mod tests {
         assert_eq!(game.doctor_moves_until_room(RoomId(2)), 0);
         assert_eq!(game.doctor_moves_until_room(RoomId(3)), 1);
         assert_eq!(game.doctor_moves_until_room(RoomId(1)), 2);
+    }
+
+    #[test]
+    fn possible_turns_snapshot_tiny_two_player_start() {
+        let game = tiny_two_player_game_state();
+        let turn_texts = game
+            .possible_turns()
+            .into_iter()
+            .map(|turn| turn.to_string())
+            .collect::<Vec<_>>();
+        let snapshot = format!("count={}\n{}", turn_texts.len(), turn_texts.join("\n"));
+
+        assert_eq!(
+            snapshot,
+            concat!(
+                "count=21\n",
+                "1@1;\n",
+                "1@2;\n",
+                "1@3;\n",
+                "1@4;\n",
+                "4@1;\n",
+                "4@2;\n",
+                "4@3;\n",
+                "4@4;\n",
+                "2@1;\n",
+                "2@2;\n",
+                "2@3;\n",
+                "2@4;\n",
+                "1@2 4@2;\n",
+                "1@2 4@3;\n",
+                "1@3 4@2;\n",
+                "1@2 2@2;\n",
+                "1@2 2@3;\n",
+                "1@3 2@2;\n",
+                "4@2 2@2;\n",
+                "4@2 2@3;\n",
+                "4@3 2@2;"
+            )
+        );
+    }
+
+    #[test]
+    fn after_turn_respects_must_return_new_object() {
+        let mut game = tiny_two_player_game_state();
+        let turn = turn_by_text(&game, "1@2;");
+        let before = game.clone();
+
+        let returned_new_state = MutableGameState::after_turn(&mut game, turn.clone(), true);
+        assert_eq!(game, before, "state should not mutate when cloning is requested");
+        assert_ne!(returned_new_state, before);
+
+        let _ = MutableGameState::after_turn(&mut game, turn, false);
+        assert_ne!(game, before, "state should mutate when cloning is not requested");
+    }
+
+    #[test]
+    fn tiny_two_player_state_snapshots_after_two_normal_turns() {
+        let mut game = tiny_two_player_game_state();
+        let turn_1 = turn_by_text(&game, "1@2;");
+        game.after_normal_turn(turn_1, true);
+        let turn_2 = turn_by_text(&game, "3@2;");
+        game.after_normal_turn(turn_2, true);
+
+        let frames = game
+            .animation_frames_since_normal()
+            .into_iter()
+            .map(|frame| {
+                format!(
+                    "[{}, {}, {}, {}, {}]",
+                    frame[0].0, frame[1].0, frame[2].0, frame[3].0, frame[4].0
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let snapshot = format!(
+            "turnId={}\ncurrent={}\ndoctorRoom={}\nnormalTurnHist={}\nrecentConciseSummaries={}\nframes=\n{}",
+            game.turn_id,
+            game.player_text(),
+            game.doctor_room_id.0,
+            game.normal_turn_hist(),
+            game.prev_turn_summaries_since_normal(false),
+            frames
+        );
+
+        assert_eq!(
+            snapshot,
+            concat!(
+                "turnId=5\n",
+                "current=P1\n",
+                "doctorRoom=1\n",
+                "normalTurnHist=(P1L)1@2←1; (P3)3@2←1; \n",
+                "recentConciseSummaries=(P3)3@2←1;\n",
+                "(p4)4@4←1;\n",
+                "frames=\n",
+                "[3, 2, 2, 4, 1]\n",
+                "[4, 2, 2, 4, 1]\n",
+                "[1, 2, 2, 4, 4]"
+            )
+        );
+    }
+
+    #[test]
+    fn possible_turns_snapshot_tiny_two_player_after_opening() {
+        let mut game = tiny_two_player_game_state();
+        let opening_turn = turn_by_text(&game, "1@2;");
+        game.after_normal_turn(opening_turn, true);
+
+        let turn_texts = game
+            .possible_turns()
+            .into_iter()
+            .map(|turn| turn.to_string())
+            .collect::<Vec<_>>();
+        let head = turn_texts.iter().take(8).cloned().collect::<Vec<_>>();
+        let tail = turn_texts
+            .iter()
+            .rev()
+            .take(8)
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>();
+
+        let snapshot = format!(
+            "count={}\nhead={}\ntail={}",
+            turn_texts.len(),
+            head.join("|"),
+            tail.join("|")
+        );
+
+        assert_eq!(
+            snapshot,
+            concat!(
+                "count=21\n",
+                "head=3@1;|3@2;|3@3;|3@4;|2@1;|2@2;|2@3;|2@4;\n",
+                "tail=3@2 2@3;|3@3 2@3;|3@2 4@2;|3@2 4@3;|3@3 4@2;|2@2 4@2;|2@3 4@2;|2@3 4@3;"
+            )
+        );
     }
 }

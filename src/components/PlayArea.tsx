@@ -2050,6 +2050,29 @@ function PlayArea() {
   const aiSuggestionOverlayVisible = Boolean(aiSuggestionBoardText && !animatedPieces && !animationRef.current);
   const boardOverlayText = actionOverlay ?? (aiSuggestionOverlayVisible ? aiSuggestionBoardText : null);
   const actionOverlayLayout = boardOverlayText ? buildActionOverlayLayout(boardOverlayText) : null;
+  const aiSuggestionBoardDoButtonVisible =
+    actionOverlay === null && aiSuggestionOverlayVisible && aiCanDoIt && !hasWinner;
+  const aiSuggestionBoardDoButtonLayout =
+    aiSuggestionBoardDoButtonVisible && actionOverlayLayout
+      ? (() => {
+          const buttonHeight = Math.round(actionOverlayLayout.boxHeight * 1.5);
+          const buttonWidth = Math.round(buttonHeight * 1.45);
+          const gap = 8;
+          const margin = 10;
+          const desiredX = actionOverlayLayout.boxX + actionOverlayLayout.boxWidth + gap;
+          const maxX = boardWidth - margin - buttonWidth;
+          const x = Math.min(Math.max(desiredX, margin), maxX);
+          const desiredY = actionOverlayLayout.boxY + (actionOverlayLayout.boxHeight - buttonHeight) / 2;
+          const maxY = boardHeight - margin - buttonHeight;
+          const y = Math.min(Math.max(desiredY, margin), maxY);
+          return {
+            x,
+            y,
+            width: buttonWidth,
+            height: buttonHeight,
+          };
+        })()
+      : null;
   const actionOverlayBoxClassName =
     actionOverlay === null && aiSuggestionOverlayVisible
       ? 'action-overlay-box action-overlay-box--ai-suggestion'
@@ -2676,6 +2699,32 @@ function PlayArea() {
                     {boardOverlayText}
                   </text>
                 </g>
+              )}
+              {aiSuggestionBoardDoButtonLayout && (
+                <foreignObject
+                  className="action-overlay-action"
+                  x={aiSuggestionBoardDoButtonLayout.x}
+                  y={aiSuggestionBoardDoButtonLayout.y}
+                  width={aiSuggestionBoardDoButtonLayout.width}
+                  height={aiSuggestionBoardDoButtonLayout.height}
+                >
+                  <button
+                    type="button"
+                    className="action-overlay-do-button"
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDoSuggestedTurn();
+                    }}
+                    aria-label="Do suggested turn"
+                    title="Do suggested turn"
+                    disabled={!aiCanDoIt || hasWinner}
+                  >
+                    Do
+                  </button>
+                </foreignObject>
               )}
               {showWinnerOverlay && winnerOverlayText && winnerOverlayLayout && (
                 <g className="winner-overlay" aria-hidden>

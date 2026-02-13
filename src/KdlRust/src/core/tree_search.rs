@@ -223,46 +223,125 @@ fn compare_f64(a: f64, b: f64) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::{board::Board, common_game_state::CommonGameState, mutable_game_state::MutableGameState};
-    use crate::util::cancellation::NeverCancelToken;
-    use std::time::Instant;
+    use crate::core::{
+        board::Board, common_game_state::CommonGameState, mutable_game_state::MutableGameState,
+    };
+    use crate::util::cancellation::{AtomicCancellationToken, CancellationToken, NeverCancelToken};
 
-    #[test]
-    fn tree_search_snapshot_start_state_level2() {
+    fn alt_down_two_player_start() -> MutableGameState {
         let board =
             Board::from_embedded_json("BoardAltDown").expect("BoardAltDown should be available");
         let common = CommonGameState::from_num_normal_players(true, board, 2);
-        let state = MutableGameState::at_start(common);
-        let token = NeverCancelToken;
-        let analysis_level = 2;
+        MutableGameState::at_start(common)
+    }
+
+    fn tiny_three_player_start() -> MutableGameState {
+        let board = Board::from_embedded_json("Tiny").expect("Tiny should be available");
+        let common = CommonGameState::from_num_normal_players(true, board, 3);
+        MutableGameState::at_start(common)
+    }
+
+    fn run_snapshot_line(
+        state: &MutableGameState,
+        analysis_level: i32,
+        cancellation_token: &impl CancellationToken,
+    ) -> String {
         let mut num_states_visited = 0usize;
-        let started = Instant::now();
-        let appraised_turn =
-            TreeSearch::find_best_turn(&state, analysis_level, &token, &mut num_states_visited);
-        let elapsed = started.elapsed();
+        let appraised_turn = TreeSearch::find_best_turn(
+            state,
+            analysis_level,
+            cancellation_token,
+            &mut num_states_visited,
+        );
         let best_turn_text = appraised_turn
             .turn
             .as_ref()
             .map(|turn| turn.to_string())
-            .unwrap_or_default();
-
-        eprintln!(
-            "tree_search_snapshot level={} bestTurn={} appraisal={:+0.6} states={} timeSec={:.4}",
-            analysis_level,
-            best_turn_text,
-            appraised_turn.appraisal,
-            num_states_visited,
-            elapsed.as_secs_f64()
-        );
-        assert_eq!(best_turn_text, "1@13;");
-        assert_eq!(num_states_visited, 2167);
-        let expected_appraisal = 0.647815;
-        let diff = (appraised_turn.appraisal - expected_appraisal).abs();
-        assert!(
-            diff < 1e-6,
-            "expected appraisal {expected_appraisal}, got {}",
+            .unwrap_or_else(|| "<none>".to_string());
+        format!(
+            "L{analysis_level}|turn={best_turn_text}|appraisal={:+0.6}|states={num_states_visited}",
             appraised_turn.appraisal
+        )
+    }
+
+    #[test]
+    fn tree_search_snapshot_alt_down_start_levels_0_to_3() {
+        let state = alt_down_two_player_start();
+        let token = NeverCancelToken;
+        let snapshot = (0..=3)
+            .map(|analysis_level| run_snapshot_line(&state, analysis_level, &token))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert_eq!(
+            snapshot,
+            concat!(
+                "L0|turn=1000@0;|appraisal=+1.433623|states=1\n",
+                "L1|turn=1@1;|appraisal=-0.953516|states=391\n",
+                "L2|turn=1@13;|appraisal=+0.647815|states=2167\n",
+                "L3|turn=1@13;|appraisal=-0.104624|states=14933"
+            )
         );
+    }
+
+    #[test]
+    fn tree_search_snapshot_alt_down_after_opening_levels_1_to_3() {
+        let mut state = alt_down_two_player_start();
+        let opening_turn = state
+            .possible_turns()
+            .into_iter()
+            .find(|turn| turn.to_string() == "1@13;")
+            .expect("expected to find opening turn 1@13;");
+        state.after_normal_turn(opening_turn, false);
+
+        let token = NeverCancelToken;
+        let snapshot = (1..=3)
+            .map(|analysis_level| run_snapshot_line(&state, analysis_level, &token))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert_eq!(
+            snapshot,
+            concat!(
+                "L1|turn=2@14;|appraisal=-0.647815|states=517\n",
+                "L2|turn=3@14 2@2;|appraisal=+0.104624|states=6214\n",
+                "L3|turn=3@15 2@4;|appraisal=-0.034230|states=10820"
+            )
+        );
+    }
+
+    #[test]
+    fn tree_search_snapshot_tiny_three_player_start_levels_0_to_3() {
+        let state = tiny_three_player_start();
+        let token = NeverCancelToken;
+        let snapshot = (0..=3)
+            .map(|analysis_level| run_snapshot_line(&state, analysis_level, &token))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert_eq!(
+            snapshot,
+            concat!(
+                "L0|turn=1000@0;|appraisal=+0.475000|states=1\n",
+                "L1|turn=1@2;|appraisal=+0.149219|states=5\n",
+                "L2|turn=1@2;|appraisal=+0.149219|states=21\n",
+                "L3|turn=1@2;|appraisal=+0.725000|states=85"
+            )
+        );
+    }
+
+    #[test]
+    fn tree_search_cancelled_token_returns_empty_minimum() {
+        let state = alt_down_two_player_start();
+        let token = AtomicCancellationToken::new();
+        token.cancel();
+
+        let mut num_states_visited = 123usize;
+        let appraised_turn = TreeSearch::find_best_turn(&state, 4, &token, &mut num_states_visited);
+
+        assert!(appraised_turn.turn.is_none());
+        assert_eq!(appraised_turn.appraisal, f64::NEG_INFINITY);
+        assert_eq!(num_states_visited, 1);
     }
 }
 
