@@ -179,6 +179,9 @@ const analysisMaxTimeOptions = [
   { label: '4min', ms: 240000 },
   { label: '5min', ms: 300000 },
   { label: '8min', ms: 480000 },
+  { label: '12min', ms: 720000 },
+  { label: '30min', ms: 1.8e6 },
+  { label: '60min', ms: 3.6e6 },
 ] as const;
 const defaultAnalysisMaxTimeIndex = 1;
 const defaultMinAnalysisLevel = 2;
@@ -224,7 +227,7 @@ type SetupPrefsDraft = {
 type PendingEmptyRoomTouchTap = {
   roomId: number;
   startedAtMs: number;
-  timerId: number;
+  turnCounterAtTap: number;
 };
 
 type StepDirection = 'down' | 'up';
@@ -1233,11 +1236,6 @@ function PlayArea() {
   };
 
   const clearPendingEmptyRoomTouchTap = () => {
-    const pendingTouchTap = pendingEmptyRoomTouchTapRef.current;
-    if (!pendingTouchTap) {
-      return;
-    }
-    window.clearTimeout(pendingTouchTap.timerId);
     pendingEmptyRoomTouchTapRef.current = null;
   };
 
@@ -1257,7 +1255,61 @@ function PlayArea() {
     if (nativeEvent.sourceCapabilities?.firesTouchEvents) {
       return true;
     }
+    if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) {
+      return true;
+    }
     return false;
+  };
+
+  const rememberForgivingTouchTap = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
+    if (!isTouchLikeRoomClick(event)) {
+      clearPendingEmptyRoomTouchTap();
+      return;
+    }
+    pendingEmptyRoomTouchTapRef.current = {
+      roomId,
+      startedAtMs: Date.now(),
+      turnCounterAtTap: turnCounterRef.current,
+    };
+  };
+
+  // Intentionally timer-free: no delayed callbacks means fewer places that must remember to cancel state.
+  const tryConsumeForgivingTouchDoubleTap = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
+    if (!isTouchLikeRoomClick(event)) {
+      clearPendingEmptyRoomTouchTap();
+      return false;
+    }
+
+    const pendingTouchTap = pendingEmptyRoomTouchTapRef.current;
+    if (
+      pendingTouchTap &&
+      pendingTouchTap.roomId === roomId &&
+      pendingTouchTap.turnCounterAtTap === turnCounterRef.current &&
+      Date.now() - pendingTouchTap.startedAtMs <= touchDoubleTapGraceMs
+    ) {
+      clearPendingEmptyRoomTouchTap();
+      if (selectedPieceId) {
+        setSelectedPieceId(null);
+      }
+      submitCurrentPlayerMoveToRoom(roomId);
+      return true;
+    }
+
+    return false;
+  };
+
+  const submitCurrentPlayerMoveToRoom = (roomId: number) => {
+    if (!currentPlayerPieceId) {
+      setValidationMessage('No current player available.');
+      return;
+    }
+    if (pieceRoomMap.get(currentPlayerPieceId) === roomId) {
+      setValidationMessage(null);
+      return;
+    }
+    const nextMoves = { ...plannedMoves, [currentPlayerPieceId]: roomId };
+    const nextOrder = planOrder.includes(currentPlayerPieceId) ? planOrder : [...planOrder, currentPlayerPieceId];
+    submitPlan(nextMoves, nextOrder);
   };
 
   const handlePieceClick = (pieceId: PieceId) => {
@@ -1282,44 +1334,22 @@ function PlayArea() {
     if (hasWinner) {
       return;
     }
-    if (event?.detail && event.detail > 1 && !selectedPieceId) {
+    if (tryConsumeForgivingTouchDoubleTap(roomId, event)) {
+      return;
+    }
+    if (event?.detail && event.detail > 1 && !selectedPieceId && !isTouchLikeRoomClick(event)) {
       return;
     }
     if (!selectedPieceId) {
       const preferredPiece = getPreferredSelectablePieceInRoom(roomId);
       if (preferredPiece) {
-        clearPendingEmptyRoomTouchTap();
+        rememberForgivingTouchTap(roomId, event);
         setSelectedPieceId(preferredPiece);
         setValidationMessage(null);
         return;
       }
       if (isTouchLikeRoomClick(event)) {
-        const now = Date.now();
-        const pendingTouchTap = pendingEmptyRoomTouchTapRef.current;
-        if (
-          pendingTouchTap &&
-          pendingTouchTap.roomId === roomId &&
-          now - pendingTouchTap.startedAtMs <= touchDoubleTapGraceMs
-        ) {
-          clearPendingEmptyRoomTouchTap();
-          handleRoomDoubleClick(roomId);
-          return;
-        }
-
-        clearPendingEmptyRoomTouchTap();
-        const timerId = window.setTimeout(() => {
-          const current = pendingEmptyRoomTouchTapRef.current;
-          if (!current || current.timerId !== timerId) {
-            return;
-          }
-          pendingEmptyRoomTouchTapRef.current = null;
-          setValidationMessage('Select a piece, then choose a destination room.');
-        }, touchDoubleTapGraceMs);
-        pendingEmptyRoomTouchTapRef.current = {
-          roomId,
-          startedAtMs: now,
-          timerId,
-        };
+        rememberForgivingTouchTap(roomId, event);
         return;
       }
       clearPendingEmptyRoomTouchTap();
@@ -1393,7 +1423,6 @@ function PlayArea() {
       animateFromCurrentState?: boolean;
     },
   ) => {
-    clearPendingEmptyRoomTouchTap();
     if (!gameState || gameState.hasWinner()) {
       return;
     }
@@ -1442,7 +1471,6 @@ function PlayArea() {
     startAnimationFromState(initialRoomsForAnimation);
   };
   const handleSubmit = () => {
-    clearPendingEmptyRoomTouchTap();
     if (!gameState || hasWinner) {
       return;
     }
@@ -1717,17 +1745,14 @@ function PlayArea() {
   };
 
   const handleThink = () => {
-    clearPendingEmptyRoomTouchTap();
     startBestTurnAnalysis(false);
   };
 
   const handleThinkAndDo = () => {
-    clearPendingEmptyRoomTouchTap();
     startBestTurnAnalysis(true);
   };
 
   const handleDoSuggestedTurn = () => {
-    clearPendingEmptyRoomTouchTap();
     if (!aiSuggestion || hasWinner) {
       return;
     }
@@ -1742,7 +1767,6 @@ function PlayArea() {
   };
 
   const handleUndo = () => {
-    clearPendingEmptyRoomTouchTap();
     if (!gameState) {
       return;
     }
@@ -1780,7 +1804,6 @@ function PlayArea() {
   };
 
   const handleRedo = () => {
-    clearPendingEmptyRoomTouchTap();
     if (!gameState) {
       return;
     }
@@ -1817,7 +1840,6 @@ function PlayArea() {
   };
 
   const handleReset = () => {
-    clearPendingEmptyRoomTouchTap();
     if (!gameState) {
       return;
     }
@@ -1940,7 +1962,6 @@ function PlayArea() {
   };
 
   const handleStartNewGameWithSetup = () => {
-    clearPendingEmptyRoomTouchTap();
     if (!gameState) {
       return;
     }
@@ -1983,7 +2004,6 @@ function PlayArea() {
   };
 
   const handleCancel = () => {
-    clearPendingEmptyRoomTouchTap();
     stopAnimation();
     setPlannedMoves({});
     setPlanOrder([]);
@@ -2028,17 +2048,7 @@ function PlayArea() {
     if (selectedPieceId) {
       return;
     }
-    if (!currentPlayerPieceId) {
-      setValidationMessage('No current player available.');
-      return;
-    }
-    if (pieceRoomMap.get(currentPlayerPieceId) === roomId) {
-      setValidationMessage(null);
-      return;
-    }
-    const nextMoves = { ...plannedMoves, [currentPlayerPieceId]: roomId };
-    const nextOrder = planOrder.includes(currentPlayerPieceId) ? planOrder : [...planOrder, currentPlayerPieceId];
-    submitPlan(nextMoves, nextOrder);
+    submitCurrentPlayerMoveToRoom(roomId);
   };
 
   const planSummary =
