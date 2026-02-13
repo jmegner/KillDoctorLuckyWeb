@@ -1027,15 +1027,17 @@ function PlayArea() {
   const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
   const history = gameState ? gameState.normalTurnHistory() : '';
   const currentPlayerPieceId = gameState ? (gameState.currentPlayerPieceId() as PieceId) : null;
-  const currentNormalTurnCount =
-    gameState ? (parseNormalTurnCountFromSnapshotJson(gameState.exportStateJson()) ?? 1) : 1;
+  const currentNormalTurnCount = gameState
+    ? (parseNormalTurnCountFromSnapshotJson(gameState.exportStateJson()) ?? 1)
+    : 1;
   const highestRememberedUndoneTurnCount = redoStateStack.reduce((highest, snapshot) => {
     const snapshotNormalTurnCount = parseNormalTurnCountFromSnapshotJson(snapshot);
     return snapshotNormalTurnCount === null ? highest : Math.max(highest, snapshotNormalTurnCount);
   }, currentNormalTurnCount);
-  const currentTurnCountText = highestRememberedUndoneTurnCount === currentNormalTurnCount
-    ? `${currentNormalTurnCount}`
-    : `${currentNormalTurnCount}/${highestRememberedUndoneTurnCount}`;
+  const currentTurnCountText =
+    highestRememberedUndoneTurnCount === currentNormalTurnCount
+      ? `${currentNormalTurnCount}`
+      : `${currentNormalTurnCount}/${highestRememberedUndoneTurnCount}`;
   const currentTurnTitleText = `Turn ${currentTurnCountText}: ${currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}`;
   const hasWinner = gameState ? gameState.hasWinner() : false;
   const canUndo = history.trim().length > 0;
@@ -1044,9 +1046,9 @@ function PlayArea() {
   const winnerPieceIdRaw = gameState ? gameState.winnerPieceId() : '';
   const winnerPieceId =
     winnerPieceIdRaw === 'player1' || winnerPieceIdRaw === 'player2' ? (winnerPieceIdRaw as PieceId) : null;
-  const winnerOverlayText = winnerPieceId ? `${pieceConfig[winnerPieceId].label} wins!` : null;
+  const winnerOverlayText = winnerPieceId ? `${pieceConfig[winnerPieceId].label} won!` : null;
   const winnerTurnTitleText = winnerPieceId
-    ? `Turn ${currentNormalTurnCount}: ${pieceConfig[winnerPieceId].label} wins!`
+    ? `Turn ${currentNormalTurnCount}: ${pieceConfig[winnerPieceId].label} won!`
     : null;
   const saveCurrentAiPrefs = (overrides?: Partial<AiPrefs>) => {
     const fallbackAiPrefs = loadAiPrefs();
@@ -1307,9 +1309,9 @@ function PlayArea() {
     if (!gameState || gameState.hasWinner()) {
       return;
     }
-    const initialRoomsForAnimation =
-      options?.animateFromCurrentState ? Array.from(gameState.piecePositions(), (value) => Number(value))
-        : null;
+    const initialRoomsForAnimation = options?.animateFromCurrentState
+      ? Array.from(gameState.piecePositions(), (value) => Number(value))
+      : null;
     const planEntries = order
       .map((pieceId) => {
         const roomId = moves[pieceId];
@@ -1513,10 +1515,7 @@ function PlayArea() {
         const remainingMs = Math.max(0, maxTimeMs - elapsedMs);
         if (remainingMs < mostRecentCompletedLevelElapsedMs) {
           const deepestCompletedLevel = deepestCompletedSuggestion?.analysisLevel ?? currentLevel - 1;
-          completeAndMaybeSubmit(
-            `smart stop at L${deepestCompletedLevel}`,
-            { terminateWorker: true },
-          );
+          completeAndMaybeSubmit(`smart stop at L${deepestCompletedLevel}`, { terminateWorker: true });
           return;
         }
       }
@@ -2656,9 +2655,7 @@ function PlayArea() {
                 className="planner-title"
                 style={{ backgroundColor: currentPlayerColor, color: currentPlayerTextColor }}
               >
-                {hasWinner && winnerTurnTitleText
-                  ? winnerTurnTitleText
-                  : currentTurnTitleText}
+                {hasWinner && winnerTurnTitleText ? winnerTurnTitleText : currentTurnTitleText}
               </h2>
             </div>
             <div className="planner-header-actions">
@@ -2828,7 +2825,10 @@ function PlayArea() {
         </aside>
         <aside className="planner-panel ai-panel">
           <div className="planner-header">
-            <h2 className="planner-title" style={{ backgroundColor: currentPlayerColor, color: currentPlayerTextColor }}>
+            <h2
+              className="planner-title"
+              style={{ backgroundColor: currentPlayerColor, color: currentPlayerTextColor }}
+            >
               AI
             </h2>
             <div className="planner-header-actions">
