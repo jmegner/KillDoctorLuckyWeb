@@ -2768,7 +2768,7 @@ function PlayArea() {
                 >
                   <button
                     type="button"
-                    className="action-overlay-do-button"
+                    className="planner-button planner-button--primary action-overlay-do-button"
                     onMouseDown={(event) => {
                       event.stopPropagation();
                     }}
