@@ -182,6 +182,7 @@ const analysisMaxTimeOptions = [
 ] as const;
 const defaultAnalysisMaxTimeIndex = 1;
 const defaultMinAnalysisLevel = 2;
+const touchDoubleTapGraceMs = 650;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 const animationPrefsStorageKey = 'kdl.settings.v1';
 const aiPrefsStorageKey = 'kdl.ai.v1';
@@ -218,6 +219,12 @@ type SetupPrefsDraft = {
   moveCards: string;
   weaponCards: string;
   failureCards: string;
+};
+
+type PendingEmptyRoomTouchTap = {
+  roomId: number;
+  startedAtMs: number;
+  timerId: number;
 };
 
 type StepDirection = 'down' | 'up';
@@ -1028,6 +1035,7 @@ function PlayArea() {
     order: PieceId[];
     sourceTurnCounter: number;
   } | null>(null);
+  const pendingEmptyRoomTouchTapRef = useRef<PendingEmptyRoomTouchTap | null>(null);
   const animationSpeed = animationSpeeds[animationSpeedIndex];
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
   const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
@@ -1224,7 +1232,36 @@ function PlayArea() {
     return null;
   };
 
+  const clearPendingEmptyRoomTouchTap = () => {
+    const pendingTouchTap = pendingEmptyRoomTouchTapRef.current;
+    if (!pendingTouchTap) {
+      return;
+    }
+    window.clearTimeout(pendingTouchTap.timerId);
+    pendingEmptyRoomTouchTapRef.current = null;
+  };
+
+  const isTouchLikeRoomClick = (event?: MouseEvent<SVGRectElement>) => {
+    const nativeEvent = event?.nativeEvent as
+      | (globalThis.MouseEvent & {
+          pointerType?: string;
+          sourceCapabilities?: { firesTouchEvents?: boolean };
+        })
+      | undefined;
+    if (!nativeEvent) {
+      return false;
+    }
+    if (nativeEvent.pointerType === 'touch') {
+      return true;
+    }
+    if (nativeEvent.sourceCapabilities?.firesTouchEvents) {
+      return true;
+    }
+    return false;
+  };
+
   const handlePieceClick = (pieceId: PieceId) => {
+    clearPendingEmptyRoomTouchTap();
     if (hasWinner) {
       return;
     }
@@ -1251,13 +1288,45 @@ function PlayArea() {
     if (!selectedPieceId) {
       const preferredPiece = getPreferredSelectablePieceInRoom(roomId);
       if (preferredPiece) {
+        clearPendingEmptyRoomTouchTap();
         setSelectedPieceId(preferredPiece);
         setValidationMessage(null);
         return;
       }
+      if (isTouchLikeRoomClick(event)) {
+        const now = Date.now();
+        const pendingTouchTap = pendingEmptyRoomTouchTapRef.current;
+        if (
+          pendingTouchTap &&
+          pendingTouchTap.roomId === roomId &&
+          now - pendingTouchTap.startedAtMs <= touchDoubleTapGraceMs
+        ) {
+          clearPendingEmptyRoomTouchTap();
+          handleRoomDoubleClick(roomId);
+          return;
+        }
+
+        clearPendingEmptyRoomTouchTap();
+        const timerId = window.setTimeout(() => {
+          const current = pendingEmptyRoomTouchTapRef.current;
+          if (!current || current.timerId !== timerId) {
+            return;
+          }
+          pendingEmptyRoomTouchTapRef.current = null;
+          setValidationMessage('Select a piece, then choose a destination room.');
+        }, touchDoubleTapGraceMs);
+        pendingEmptyRoomTouchTapRef.current = {
+          roomId,
+          startedAtMs: now,
+          timerId,
+        };
+        return;
+      }
+      clearPendingEmptyRoomTouchTap();
       setValidationMessage('Select a piece, then choose a destination room.');
       return;
     }
+    clearPendingEmptyRoomTouchTap();
     if (pieceRoomMap.get(selectedPieceId) === roomId) {
       setSelectedPieceId(null);
       setValidationMessage(null);
@@ -1324,6 +1393,7 @@ function PlayArea() {
       animateFromCurrentState?: boolean;
     },
   ) => {
+    clearPendingEmptyRoomTouchTap();
     if (!gameState || gameState.hasWinner()) {
       return;
     }
@@ -1372,6 +1442,7 @@ function PlayArea() {
     startAnimationFromState(initialRoomsForAnimation);
   };
   const handleSubmit = () => {
+    clearPendingEmptyRoomTouchTap();
     if (!gameState || hasWinner) {
       return;
     }
@@ -1646,14 +1717,17 @@ function PlayArea() {
   };
 
   const handleThink = () => {
+    clearPendingEmptyRoomTouchTap();
     startBestTurnAnalysis(false);
   };
 
   const handleThinkAndDo = () => {
+    clearPendingEmptyRoomTouchTap();
     startBestTurnAnalysis(true);
   };
 
   const handleDoSuggestedTurn = () => {
+    clearPendingEmptyRoomTouchTap();
     if (!aiSuggestion || hasWinner) {
       return;
     }
@@ -1668,6 +1742,7 @@ function PlayArea() {
   };
 
   const handleUndo = () => {
+    clearPendingEmptyRoomTouchTap();
     if (!gameState) {
       return;
     }
@@ -1705,6 +1780,7 @@ function PlayArea() {
   };
 
   const handleRedo = () => {
+    clearPendingEmptyRoomTouchTap();
     if (!gameState) {
       return;
     }
@@ -1741,6 +1817,7 @@ function PlayArea() {
   };
 
   const handleReset = () => {
+    clearPendingEmptyRoomTouchTap();
     if (!gameState) {
       return;
     }
@@ -1863,6 +1940,7 @@ function PlayArea() {
   };
 
   const handleStartNewGameWithSetup = () => {
+    clearPendingEmptyRoomTouchTap();
     if (!gameState) {
       return;
     }
@@ -1905,6 +1983,7 @@ function PlayArea() {
   };
 
   const handleCancel = () => {
+    clearPendingEmptyRoomTouchTap();
     stopAnimation();
     setPlannedMoves({});
     setPlanOrder([]);
@@ -1917,6 +1996,7 @@ function PlayArea() {
   };
 
   const handleRoomMouseDown = (event: MouseEvent<SVGRectElement>, roomId: number) => {
+    clearPendingEmptyRoomTouchTap();
     if (hasWinner) {
       return;
     }
@@ -1941,6 +2021,7 @@ function PlayArea() {
   };
 
   const handleRoomDoubleClick = (roomId: number) => {
+    clearPendingEmptyRoomTouchTap();
     if (hasWinner) {
       return;
     }
@@ -2326,6 +2407,7 @@ function PlayArea() {
   }
 
   const handleBoardMouseDown = (event: MouseEvent<SVGSVGElement>) => {
+    clearPendingEmptyRoomTouchTap();
     if (hasWinner) {
       return;
     }
