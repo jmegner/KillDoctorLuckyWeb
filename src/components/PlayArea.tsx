@@ -2444,7 +2444,65 @@ function PlayArea() {
         </p>
       </>
     ) : infoPopup === 'ai' ? (
-      <p>AI HELP HERE</p>
+      <>
+        <h4>AI Controls</h4>
+        <ul>
+          <li>
+            <strong>Think</strong>: runs analysis and updates the suggestion using the current Min Turn Depth and Max
+            Time.
+          </li>
+          <li>
+            <strong>Do</strong>: submits the current suggested turn if it is valid and not stale.
+          </li>
+          <li>
+            <strong>T&amp;D</strong>: runs analysis, then auto-submits the best suggestion found by the time analysis
+            stops.
+          </li>
+          <li>
+            <strong>Cancel</strong>: stops an in-progress analysis run and keeps the best completed level found so far.
+          </li>
+        </ul>
+        <h4>AI Ownership / Display</h4>
+        <ul>
+          <li>
+            <strong>Control (P1/P3)</strong>: lets AI automatically play that normal player when it becomes their turn.
+            More specifically, it automatically submits the suggested turn when the analysis completes.
+          </li>
+          <li>
+            <strong>Show On Board (P1/P3)</strong>: shows/hides the suggested move text overlay (and a small Do button)
+            on the board for that side.
+          </li>
+        </ul>
+        <h4>Analysis Settings</h4>
+        <ul>
+          <li>
+            <strong>Min Turn Depth</strong>: minimum search depth before the run is allowed to stop from time limits.
+          </li>
+          <li>
+            <strong>Max Time</strong>: total time budget for one run; analysis will stop when this budget is hit, unless
+            we still haven't completed the minimum turn depth analysis.
+          </li>
+          <li>The +/- buttons next to each field are quick steppers for mobile and desktop.</li>
+        </ul>
+        <h4>AI Outputs</h4>
+        <ul>
+          <li>
+            <strong>Status</strong>: current run status (idle/analyzing/cancelled/finished), including level and elapsed
+            timing while running.
+          </li>
+          <li>
+            <strong>Suggested</strong>: the best move sequence from the latest completed analysis result.
+          </li>
+          <li>
+            <strong>Stats</strong>: <code>L#</code>, heuristic score, and elapsed time for the completed suggestion
+            level.
+          </li>
+          <li>
+            <strong>Preview</strong>: predicted result if the suggested turn is executed (next player, attackers,
+            winner, etc.).
+          </li>
+        </ul>
+      </>
     ) : infoPopup === 'playerInfoBox' ? (
       <>
         <h4>Player Info Box</h4>
