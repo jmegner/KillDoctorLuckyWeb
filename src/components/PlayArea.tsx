@@ -41,7 +41,7 @@ type PreviewDisplay = {
   tokens: PreviewToken[];
 };
 
-type InfoPopupKind = 'rules' | 'ui' | 'turnPlanner' | 'ai' | 'playerInfoBox';
+type InfoPopupKind = 'rules' | 'turnPlanner' | 'ai' | 'playerInfoBox';
 
 type PlayerStatsResponseRow = {
   pieceId: string;
@@ -2437,9 +2437,7 @@ function PlayArea() {
   let infoPopupTitle =
     infoPopup === 'rules'
       ? 'Rules'
-      : infoPopup === 'ui'
-        ? 'UI Info'
-        : infoPopup === 'turnPlanner'
+      : infoPopup === 'turnPlanner'
           ? 'Turn Planner Help'
           : infoPopup === 'ai'
             ? 'AI Help'
@@ -2480,19 +2478,6 @@ function PlayArea() {
           And again: if the stranger before you in the turn order kills the Dr, you win; the teams are [P1,p4] and
           [P2,p3]. If P1 or p4 attack, P3 defends. If p2 or P3 attack, P4 defends. Strangers never contribute clovers to
           defend any attack.
-        </p>
-      </>
-    ) : infoPopup === 'ui' ? (
-      <>
-        <p>
-          You click the pieces, the rooms, and the "Submit" button to plan and submit your turn. For more info, see the
-          help in the turn planner box.
-        </p>
-        <p>The colorful player info box has a help popup if you click anywhere in the box.</p>
-        <p>The AI box can be used to get AI suggestions and execute the suggested moves.</p>
-        <p>
-          The boxes of text at the bottom are a CLI style... 1) current game state summary, 2) recent moves and actions,
-          and 3) terse history of all normal player turns.
         </p>
       </>
     ) : infoPopup === 'turnPlanner' ? (
@@ -2633,9 +2618,6 @@ function PlayArea() {
           </button>
           <button className="board-control-button" onClick={() => handleInfoToggle('rules')}>
             Rules
-          </button>
-          <button className="board-control-button" onClick={() => handleInfoToggle('ui')}>
-            UI Info
           </button>
         </div>
         <div className="board-shell" style={{ borderColor: boardOutlineColor }}>
