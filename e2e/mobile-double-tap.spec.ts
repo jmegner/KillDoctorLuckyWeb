@@ -38,6 +38,39 @@ const readNormalTurnCount = async (page: Page) =>
     return parsed.normalTurns.length;
   }, gameStateStorageKey);
 
+const seedStateWithDefaultSnapshot = async (page: Page) => {
+  const normalTurnCount = await page.evaluate(
+    async ({ gameStateStorageKeyArg, redoStateStackStorageKeyArg }) => {
+      const wasm = await import('/src/KdlRust/pkg/kill_doctor_lucky_rust.js');
+      await wasm.default();
+      const seeded = wasm.newDefaultGameState();
+      const snapshot = seeded.exportStateJson();
+      seeded.free();
+
+      window.localStorage.setItem(gameStateStorageKeyArg, snapshot);
+      window.localStorage.removeItem(redoStateStackStorageKeyArg);
+
+      const parsedSnapshot = JSON.parse(snapshot) as { normalTurns?: unknown };
+      return Array.isArray(parsedSnapshot.normalTurns) ? parsedSnapshot.normalTurns.length : -1;
+    },
+    {
+      gameStateStorageKeyArg: gameStateStorageKey,
+      redoStateStackStorageKeyArg: redoStateStackStorageKey,
+    },
+  );
+  await page.reload();
+  return normalTurnCount;
+};
+
+const tapRoomTwiceAndCaptureBeforeTurnCount = async (page: Page, room: Locator, interTapDelayMs: number) => {
+  const beforeTurnCount = await readNormalTurnCount(page);
+  await dispatchTouchRoomClick(room);
+  await expect.poll(() => readNormalTurnCount(page), { timeout: 400 }).toBe(beforeTurnCount);
+  await page.waitForTimeout(interTapDelayMs);
+  await dispatchTouchRoomClick(room);
+  return beforeTurnCount;
+};
+
 const seedStateWithStrangerAtDistinctRoom = async (page: Page) => {
   const seedResult = await page.evaluate(
     async ({ gameStateStorageKeyArg, redoStateStackStorageKeyArg }) => {
@@ -118,35 +151,40 @@ const seedStateWithStrangerAtDistinctRoom = async (page: Page) => {
 };
 
 test.describe('mobile forgiving double-tap', () => {
-  test('submits turn when second tap is slower but within forgiving window', async ({ page }) => {
+  test('submits turn on a fast touch double tap', async ({ page }) => {
     await page.goto('/');
+    const seededTurnCount = await seedStateWithDefaultSnapshot(page);
+    expect(seededTurnCount).toBe(0);
 
-    const undoButton = page.getByRole('button', { name: 'Undo' });
     const room = page.locator('.room-layer rect[aria-label="dining hall"]');
 
-    await expect(undoButton).toBeDisabled();
+    const beforeTurnCount = await tapRoomTwiceAndCaptureBeforeTurnCount(page, room, 60);
 
-    await dispatchTouchRoomClick(room);
-    await page.waitForTimeout(350);
-    await dispatchTouchRoomClick(room);
+    await expect.poll(() => readNormalTurnCount(page)).toBe(beforeTurnCount + 1);
+  });
 
-    await expect(undoButton).toBeEnabled();
+  test('submits turn when second tap is slower but within forgiving window', async ({ page }) => {
+    await page.goto('/');
+    const seededTurnCount = await seedStateWithDefaultSnapshot(page);
+    expect(seededTurnCount).toBe(0);
+
+    const room = page.locator('.room-layer rect[aria-label="dining hall"]');
+
+    const beforeTurnCount = await tapRoomTwiceAndCaptureBeforeTurnCount(page, room, 350);
+
+    await expect.poll(() => readNormalTurnCount(page)).toBe(beforeTurnCount + 1);
   });
 
   test('does not submit turn when taps are too far apart', async ({ page }) => {
     await page.goto('/');
+    const seededTurnCount = await seedStateWithDefaultSnapshot(page);
+    expect(seededTurnCount).toBe(0);
 
-    const undoButton = page.getByRole('button', { name: 'Undo' });
     const room = page.locator('.room-layer rect[aria-label="dining hall"]');
 
-    await expect(undoButton).toBeDisabled();
+    const beforeTurnCount = await tapRoomTwiceAndCaptureBeforeTurnCount(page, room, 850);
 
-    await dispatchTouchRoomClick(room);
-    await page.waitForTimeout(850);
-    await dispatchTouchRoomClick(room);
-    await page.waitForTimeout(150);
-
-    await expect(undoButton).toBeDisabled();
+    await expect.poll(() => readNormalTurnCount(page), { timeout: 1200 }).toBe(beforeTurnCount);
   });
 
   test('does not submit turn when second tap is on a different room', async ({ page }) => {
