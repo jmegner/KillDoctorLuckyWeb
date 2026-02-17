@@ -2112,8 +2112,16 @@ function PlayArea() {
   const aiStaleMessage = aiSuggestion && !aiSuggestionIsCurrent ? 'Suggestion is stale. Run Think again.' : null;
   const aiShowOnBoardEnabledForCurrentPlayer =
     currentPlayerPieceId === 'player1' ? aiShowOnBoardP1 : currentPlayerPieceId === 'player2' ? aiShowOnBoardP3 : false;
+  const analysisMaxTimeMs = (analysisMaxTimeOptions[analysisMaxTimeIndex] ?? analysisMaxTimeOptions[0]).ms;
   const aiSuggestionBoardText = (() => {
-    if (hasWinner || !aiShowOnBoardEnabledForCurrentPlayer || !aiSuggestion || !aiSuggestionIsCurrent) {
+    if (hasWinner || !aiShowOnBoardEnabledForCurrentPlayer) {
+      return null;
+    }
+    const runningTimeText = `(${formatWholeSeconds(analysisElapsedMs)}/${formatWholeSeconds(analysisMaxTimeMs)})`;
+    if (analysisIsRunning && !aiSuggestion) {
+      return `L${analysisRunningLevel ?? '?'}: thinking ${runningTimeText}`;
+    }
+    if (!aiSuggestion || !aiSuggestionIsCurrent) {
       return null;
     }
     if (!aiSuggestion.bestTurn.isValid) {
@@ -2123,7 +2131,7 @@ function PlayArea() {
     if (!suggestedTurnTextForBoard) {
       return null;
     }
-    const statusText = analysisIsRunning ? '...' : '(done)';
+    const statusText = analysisIsRunning ? runningTimeText : '(done)';
     return `L${aiSuggestion.analysisLevel}: ${suggestedTurnTextForBoard} ${statusText}`;
   })();
 
