@@ -802,7 +802,7 @@ const pieceConfig: Record<
   stranger2: { label: 'p4', shape: 'hex', color: '#55cccc', textColor: '#000000', showLabel: true },
 };
 
-const pieceSizeTarget = 60;
+const pieceSizeTarget = 80;
 const pieceGap = 3;
 
 const getRoomRect = (coords: number[]): RoomRect => ({
@@ -1368,7 +1368,9 @@ function PlayArea() {
       ...entry,
       lastUsedAtMs: touchedAtMs,
     };
-    const otherEntries = aiResultsCacheRef.current.entries.filter((candidate) => candidate.stateJson !== entry.stateJson);
+    const otherEntries = aiResultsCacheRef.current.entries.filter(
+      (candidate) => candidate.stateJson !== entry.stateJson,
+    );
     aiResultsCacheRef.current = saveAiResultsCacheStore({
       version: 1,
       entries: [...otherEntries, nextEntry],
@@ -2766,12 +2768,12 @@ function PlayArea() {
     infoPopup === 'rules'
       ? 'Rules'
       : infoPopup === 'turnPlanner'
-          ? 'Turn Planner Help'
-          : infoPopup === 'ai'
-            ? 'AI Help'
-            : infoPopup === 'playerInfoBox'
-              ? 'Player Info Box Help'
-              : 'UNKNOWN3854';
+        ? 'Turn Planner Help'
+        : infoPopup === 'ai'
+          ? 'AI Help'
+          : infoPopup === 'playerInfoBox'
+            ? 'Player Info Box Help'
+            : 'UNKNOWN3854';
   infoPopupTitle += ' (click anywhere to close)';
   const infoPopupContent =
     infoPopup === 'rules' ? (
