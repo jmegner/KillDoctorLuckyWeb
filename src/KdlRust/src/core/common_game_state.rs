@@ -4,12 +4,13 @@ use crate::core::{
     rule_helper,
 };
 use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 #[readonly::make]
 pub struct CommonGameState {
     pub is_log_enabled: bool,
-    pub board: Board,
+    pub board: Rc<Board>,
     pub num_normal_players: usize,
     pub num_all_players: usize,
 }
@@ -23,7 +24,7 @@ impl CommonGameState {
     ) -> Self {
         Self {
             is_log_enabled,
-            board,
+            board: Rc::new(board),
             num_normal_players,
             num_all_players,
         }

@@ -125,12 +125,10 @@ impl MutableGameState {
         }
 
         let doctor_idx = room_ids
-            .iter()
-            .position(|candidate| *candidate == self.doctor_room_id)
+            .binary_search_by_key(&self.doctor_room_id.0, |candidate| candidate.0)
             .expect("doctor room id not found in board room ids");
         let target_idx = room_ids
-            .iter()
-            .position(|candidate| *candidate == room_id)
+            .binary_search_by_key(&room_id.0, |candidate| candidate.0)
             .expect("target room id not found in board room ids");
 
         let distance = if target_idx >= doctor_idx {
@@ -349,8 +347,6 @@ impl MutableGameState {
             self.prev_state = Some(Rc::new(self.copy_state()));
         }
 
-        self.prev_turn = turn.clone();
-
         let total_dist: i32 = turn
             .moves
             .iter()
@@ -376,6 +372,8 @@ impl MutableGameState {
 
             self.player_room_ids[player_idx] = mv.dest_room_id;
         }
+
+        self.prev_turn = turn;
 
         let action = self.best_action_allowed(moved_stranger_that_saw_doctor);
 
@@ -670,31 +668,32 @@ impl MutableGameState {
         if self.has_winner() {
             return Vec::new();
         }
-
-        let mut subsets: Vec<Vec<PlayerId>> = vec![vec![self.current_player_id]];
+        let dist_allowed = self.player_move_cards[self.current_player_id.0 as usize] as i32 + 1;
+        let mut turns = self.possible_turns_single(dist_allowed, self.current_player_id);
 
         if self.common.has_strangers() {
             let allied_stranger = rule_helper::allied_stranger(self.current_player_id);
             let opposing_stranger = rule_helper::opposing_stranger(self.current_player_id);
 
-            subsets.push(vec![allied_stranger]);
-            subsets.push(vec![opposing_stranger]);
+            turns.extend(self.possible_turns_single(dist_allowed, allied_stranger));
+            turns.extend(self.possible_turns_single(dist_allowed, opposing_stranger));
 
             if self.player_move_cards[self.current_player_id.0 as usize] > 0.0 {
-                subsets.push(vec![self.current_player_id, allied_stranger]);
-                subsets.push(vec![self.current_player_id, opposing_stranger]);
-                subsets.push(vec![allied_stranger, opposing_stranger]);
-            }
-        }
-
-        let mut turns = Vec::new();
-        let dist_allowed = self.player_move_cards[self.current_player_id.0 as usize] as i32 + 1;
-
-        for subset in subsets {
-            if subset.len() == 1 {
-                turns.extend(self.possible_turns_single(dist_allowed, subset[0]));
-            } else if subset.len() == 2 {
-                turns.extend(self.possible_turns_dual(dist_allowed, subset[0], subset[1]));
+                turns.extend(self.possible_turns_dual(
+                    dist_allowed,
+                    self.current_player_id,
+                    allied_stranger,
+                ));
+                turns.extend(self.possible_turns_dual(
+                    dist_allowed,
+                    self.current_player_id,
+                    opposing_stranger,
+                ));
+                turns.extend(self.possible_turns_dual(
+                    dist_allowed,
+                    allied_stranger,
+                    opposing_stranger,
+                ));
             }
         }
 
@@ -729,10 +728,12 @@ impl MutableGameState {
         movable_player: PlayerId,
     ) -> Vec<SimpleTurn> {
         let movable_room = self.player_room_ids[movable_player.0 as usize];
-        let mut turns = Vec::new();
+        let room_ids = &self.common.board.room_ids;
+        let distance = &self.common.board.distance[movable_room.0];
+        let mut turns = Vec::with_capacity(room_ids.len());
 
-        for dest_room in &self.common.board.room_ids {
-            if self.common.board.distance[movable_room.0][dest_room.0] <= dist_allowed {
+        for dest_room in room_ids {
+            if distance[dest_room.0] <= dist_allowed {
                 turns.push(SimpleTurn::single(movable_player, *dest_room));
             }
         }
@@ -748,11 +749,12 @@ impl MutableGameState {
     ) -> Vec<SimpleTurn> {
         let src_room_a = self.player_room_ids[movable_player_a.0 as usize];
         let src_room_b = self.player_room_ids[movable_player_b.0 as usize];
-        let mut turns = Vec::new();
+        let room_ids = &self.common.board.room_ids;
+        let distance = &self.common.board.distance;
+        let mut turns = Vec::with_capacity(room_ids.len() * room_ids.len());
 
-        for dst_room_a in &self.common.board.room_ids {
-            let dist_remaining =
-                dist_allowed - self.common.board.distance[src_room_a.0][dst_room_a.0];
+        for dst_room_a in room_ids {
+            let dist_remaining = dist_allowed - distance[src_room_a.0][dst_room_a.0];
 
             if dist_remaining <= 0 || src_room_a == *dst_room_a {
                 continue;
@@ -760,10 +762,8 @@ impl MutableGameState {
 
             let move_a = PlayerMove::new(movable_player_a, *dst_room_a);
 
-            for dst_room_b in &self.common.board.room_ids {
-                if self.common.board.distance[src_room_b.0][dst_room_b.0] > dist_remaining
-                    || src_room_b == *dst_room_b
-                {
+            for dst_room_b in room_ids {
+                if distance[src_room_b.0][dst_room_b.0] > dist_remaining || src_room_b == *dst_room_b {
                     continue;
                 }
 

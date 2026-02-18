@@ -311,8 +311,7 @@ impl Board {
 
     pub fn next_room_id(room_id: RoomId, delta: i32, room_ids: &[RoomId]) -> RoomId {
         let idx = room_ids
-            .iter()
-            .position(|room| *room == room_id)
+            .binary_search_by_key(&room_id.0, |room| room.0)
             .expect("room id not found in room_ids");
         let next_idx = positive_remainder(idx as i32 + delta, room_ids.len());
         room_ids[next_idx]
@@ -321,8 +320,7 @@ impl Board {
     pub fn room_ids_in_doctor_visit_order(&self, start_room_id: RoomId) -> Vec<RoomId> {
         let start_idx = self
             .room_ids
-            .iter()
-            .position(|room_id| *room_id == start_room_id)
+            .binary_search_by_key(&start_room_id.0, |room_id| room_id.0)
             .expect("start room not found in room_ids");
 
         (0..self.room_ids.len())

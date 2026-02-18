@@ -119,14 +119,12 @@ where
         let beta = beta;
 
         if analysis_level > 1 {
-            let mut scored_states = possible_turns
-                .into_iter()
-                .map(|turn| {
-                    let child_state = curr_state.after_turn(turn, true);
-                    let score = child_state.heuristic_score(curr_player_id);
-                    (score, child_state)
-                })
-                .collect::<Vec<_>>();
+            let mut scored_states = Vec::with_capacity(possible_turns.len());
+            for turn in possible_turns {
+                let child_state = curr_state.after_turn(turn, true);
+                let score = child_state.heuristic_score(curr_player_id);
+                scored_states.push((score, child_state));
+            }
             scored_states.sort_by(|(score_a, _), (score_b, _)| {
                 compare_scores(*score_a, *score_b, false)
             });
