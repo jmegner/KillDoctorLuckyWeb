@@ -102,6 +102,21 @@ type AiSuggestion = {
   levelElapsedMs: number;
 };
 
+type AiResultsCacheEntry = {
+  stateJson: string;
+  analysisLevel: number;
+  bestTurn: BestTurnResponse;
+  previewRaw: string;
+  elapsedMs: number;
+  levelElapsedMs: number;
+  lastUsedAtMs: number;
+};
+
+type AiResultsCacheStore = {
+  version: 1;
+  entries: AiResultsCacheEntry[];
+};
+
 type BoardRoomRaw = {
   Id: string | number;
   Name?: string;
@@ -189,9 +204,12 @@ const touchDoubleTapGraceMs = 650;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 const animationPrefsStorageKey = 'kdl.settings.v1';
 const aiPrefsStorageKey = 'kdl.ai.v1';
+const aiResultsCacheStorageKey = 'kdl.aiResultsCache.v1';
 const setupPrefsStorageKey = 'kdl.setup.v1';
 const gameStateStorageKey = 'kdl.gameState.v1';
 const redoStateStackStorageKey = 'kdl.redoStack.v1';
+const assumedLocalStorageLimitBytes = 5 * 1024 * 1024;
+const localStorageUsageThresholdRatio = 0.85;
 const fallbackSetupPrefs = {
   moveCards: 2,
   weaponCards: 2,
@@ -438,6 +456,241 @@ const saveAiPrefs = (prefs: AiPrefs) => {
   } catch {
     // Ignore persistence failures (e.g. private mode / quota).
   }
+};
+
+const createEmptyAiResultsCacheStore = (): AiResultsCacheStore => ({
+  version: 1,
+  entries: [],
+});
+
+const sanitizeCachedTurnPlanEntry = (candidate: unknown): TurnPlanEntry | null => {
+  if (!candidate || typeof candidate !== 'object') {
+    return null;
+  }
+  const parsed = candidate as { pieceId?: unknown; roomId?: unknown };
+  const pieceId = parsed.pieceId;
+  if (typeof pieceId !== 'string' || !isPieceId(pieceId)) {
+    return null;
+  }
+  if (typeof parsed.roomId !== 'number' || !Number.isFinite(parsed.roomId)) {
+    return null;
+  }
+  return {
+    pieceId,
+    roomId: parsed.roomId,
+  };
+};
+
+const sanitizeCachedBestTurnResponse = (candidate: unknown): BestTurnResponse | null => {
+  if (!candidate || typeof candidate !== 'object') {
+    return null;
+  }
+  const parsed = candidate as Partial<BestTurnResponse>;
+  if (parsed.isValid !== true) {
+    return null;
+  }
+  if (typeof parsed.suggestedTurnText !== 'string') {
+    return null;
+  }
+  if (!Array.isArray(parsed.suggestedTurn)) {
+    return null;
+  }
+  const suggestedTurn = parsed.suggestedTurn
+    .map((entry) => sanitizeCachedTurnPlanEntry(entry))
+    .filter((entry): entry is TurnPlanEntry => entry !== null);
+  if (
+    typeof parsed.validationMessage !== 'string' ||
+    typeof parsed.heuristicScore !== 'number' ||
+    !Number.isFinite(parsed.heuristicScore) ||
+    typeof parsed.numStatesVisited !== 'number' ||
+    !Number.isFinite(parsed.numStatesVisited) ||
+    typeof parsed.elapsedMs !== 'number' ||
+    !Number.isFinite(parsed.elapsedMs)
+  ) {
+    return null;
+  }
+  return {
+    isValid: true,
+    validationMessage: parsed.validationMessage,
+    suggestedTurnText: parsed.suggestedTurnText,
+    suggestedTurn,
+    heuristicScore: parsed.heuristicScore,
+    numStatesVisited: parsed.numStatesVisited,
+    elapsedMs: parsed.elapsedMs,
+  };
+};
+
+const sanitizeAiResultsCacheEntry = (candidate: unknown): AiResultsCacheEntry | null => {
+  if (!candidate || typeof candidate !== 'object') {
+    return null;
+  }
+  const parsed = candidate as Partial<AiResultsCacheEntry>;
+  if (typeof parsed.stateJson !== 'string' || parsed.stateJson.length === 0) {
+    return null;
+  }
+  if (typeof parsed.analysisLevel !== 'number' || !Number.isFinite(parsed.analysisLevel) || parsed.analysisLevel < 0) {
+    return null;
+  }
+  const bestTurn = sanitizeCachedBestTurnResponse(parsed.bestTurn);
+  if (!bestTurn) {
+    return null;
+  }
+  if (typeof parsed.previewRaw !== 'string') {
+    return null;
+  }
+  if (typeof parsed.elapsedMs !== 'number' || !Number.isFinite(parsed.elapsedMs) || parsed.elapsedMs < 0) {
+    return null;
+  }
+  if (
+    typeof parsed.levelElapsedMs !== 'number' ||
+    !Number.isFinite(parsed.levelElapsedMs) ||
+    parsed.levelElapsedMs < 0
+  ) {
+    return null;
+  }
+  if (typeof parsed.lastUsedAtMs !== 'number' || !Number.isFinite(parsed.lastUsedAtMs) || parsed.lastUsedAtMs < 0) {
+    return null;
+  }
+
+  return {
+    stateJson: parsed.stateJson,
+    analysisLevel: Math.trunc(parsed.analysisLevel),
+    bestTurn,
+    previewRaw: parsed.previewRaw,
+    elapsedMs: parsed.elapsedMs,
+    levelElapsedMs: parsed.levelElapsedMs,
+    lastUsedAtMs: parsed.lastUsedAtMs,
+  };
+};
+
+const normalizeAiResultsCacheEntries = (entries: AiResultsCacheEntry[]) => {
+  const entriesByState = new Map<string, AiResultsCacheEntry>();
+  entries.forEach((entry) => {
+    const previous = entriesByState.get(entry.stateJson);
+    if (!previous || previous.lastUsedAtMs <= entry.lastUsedAtMs) {
+      entriesByState.set(entry.stateJson, entry);
+    }
+  });
+  return Array.from(entriesByState.values());
+};
+
+const estimateStorageStringBytes = (value: string) => value.length * 2;
+
+const estimateLocalStorageUsageBytes = (storage: Storage, excludedKey?: string) => {
+  let totalBytes = 0;
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (!key || key === excludedKey) {
+      continue;
+    }
+    const value = storage.getItem(key) ?? '';
+    totalBytes += estimateStorageStringBytes(key) + estimateStorageStringBytes(value);
+  }
+  return totalBytes;
+};
+
+const getOldestAiResultsCacheEntryIndex = (entries: AiResultsCacheEntry[]) => {
+  if (entries.length === 0) {
+    return -1;
+  }
+  let oldestIndex = 0;
+  let oldestTime = entries[0].lastUsedAtMs;
+  for (let index = 1; index < entries.length; index += 1) {
+    if (entries[index].lastUsedAtMs < oldestTime) {
+      oldestTime = entries[index].lastUsedAtMs;
+      oldestIndex = index;
+    }
+  }
+  return oldestIndex;
+};
+
+const saveAiResultsCacheStore = (store: AiResultsCacheStore): AiResultsCacheStore => {
+  const normalizedStore: AiResultsCacheStore = {
+    version: 1,
+    entries: normalizeAiResultsCacheEntries(store.entries),
+  };
+  if (typeof window === 'undefined') {
+    return normalizedStore;
+  }
+
+  const storage = window.localStorage;
+  const usageThresholdBytes = Math.floor(assumedLocalStorageLimitBytes * localStorageUsageThresholdRatio);
+  const bytesWithoutCacheKey = estimateLocalStorageUsageBytes(storage, aiResultsCacheStorageKey);
+  const nextEntries = [...normalizedStore.entries];
+
+  while (nextEntries.length > 0) {
+    const serialized = JSON.stringify({ version: 1, entries: nextEntries } satisfies AiResultsCacheStore);
+    const projectedUsageBytes =
+      bytesWithoutCacheKey +
+      estimateStorageStringBytes(aiResultsCacheStorageKey) +
+      estimateStorageStringBytes(serialized);
+    if (projectedUsageBytes < usageThresholdBytes) {
+      try {
+        storage.setItem(aiResultsCacheStorageKey, serialized);
+        return {
+          version: 1,
+          entries: [...nextEntries],
+        };
+      } catch {
+        // Try again after removing oldest entries until a write succeeds.
+      }
+    }
+    const oldestEntryIndex = getOldestAiResultsCacheEntryIndex(nextEntries);
+    if (oldestEntryIndex < 0) {
+      break;
+    }
+    nextEntries.splice(oldestEntryIndex, 1);
+  }
+
+  try {
+    storage.removeItem(aiResultsCacheStorageKey);
+  } catch {
+    // Ignore cleanup failures.
+  }
+  return createEmptyAiResultsCacheStore();
+};
+
+const loadAiResultsCacheStore = (): AiResultsCacheStore => {
+  if (typeof window === 'undefined') {
+    return createEmptyAiResultsCacheStore();
+  }
+
+  try {
+    const raw = window.localStorage.getItem(aiResultsCacheStorageKey);
+    if (!raw) {
+      return createEmptyAiResultsCacheStore();
+    }
+    const parsed = JSON.parse(raw) as { entries?: unknown };
+    if (!Array.isArray(parsed.entries)) {
+      window.localStorage.removeItem(aiResultsCacheStorageKey);
+      return createEmptyAiResultsCacheStore();
+    }
+    const sanitizedEntries = parsed.entries
+      .map((entry) => sanitizeAiResultsCacheEntry(entry))
+      .filter((entry): entry is AiResultsCacheEntry => entry !== null);
+    return saveAiResultsCacheStore({
+      version: 1,
+      entries: sanitizedEntries,
+    });
+  } catch {
+    try {
+      window.localStorage.removeItem(aiResultsCacheStorageKey);
+    } catch {
+      // Ignore cleanup failures.
+    }
+    return createEmptyAiResultsCacheStore();
+  }
+};
+
+const clearAiResultsCacheStore = (): AiResultsCacheStore => {
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.removeItem(aiResultsCacheStorageKey);
+    } catch {
+      // Ignore cleanup failures.
+    }
+  }
+  return createEmptyAiResultsCacheStore();
 };
 
 const saveGameStateSnapshot = (gameState: GameStateHandle | null) => {
@@ -1004,6 +1257,7 @@ function PlayArea() {
   const [analysisCurrentLevelElapsedMs, setAnalysisCurrentLevelElapsedMs] = useState(0);
   const [analysisStatusMessage, setAnalysisStatusMessage] = useState<string | null>(null);
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null);
+  const aiResultsCacheRef = useRef<AiResultsCacheStore>(loadAiResultsCacheStore());
   const analysisTimerRef = useRef<number | null>(null);
   const analysisDeadlineTimerRef = useRef<number | null>(null);
   const analysisTimingRef = useRef<{ runStartMs: number; levelStartMs: number } | null>(null);
@@ -1098,6 +1352,48 @@ function PlayArea() {
       showOnBoardP1: nextShowOnBoardP1,
       showOnBoardP3: nextShowOnBoardP3,
     });
+  };
+  const findAiResultsCacheEntry = (stateJson: string) =>
+    aiResultsCacheRef.current.entries.find((entry) => entry.stateJson === stateJson) ?? null;
+  const toAiSuggestionFromCacheEntry = (entry: AiResultsCacheEntry, sourceTurnCounter: number): AiSuggestion => ({
+    sourceTurnCounter,
+    analysisLevel: entry.analysisLevel,
+    bestTurn: entry.bestTurn,
+    previewRaw: entry.previewRaw,
+    elapsedMs: entry.elapsedMs,
+    levelElapsedMs: entry.levelElapsedMs,
+  });
+  const touchAiResultsCacheEntry = (entry: AiResultsCacheEntry, touchedAtMs: number) => {
+    const nextEntry: AiResultsCacheEntry = {
+      ...entry,
+      lastUsedAtMs: touchedAtMs,
+    };
+    const otherEntries = aiResultsCacheRef.current.entries.filter((candidate) => candidate.stateJson !== entry.stateJson);
+    aiResultsCacheRef.current = saveAiResultsCacheStore({
+      version: 1,
+      entries: [...otherEntries, nextEntry],
+    });
+    return nextEntry;
+  };
+  const upsertAiResultsCacheFromSuggestion = (stateJson: string, suggestion: AiSuggestion, touchedAtMs: number) => {
+    const nextEntry: AiResultsCacheEntry = {
+      stateJson,
+      analysisLevel: suggestion.analysisLevel,
+      bestTurn: suggestion.bestTurn,
+      previewRaw: suggestion.previewRaw,
+      elapsedMs: suggestion.elapsedMs,
+      levelElapsedMs: suggestion.levelElapsedMs,
+      lastUsedAtMs: touchedAtMs,
+    };
+    const otherEntries = aiResultsCacheRef.current.entries.filter((entry) => entry.stateJson !== stateJson);
+    aiResultsCacheRef.current = saveAiResultsCacheStore({
+      version: 1,
+      entries: [...otherEntries, nextEntry],
+    });
+  };
+  const handleClearAiResultsCache = () => {
+    aiResultsCacheRef.current = clearAiResultsCacheStore();
+    setAnalysisStatusMessage('AI cache cleared.');
   };
   const pieceRooms = gameState ? gameState.piecePositions() : null;
   const pieceRoomMap = (() => {
@@ -1531,15 +1827,22 @@ function PlayArea() {
           ? aiControlP3Ref.current
           : false;
     const shouldAutoSubmit = autoSubmit || autoSubmitFromControl;
+    const cachedEntry = findAiResultsCacheEntry(sourceStateJson);
+    const cachedSuggestion = cachedEntry
+      ? toAiSuggestionFromCacheEntry(touchAiResultsCacheEntry(cachedEntry, Date.now()), sourceTurnCounter)
+      : null;
+    const initialAnalysisLevel = cachedSuggestion
+      ? Math.max(minAnalysisLevel, cachedSuggestion.analysisLevel + 1)
+      : minAnalysisLevel;
 
     stopAnalysisTimer();
     if (analysisIsRunning) {
       stopAnalysisWorker();
     }
-    setAiSuggestion(null);
+    setAiSuggestion(cachedSuggestion);
     setAnalysisIsRunning(true);
-    analysisRunningLevelRef.current = minAnalysisLevel;
-    setAnalysisRunningLevel(minAnalysisLevel);
+    analysisRunningLevelRef.current = initialAnalysisLevel;
+    setAnalysisRunningLevel(initialAnalysisLevel);
     setAnalysisCurrentLevelElapsedMs(0);
     setAnalysisStatusMessage(shouldAutoSubmit ? 'Analyzing and auto-submitting...' : 'Analyzing...');
     setAnalysisElapsedMs(0);
@@ -1570,9 +1873,9 @@ function PlayArea() {
       analysisWorkerRef.current = worker;
     }
 
-    let currentLevel = minAnalysisLevel;
-    let deepestCompletedSuggestion: AiSuggestion | null = null;
-    let mostRecentCompletedLevelElapsedMs: number | null = null;
+    let currentLevel = initialAnalysisLevel;
+    let deepestCompletedSuggestion: AiSuggestion | null = cachedSuggestion;
+    let mostRecentCompletedLevelElapsedMs: number | null = cachedSuggestion ? cachedSuggestion.levelElapsedMs : null;
     let timeLimitReached = false;
 
     const completeAndMaybeSubmit = (
@@ -1708,6 +2011,7 @@ function PlayArea() {
         elapsedMs: completedElapsedMs,
         levelElapsedMs: completedLevelElapsedMs,
       };
+      upsertAiResultsCacheFromSuggestion(sourceStateJson, deepestCompletedSuggestion, Date.now());
       mostRecentCompletedLevelElapsedMs = completedLevelElapsedMs;
       setAiSuggestion(deepestCompletedSuggestion);
 
@@ -2546,6 +2850,9 @@ function PlayArea() {
           <li>
             <strong>Cancel</strong>: stops an in-progress analysis run and keeps the best completed level found so far.
           </li>
+          <li>
+            <strong>Clear Cache</strong>: removes remembered analysis results from memory and localStorage.
+          </li>
         </ul>
         <h4>AI Ownership / Display</h4>
         <ul>
@@ -3290,6 +3597,11 @@ function PlayArea() {
             </span>
           </div>
           {aiStaleMessage && <p className="ai-note">{aiStaleMessage}</p>}
+          <div className="planner-actions ai-actions ai-actions--footer">
+            <button className="planner-button" onClick={handleClearAiResultsCache}>
+              Clear Cache
+            </button>
+          </div>
         </aside>
       </div>
       <div className="play-area-summary">
