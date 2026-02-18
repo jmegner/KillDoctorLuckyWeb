@@ -1612,6 +1612,17 @@ function PlayArea() {
     submitPlan(nextMoves, nextOrder);
   };
 
+  const clearPlannedMoveForPiece = (pieceId: PieceId) => {
+    setPlannedMoves((prev) => {
+      if (prev[pieceId] === undefined) {
+        return prev;
+      }
+      const { [pieceId]: _removed, ...remainingMoves } = prev;
+      return remainingMoves;
+    });
+    setPlanOrder((prev) => (prev.includes(pieceId) ? prev.filter((id) => id !== pieceId) : prev));
+  };
+
   const handlePieceClick = (pieceId: PieceId) => {
     clearPendingEmptyRoomTouchTap();
     if (hasWinner) {
@@ -1658,6 +1669,10 @@ function PlayArea() {
     }
     clearPendingEmptyRoomTouchTap();
     if (pieceRoomMap.get(selectedPieceId) === roomId) {
+      const plannedRoomId = plannedMoves[selectedPieceId];
+      if (plannedRoomId !== undefined && plannedRoomId !== roomId) {
+        clearPlannedMoveForPiece(selectedPieceId);
+      }
       setSelectedPieceId(null);
       setValidationMessage(null);
       return;
@@ -2354,6 +2369,10 @@ function PlayArea() {
       return;
     }
     if (pieceRoomMap.get(selectedPieceId) === roomId) {
+      const plannedRoomId = plannedMoves[selectedPieceId];
+      if (plannedRoomId !== undefined && plannedRoomId !== roomId) {
+        clearPlannedMoveForPiece(selectedPieceId);
+      }
       setSelectedPieceId(null);
       setValidationMessage(null);
       return;
