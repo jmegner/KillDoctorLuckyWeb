@@ -149,7 +149,6 @@
 .action-overlay-text {
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 18px;
   fill: #000000;
   text-anchor: middle;
   dominant-baseline: middle;

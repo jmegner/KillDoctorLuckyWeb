@@ -210,6 +210,7 @@ const gameStateStorageKey = 'kdl.gameState.v1';
 const redoStateStackStorageKey = 'kdl.redoStack.v1';
 const assumedLocalStorageLimitBytes = 5 * 1024 * 1024;
 const localStorageUsageThresholdRatio = 0.85;
+const boardOverlayFontSizePx = 27;
 const fallbackSetupPrefs = {
   moveCards: 2,
   weaponCards: 2,
@@ -1024,7 +1025,7 @@ const parseActionSummaries = (summary: string): Array<ActionInfo | null> => {
 };
 
 const buildActionOverlayLayout = (text: string) => {
-  const fontSize = 18;
+  const fontSize = boardOverlayFontSizePx;
   const paddingX = 16;
   const paddingY = 8;
   const estimatedTextWidth = Math.max(60, text.length * fontSize * 0.6);
@@ -1047,6 +1048,7 @@ const buildActionOverlayLayout = (text: string) => {
     boxHeight,
     textX: clampedX + boxWidth / 2,
     textY: clampedY + boxHeight / 2 + 0.5,
+    fontSize,
   };
 };
 
@@ -3161,7 +3163,12 @@ function PlayArea() {
                     width={actionOverlayLayout.boxWidth}
                     height={actionOverlayLayout.boxHeight}
                   />
-                  <text className="action-overlay-text" x={actionOverlayLayout.textX} y={actionOverlayLayout.textY}>
+                  <text
+                    className="action-overlay-text"
+                    x={actionOverlayLayout.textX}
+                    y={actionOverlayLayout.textY}
+                    style={{ fontSize: `${actionOverlayLayout.fontSize}px` }}
+                  >
                     {boardOverlayText}
                   </text>
                 </g>
