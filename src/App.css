@@ -732,12 +732,31 @@ body:has(.info-overlay) {
   font-size: 0.85rem;
 }
 
+.planner-animations-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.planner-animations-toggle input {
+  margin: 0;
+}
+
 .planner-animations-speed {
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 0.9rem;
   min-width: 52px;
   text-align: center;
+}
+
+.planner-animations-redo-button {
+  margin-left: auto;
 }
 
 .play-area-summary {

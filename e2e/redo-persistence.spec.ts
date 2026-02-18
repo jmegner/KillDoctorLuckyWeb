@@ -8,7 +8,7 @@ const aiPrefsStorageKey = 'kdl.ai.v1';
 test('redo remains available after refresh and does not disturb unrelated localStorage keys', async ({ page }) => {
   await page.goto('/');
 
-  const redoButton = page.getByRole('button', { name: 'Redo' });
+  const redoButton = page.getByRole('button', { name: 'Redo', exact: true });
   await expect(redoButton).toBeDisabled();
 
   await page.evaluate(async ({ gameStateStorageKeyArg, redoStateStackStorageKeyArg, sanityStorageKeyArg }) => {
@@ -119,7 +119,7 @@ test('undo clears AI control for the undone player before analysis can auto-subm
   await page.reload();
 
   const undoButton = page.getByRole('button', { name: 'Undo' });
-  const redoButton = page.getByRole('button', { name: 'Redo' });
+  const redoButton = page.getByRole('button', { name: 'Redo', exact: true });
   const controlRow = page.locator('.planner-line').filter({ hasText: 'Control' }).first();
   const p1ControlCheckbox = controlRow.getByRole('checkbox', { name: 'P1' });
   const turnPlannerTitle = page.locator('.planner-panel .planner-title').first();
@@ -137,4 +137,39 @@ test('undo clears AI control for the undone player before analysis can auto-subm
   await expect.poll(async () =>
     page.evaluate((key) => JSON.parse(window.localStorage.getItem(key) ?? '{}').controlP1, aiPrefsStorageKey),
   ).toBe(false);
+});
+
+test('Anim Redo redoes the turn even when animation checkbox is off', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(async ({ gameStateStorageKeyArg, redoStateStackStorageKeyArg }) => {
+    const wasm = await import('/src/KdlRust/pkg/kill_doctor_lucky_rust.js');
+    await wasm.default();
+    const seededState = wasm.newDefaultGameState();
+    const snapshot = seededState.exportStateJson();
+    seededState.free();
+
+    window.localStorage.setItem(gameStateStorageKeyArg, snapshot);
+    window.localStorage.setItem(redoStateStackStorageKeyArg, JSON.stringify([snapshot]));
+  }, {
+    gameStateStorageKeyArg: gameStateStorageKey,
+    redoStateStackStorageKeyArg: redoStateStackStorageKey,
+  });
+
+  await page.reload();
+
+  const animationsPanel = page.locator('.planner-animations');
+  const animationOnCheckbox = animationsPanel.getByRole('checkbox', { name: 'On' });
+  const animRedoButton = animationsPanel.getByRole('button', { name: 'Anim Redo' });
+  const redoButton = page.getByRole('button', { name: 'Redo', exact: true });
+
+  await expect(animationOnCheckbox).toBeChecked();
+  await animationOnCheckbox.uncheck();
+  await expect(animationOnCheckbox).not.toBeChecked();
+
+  await expect(animRedoButton).toBeEnabled();
+  await animRedoButton.click();
+
+  await expect(redoButton).toBeDisabled();
+  await expect.poll(async () => page.evaluate((key) => window.localStorage.getItem(key), redoStateStackStorageKey)).toBeNull();
 });

@@ -2112,7 +2112,7 @@ function PlayArea() {
     }
   };
 
-  const handleRedo = () => {
+  const runRedo = (options?: { animateFromCurrentState?: boolean }) => {
     if (!gameState) {
       return;
     }
@@ -2120,6 +2120,10 @@ function PlayArea() {
       setValidationMessage('No undone turn to redo.');
       return;
     }
+    const animateFromCurrentState = options?.animateFromCurrentState ?? false;
+    const initialRoomsForAnimation = animateFromCurrentState
+      ? Array.from(gameState.piecePositions(), (value) => Number(value))
+      : null;
     if (analysisIsRunning) {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
@@ -2146,6 +2150,13 @@ function PlayArea() {
     if (!(gameState?.hasWinner() ?? true)) {
       startBestTurnAnalysis(false, nextTurnCounter);
     }
+    if (animateFromCurrentState) {
+      startAnimationFromState(initialRoomsForAnimation, { force: true });
+    }
+  };
+
+  const handleRedo = () => {
+    runRedo();
   };
 
   const handleReset = () => {
@@ -2555,8 +2566,8 @@ function PlayArea() {
       );
   };
 
-  const startAnimationFromState = (initialRoomsOverride?: number[] | null) => {
-    if (!gameState || !animationEnabled) {
+  const startAnimationFromState = (initialRoomsOverride?: number[] | null, options?: { force?: boolean }) => {
+    if (!gameState || (!animationEnabled && !options?.force)) {
       return;
     }
     const framesRaw = gameState.animationFrames();
@@ -2704,13 +2715,13 @@ function PlayArea() {
     animationRef.current.rafId = requestAnimationFrame(tick);
   };
 
-  const handleAnimationEnabled = (enabled: boolean) => {
-    setAnimationEnabled(enabled);
+  const handleAnimationEnabledChange = (checked: boolean) => {
+    setAnimationEnabled(checked);
     saveAnimationPrefs({
-      animationEnabled: enabled,
+      animationEnabled: checked,
       animationSpeedIndex,
     });
-    if (!enabled) {
+    if (!checked) {
       stopAnimation();
     }
   };
@@ -2834,7 +2845,8 @@ function PlayArea() {
         <p>
           Clicking the Undo button will undo everything up to the last submitted plan, which includes all Dr movement
           and stranger turns. Clicking Redo will redo the last undone plan, and you can redo multiple times if you had
-          undone multiple times.
+          undone multiple times. Anim Redo does the same redo operation but always plays the animation for that redone
+          turn.
         </p>
       </>
     ) : infoPopup === 'ai' ? (
@@ -3302,18 +3314,14 @@ function PlayArea() {
           <div className="planner-animations">
             <p className="planner-animations-title">Animations</p>
             <div className="planner-animations-row">
-              <button
-                className={`planner-button ${animationEnabled ? '' : 'is-active'}`}
-                onClick={() => handleAnimationEnabled(false)}
-              >
-                Off
-              </button>
-              <button
-                className={`planner-button ${animationEnabled ? 'is-active' : ''}`}
-                onClick={() => handleAnimationEnabled(true)}
-              >
+              <label className="planner-animations-toggle">
+                <input
+                  type="checkbox"
+                  checked={animationEnabled}
+                  onChange={(event) => handleAnimationEnabledChange(event.target.checked)}
+                />
                 On
-              </button>
+              </label>
               <button className="planner-button" onClick={() => handleSpeedChange('slower')} aria-label="Slower">
                 -
               </button>
@@ -3321,6 +3329,13 @@ function PlayArea() {
                 +
               </button>
               <span className="planner-animations-speed">{animationSpeed.toFixed(2)}x</span>
+              <button
+                className="planner-button planner-animations-redo-button"
+                onClick={() => runRedo({ animateFromCurrentState: true })}
+                disabled={!canRedo}
+              >
+                Anim Redo
+              </button>
             </div>
           </div>
         </aside>
