@@ -121,7 +121,15 @@
 }
 
 .room-distance-box {
-  fill: #ffe740;
+  fill: #FFFF77;
+}
+
+.room-distance-box--possible {
+  fill: #FFFF77;
+}
+
+.room-distance-box--too-far {
+  fill: #FF3300;
 }
 
 .room-distance-text {

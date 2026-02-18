@@ -2470,6 +2470,31 @@ function PlayArea() {
   const selectedSuffix = selectedPieceId && plannedMoves[selectedPieceId] !== undefined ? ' (update)' : '';
   const selectedRoomId = selectedPieceId ? pieceRoomMap.get(selectedPieceId) : undefined;
   const distanceByRoom = selectedRoomId !== undefined ? buildRoomDistanceMap(selectedRoomId) : null;
+  const movePossibleByRoom = (() => {
+    if (!selectedPieceId || selectedRoomId === undefined || !distanceByRoom || !gameState) {
+      return null;
+    }
+    const nextOrder = planOrder.includes(selectedPieceId) ? planOrder : [...planOrder, selectedPieceId];
+    const byRoom = new Map<number, boolean>();
+    distanceByRoom.forEach((_distance, roomId) => {
+      if (roomId === selectedRoomId) {
+        return;
+      }
+      const nextMoves = { ...plannedMoves, [selectedPieceId]: roomId };
+      const nextEntries = nextOrder
+        .map((pieceId) => {
+          const plannedRoomId = nextMoves[pieceId];
+          if (plannedRoomId === undefined) {
+            return null;
+          }
+          return { pieceId, roomId: plannedRoomId };
+        })
+        .filter((entry): entry is TurnPlanEntry => entry !== null);
+      const validation = gameState.validateTurnPlan(JSON.stringify(nextEntries));
+      byRoom.set(roomId, !validation);
+    });
+    return byRoom;
+  })();
   const aiSuggestionOverlayVisible = Boolean(aiSuggestionBoardText && !animatedPieces && !animationRef.current);
   const boardOverlayText = actionOverlay ?? (aiSuggestionOverlayVisible ? aiSuggestionBoardText : null);
   const actionOverlayLayout = boardOverlayText ? buildActionOverlayLayout(boardOverlayText) : null;
@@ -3009,10 +3034,14 @@ function PlayArea() {
                     const boxY = rect.y + rect.height * 0.2;
                     const textX = boxX + boxWidth / 2;
                     const textY = boxY + boxHeight / 2 + 0.5;
+                    const isMovePossible = movePossibleByRoom?.get(room.id) ?? true;
+                    const boxClassName = isMovePossible
+                      ? 'room-distance-box room-distance-box--possible'
+                      : 'room-distance-box room-distance-box--too-far';
 
                     return (
                       <g key={`distance-${room.id}`}>
-                        <rect className="room-distance-box" x={boxX} y={boxY} width={boxWidth} height={boxHeight} />
+                        <rect className={boxClassName} x={boxX} y={boxY} width={boxWidth} height={boxHeight} />
                         <text className="room-distance-text" x={textX} y={textY}>
                           {distance}
                         </text>
