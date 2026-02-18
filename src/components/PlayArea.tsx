@@ -1164,7 +1164,7 @@ const formatWholeSeconds = (elapsedMs: number) => {
   return `${Math.floor(elapsedMs / 1000)}s`;
 };
 
-const isWinningHeuristicScore = (score: number) => Number.isFinite(score) && score > 1e12;
+const isTerminalHeuristicScore = (score: number) => Number.isFinite(score) && Math.abs(score) > 1e12;
 
 const formatSuggestedTurnText = (bestTurn: BestTurnResponse) => {
   if (bestTurn.suggestedTurn.length > 0) {
@@ -2015,8 +2015,8 @@ function PlayArea() {
       mostRecentCompletedLevelElapsedMs = completedLevelElapsedMs;
       setAiSuggestion(deepestCompletedSuggestion);
 
-      if (isWinningHeuristicScore(bestTurn.heuristicScore)) {
-        completeAndMaybeSubmit(`Win found at L${currentLevel}.`);
+      if (isTerminalHeuristicScore(bestTurn.heuristicScore)) {
+        completeAndMaybeSubmit(`${formatHeuristicScore(bestTurn.heuristicScore)} found at L${currentLevel}.`);
         return;
       }
 
