@@ -1820,13 +1820,18 @@ function PlayArea() {
     const sourceStateJson = gameState.exportStateJson();
     const sourceCurrentPlayerPieceIdRaw = gameState.currentPlayerPieceId();
     const sourceCurrentPlayerPieceId = isPieceId(sourceCurrentPlayerPieceIdRaw) ? sourceCurrentPlayerPieceIdRaw : null;
-    const autoSubmitFromControl =
-      sourceCurrentPlayerPieceId === 'player1'
-        ? aiControlP1Ref.current
-        : sourceCurrentPlayerPieceId === 'player2'
-          ? aiControlP3Ref.current
-          : false;
-    const shouldAutoSubmit = autoSubmit || autoSubmitFromControl;
+    const shouldAutoSubmitAtThisMoment = () => {
+      if (autoSubmit) {
+        return true;
+      }
+      if (sourceCurrentPlayerPieceId === 'player1') {
+        return aiControlP1Ref.current;
+      }
+      if (sourceCurrentPlayerPieceId === 'player2') {
+        return aiControlP3Ref.current;
+      }
+      return false;
+    };
     const cachedEntry = findAiResultsCacheEntry(sourceStateJson);
     const cachedSuggestion = cachedEntry
       ? toAiSuggestionFromCacheEntry(touchAiResultsCacheEntry(cachedEntry, Date.now()), sourceTurnCounter)
@@ -1844,7 +1849,7 @@ function PlayArea() {
     analysisRunningLevelRef.current = initialAnalysisLevel;
     setAnalysisRunningLevel(initialAnalysisLevel);
     setAnalysisCurrentLevelElapsedMs(0);
-    setAnalysisStatusMessage(shouldAutoSubmit ? 'Analyzing and auto-submitting...' : 'Analyzing...');
+    setAnalysisStatusMessage(shouldAutoSubmitAtThisMoment() ? 'Analyzing and auto-submitting...' : 'Analyzing...');
     setAnalysisElapsedMs(0);
 
     const timerStart = performance.now();
@@ -1885,7 +1890,7 @@ function PlayArea() {
       },
     ) => {
       const terminateWorker = options?.terminateWorker ?? false;
-      if (!shouldAutoSubmit) {
+      if (!shouldAutoSubmitAtThisMoment()) {
         stopAnalysisRun(completionMessage, { terminateWorker });
         return;
       }
