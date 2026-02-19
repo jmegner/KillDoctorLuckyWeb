@@ -1206,6 +1206,27 @@ const formatSuggestedTurnTextForBoard = (bestTurn: BestTurnResponse) => {
   return null;
 };
 
+const formatDebugSeconds = (elapsedMs: number) => {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
+    return '0.0s';
+  }
+  return `${(elapsedMs / 1000).toFixed(1)}s`;
+};
+
+const formatAnalysisLevelDebugLine = (
+  turnNumber: number,
+  analysisLevel: number,
+  levelElapsedMs: number,
+  bestTurn: BestTurnResponse,
+) => `T${turnNumber}, L${analysisLevel}, ${formatDebugSeconds(levelElapsedMs)}; ${formatSuggestedTurnText(bestTurn)}`;
+
+const emitAnalysisDebugLog = (message: string) => {
+  if (typeof navigator !== 'undefined' && navigator.webdriver) {
+    return;
+  }
+  console.debug(message);
+};
+
 const formatHeuristicScore = (score: number) => {
   if (!Number.isFinite(score)) {
     return '?';
@@ -1864,6 +1885,16 @@ function PlayArea() {
     const runId = analysisRunIdRef.current;
     const sourceTurnCounter = sourceTurnCounterOverride ?? turnCounterRef.current;
     const sourceStateJson = gameState.exportStateJson();
+    const sourceNormalTurnCount = parseNormalTurnCountFromSnapshotJson(sourceStateJson) ?? currentNormalTurnCount;
+    let loggedStopReason = false;
+    const debugAnalysisStopReason = (stoppedLevel: number | null, reason: string) => {
+      if (loggedStopReason) {
+        return;
+      }
+      loggedStopReason = true;
+      const levelText = stoppedLevel === null ? '?' : `${stoppedLevel}`;
+      emitAnalysisDebugLog(`T${sourceNormalTurnCount}, stopped at L${levelText} cuz ${reason}`);
+    };
     const sourceCurrentPlayerPieceIdRaw = gameState.currentPlayerPieceId();
     const sourceCurrentPlayerPieceId = isPieceId(sourceCurrentPlayerPieceIdRaw) ? sourceCurrentPlayerPieceIdRaw : null;
     const shouldAutoSubmitAtThisMoment = () => {
@@ -1882,6 +1913,16 @@ function PlayArea() {
     const cachedSuggestion = cachedEntry
       ? toAiSuggestionFromCacheEntry(touchAiResultsCacheEntry(cachedEntry, Date.now()), sourceTurnCounter)
       : null;
+    if (cachedSuggestion) {
+      emitAnalysisDebugLog(
+        `${formatAnalysisLevelDebugLine(
+          sourceNormalTurnCount,
+          cachedSuggestion.analysisLevel,
+          cachedSuggestion.levelElapsedMs,
+          cachedSuggestion.bestTurn,
+        )} (cache)`,
+      );
+    }
     const initialAnalysisLevel = cachedSuggestion
       ? Math.max(minAnalysisLevel, cachedSuggestion.analysisLevel + 1)
       : minAnalysisLevel;
@@ -1896,6 +1937,10 @@ function PlayArea() {
       cachedSuggestion &&
       cachedSuggestion.analysisLevel >= effectiveMaxAnalysisLevel
     ) {
+      debugAnalysisStopReason(
+        Math.min(cachedSuggestion.analysisLevel, effectiveMaxAnalysisLevel),
+        `max turn depth is L${effectiveMaxAnalysisLevel}`,
+      );
       setAiSuggestion(cachedSuggestion);
       setAnalysisIsRunning(false);
       analysisRunningLevelRef.current = null;
@@ -1954,6 +1999,7 @@ function PlayArea() {
       try {
         worker = new Worker(new URL('../workers/treeSearchWorker.ts', import.meta.url), { type: 'module' });
       } catch {
+        debugAnalysisStopReason(initialAnalysisLevel, 'analysis worker failed to start');
         stopAnalysisRun('Failed to start analysis worker.');
         return;
       }
@@ -1967,11 +2013,15 @@ function PlayArea() {
 
     const completeAndMaybeSubmit = (
       completionMessage: string,
+      debugReason: string,
       options?: {
         terminateWorker?: boolean;
+        stopLevel?: number | null;
       },
     ) => {
       const terminateWorker = options?.terminateWorker ?? false;
+      const stopLevel = options?.stopLevel ?? deepestCompletedSuggestion?.analysisLevel ?? analysisRunningLevelRef.current;
+      debugAnalysisStopReason(stopLevel, debugReason);
       if (!shouldAutoSubmitAtThisMoment()) {
         stopAnalysisRun(completionMessage, { terminateWorker });
         return;
@@ -2007,7 +2057,14 @@ function PlayArea() {
       }
       if (effectiveMaxAnalysisLevel !== null && currentLevel > effectiveMaxAnalysisLevel) {
         const deepestCompletedLevel = deepestCompletedSuggestion?.analysisLevel ?? effectiveMaxAnalysisLevel;
-        completeAndMaybeSubmit(`Max turn depth reached at L${deepestCompletedLevel}.`, { terminateWorker: true });
+        completeAndMaybeSubmit(
+          `Max turn depth reached at L${deepestCompletedLevel}.`,
+          `max turn depth is L${effectiveMaxAnalysisLevel}`,
+          {
+            terminateWorker: true,
+            stopLevel: deepestCompletedLevel,
+          },
+        );
         return;
       }
       const now = performance.now();
@@ -2015,19 +2072,38 @@ function PlayArea() {
       setAnalysisElapsedMs(elapsedMs);
       if (timeLimitReached) {
         const levelAtTimeout = analysisRunningLevelRef.current ?? currentLevel;
-        completeAndMaybeSubmit(`Time limit during L${levelAtTimeout}.`, { terminateWorker: true });
+        const stopLevel = deepestCompletedSuggestion?.analysisLevel ?? levelAtTimeout;
+        completeAndMaybeSubmit(
+          `Time limit during L${levelAtTimeout}.`,
+          `time limit was reached during L${levelAtTimeout}`,
+          { terminateWorker: true, stopLevel },
+        );
         return;
       }
       if (currentLevel > minAnalysisLevel && elapsedMs >= maxTimeMs) {
         const levelAtTimeout = analysisRunningLevelRef.current ?? currentLevel;
-        completeAndMaybeSubmit(`Time limit during L${levelAtTimeout}.`, { terminateWorker: true });
+        const stopLevel = deepestCompletedSuggestion?.analysisLevel ?? levelAtTimeout;
+        completeAndMaybeSubmit(
+          `Time limit during L${levelAtTimeout}.`,
+          `time limit was reached during L${levelAtTimeout}`,
+          { terminateWorker: true, stopLevel },
+        );
         return;
       }
       if (currentLevel > minAnalysisLevel && mostRecentCompletedLevelElapsedMs !== null) {
         const remainingMs = Math.max(0, maxTimeMs - elapsedMs);
         if (remainingMs < mostRecentCompletedLevelElapsedMs) {
           const deepestCompletedLevel = deepestCompletedSuggestion?.analysisLevel ?? currentLevel - 1;
-          completeAndMaybeSubmit(`smart stop at L${deepestCompletedLevel}`, { terminateWorker: true });
+          completeAndMaybeSubmit(
+            `smart stop at L${deepestCompletedLevel}`,
+            `L${deepestCompletedLevel} took ${formatDebugSeconds(
+              mostRecentCompletedLevelElapsedMs,
+            )} and there was only ${formatDebugSeconds(remainingMs)} remaining for L${currentLevel}`,
+            {
+              terminateWorker: true,
+              stopLevel: deepestCompletedLevel,
+            },
+          );
           return;
         }
       }
@@ -2057,7 +2133,11 @@ function PlayArea() {
         return;
       }
       analysisRunIdRef.current += 1;
-      completeAndMaybeSubmit(`Time limit during L${levelAtTimeout}.`, { terminateWorker: true });
+      const stopLevel = deepestCompletedSuggestion?.analysisLevel ?? levelAtTimeout;
+      completeAndMaybeSubmit(`Time limit during L${levelAtTimeout}.`, `time limit was reached during L${levelAtTimeout}`, {
+        terminateWorker: true,
+        stopLevel,
+      });
     }, maxTimeMs);
 
     worker.onmessage = (event: MessageEvent<TreeSearchWorkerResponse>) => {
@@ -2069,6 +2149,7 @@ function PlayArea() {
 
       const message = event.data;
       if (message.type === 'analysisError') {
+        debugAnalysisStopReason(deepestCompletedSuggestion?.analysisLevel ?? currentLevel, `analysis error: ${message.message}`);
         stopAnalysisRun(`Analysis failed: ${message.message}`);
         return;
       }
@@ -2077,6 +2158,7 @@ function PlayArea() {
       try {
         bestTurn = JSON.parse(message.analysisRaw) as BestTurnResponse;
       } catch {
+        debugAnalysisStopReason(deepestCompletedSuggestion?.analysisLevel ?? currentLevel, 'analysis response JSON was invalid');
         stopAnalysisRun('Analysis failed: invalid JSON response.');
         return;
       }
@@ -2088,10 +2170,11 @@ function PlayArea() {
       if (!bestTurn.isValid) {
         const invalidMessage = bestTurn.validationMessage || 'No suggested turn found.';
         if (!deepestCompletedSuggestion) {
+          debugAnalysisStopReason(currentLevel, invalidMessage);
           stopAnalysisRun(invalidMessage, { terminateWorker: false });
           return;
         }
-        completeAndMaybeSubmit(`Analysis stopped at L${currentLevel}: ${invalidMessage}`);
+        completeAndMaybeSubmit(`Analysis stopped at L${currentLevel}: ${invalidMessage}`, invalidMessage);
         return;
       }
 
@@ -2106,19 +2189,28 @@ function PlayArea() {
       upsertAiResultsCacheFromSuggestion(sourceStateJson, deepestCompletedSuggestion, Date.now());
       mostRecentCompletedLevelElapsedMs = completedLevelElapsedMs;
       setAiSuggestion(deepestCompletedSuggestion);
+      emitAnalysisDebugLog(formatAnalysisLevelDebugLine(sourceNormalTurnCount, currentLevel, completedLevelElapsedMs, bestTurn));
 
       if (effectiveMaxAnalysisLevel !== null && currentLevel >= effectiveMaxAnalysisLevel) {
-        completeAndMaybeSubmit(`Max turn depth reached at L${currentLevel}.`);
+        completeAndMaybeSubmit(`Max turn depth reached at L${currentLevel}.`, `max turn depth is L${effectiveMaxAnalysisLevel}`, {
+          stopLevel: currentLevel,
+        });
         return;
       }
 
       if (isTerminalHeuristicScore(bestTurn.heuristicScore)) {
-        completeAndMaybeSubmit(`${formatHeuristicScore(bestTurn.heuristicScore)} found at L${currentLevel}.`);
+        completeAndMaybeSubmit(
+          `${formatHeuristicScore(bestTurn.heuristicScore)} found at L${currentLevel}.`,
+          `${formatHeuristicScore(bestTurn.heuristicScore)} was found at L${currentLevel}`,
+          { stopLevel: currentLevel },
+        );
         return;
       }
 
       if (completedElapsedMs >= maxTimeMs) {
-        completeAndMaybeSubmit(`Time limit during L${currentLevel}.`);
+        completeAndMaybeSubmit(`Time limit during L${currentLevel}.`, `time limit was reached during L${currentLevel}`, {
+          stopLevel: currentLevel,
+        });
         return;
       }
 
@@ -2130,6 +2222,7 @@ function PlayArea() {
       if (runId !== analysisRunIdRef.current) {
         return;
       }
+      debugAnalysisStopReason(deepestCompletedSuggestion?.analysisLevel ?? currentLevel, 'analysis worker failed');
       stopAnalysisRun('Analysis worker failed.');
     };
 
