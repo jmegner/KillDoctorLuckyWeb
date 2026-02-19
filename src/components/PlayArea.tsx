@@ -1796,10 +1796,10 @@ function PlayArea() {
     saveRedoStateStack([]);
     saveGameStateSnapshot(gameState);
     const nextTurnCounter = advanceTurnCounter();
+    startAnimationFromState(initialRoomsForAnimation);
     if (!gameState.hasWinner()) {
       startBestTurnAnalysis(false, nextTurnCounter);
     }
-    startAnimationFromState(initialRoomsForAnimation);
   };
   const handleSubmit = () => {
     if (!gameState || hasWinner) {
@@ -2162,6 +2162,15 @@ function PlayArea() {
     }
 
     const planned = entriesToMovesAndOrder(aiSuggestion.bestTurn.suggestedTurn);
+    if (animationRef.current) {
+      queuedAutoSubmitRef.current = {
+        moves: planned.moves,
+        order: planned.order,
+        sourceTurnCounter: aiSuggestion.sourceTurnCounter,
+      };
+      setAnalysisStatusMessage('Suggested turn queued.');
+      return;
+    }
     submitPlan(planned.moves, planned.order, { animateFromCurrentState: true });
   };
 
