@@ -114,6 +114,7 @@ const seedStateAndCacheForControlAutoSubmit = async (page: Page, targetCurrentPl
         aiPrefsStorageKeyArg,
         JSON.stringify({
           minAnalysisLevel: 0,
+          maxAnalysisLevel: 6000,
           analysisMaxTimeIndex: 0,
           controlP1: false,
           controlP3: false,

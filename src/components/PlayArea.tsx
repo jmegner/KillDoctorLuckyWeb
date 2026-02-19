@@ -200,6 +200,7 @@ const analysisMaxTimeOptions = [
 ] as const;
 const defaultAnalysisMaxTimeIndex = 1;
 const defaultMinAnalysisLevel = 2;
+const defaultMaxAnalysisLevel = 15;
 const touchDoubleTapGraceMs = 650;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 const animationPrefsStorageKey = 'kdl.settings.v1';
@@ -224,6 +225,7 @@ type AnimationPrefs = {
 
 type AiPrefs = {
   minAnalysisLevel: number;
+  maxAnalysisLevel: number;
   analysisMaxTimeIndex: number;
   controlP1: boolean;
   controlP3: boolean;
@@ -275,6 +277,13 @@ const clampAnimationSpeedIndex = (value: number) => Math.min(animationSpeeds.len
 const clampAnalysisMaxTimeIndex = (value: number) => Math.min(analysisMaxTimeOptions.length - 1, Math.max(0, value));
 const isFiniteNonNegative = (value: number) => Number.isFinite(value) && value >= 0;
 const parseMinAnalysisLevelDraft = (draft: string) => {
+  const parsed = Number(draft);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return Math.trunc(parsed);
+};
+const parseMaxAnalysisLevelDraft = (draft: string) => {
   const parsed = Number(draft);
   if (!Number.isFinite(parsed) || parsed < 0) {
     return null;
@@ -404,6 +413,9 @@ const sanitizeAiPrefs = (candidate: Partial<AiPrefs>): AiPrefs => {
   const minAnalysisLevel = isFiniteNonNegative(candidate.minAnalysisLevel ?? NaN)
     ? Math.trunc(candidate.minAnalysisLevel as number)
     : defaultMinAnalysisLevel;
+  const maxAnalysisLevel = isFiniteNonNegative(candidate.maxAnalysisLevel ?? NaN)
+    ? Math.trunc(candidate.maxAnalysisLevel as number)
+    : defaultMaxAnalysisLevel;
   const rawMaxTimeIndex =
     typeof candidate.analysisMaxTimeIndex === 'number' && Number.isFinite(candidate.analysisMaxTimeIndex)
       ? Math.trunc(candidate.analysisMaxTimeIndex)
@@ -414,6 +426,7 @@ const sanitizeAiPrefs = (candidate: Partial<AiPrefs>): AiPrefs => {
   const showOnBoardP3 = typeof candidate.showOnBoardP3 === 'boolean' ? candidate.showOnBoardP3 : false;
   return {
     minAnalysisLevel,
+    maxAnalysisLevel,
     analysisMaxTimeIndex: clampAnalysisMaxTimeIndex(rawMaxTimeIndex),
     controlP1,
     controlP3,
@@ -425,6 +438,7 @@ const sanitizeAiPrefs = (candidate: Partial<AiPrefs>): AiPrefs => {
 const loadAiPrefs = (): AiPrefs => {
   const defaults = {
     minAnalysisLevel: defaultMinAnalysisLevel,
+    maxAnalysisLevel: defaultMaxAnalysisLevel,
     analysisMaxTimeIndex: defaultAnalysisMaxTimeIndex,
     controlP1: false,
     controlP3: false,
@@ -1238,6 +1252,7 @@ function PlayArea() {
   turnCounterRef.current = turnCounter;
   const initialAutoAnalysisQueuedRef = useRef(false);
   const [minAnalysisLevelDraft, setMinAnalysisLevelDraft] = useState(() => loadAiPrefs().minAnalysisLevel.toString());
+  const [maxAnalysisLevelDraft, setMaxAnalysisLevelDraft] = useState(() => loadAiPrefs().maxAnalysisLevel.toString());
   const [analysisMaxTimeIndex, setAnalysisMaxTimeIndex] = useState(() => loadAiPrefs().analysisMaxTimeIndex);
   const [aiControlP1, setAiControlP1] = useState(() => loadAiPrefs().controlP1);
   const [aiControlP3, setAiControlP3] = useState(() => loadAiPrefs().controlP3);
@@ -1327,6 +1342,7 @@ function PlayArea() {
     const fallbackAiPrefs = loadAiPrefs();
     saveAiPrefs({
       minAnalysisLevel: parseMinAnalysisLevelDraft(minAnalysisLevelDraft) ?? fallbackAiPrefs.minAnalysisLevel,
+      maxAnalysisLevel: parseMaxAnalysisLevelDraft(maxAnalysisLevelDraft) ?? fallbackAiPrefs.maxAnalysisLevel,
       analysisMaxTimeIndex,
       controlP1: aiControlP1Ref.current,
       controlP3: aiControlP3Ref.current,
@@ -1819,16 +1835,25 @@ function PlayArea() {
       return;
     }
 
-    const parsedLevel = Number(minAnalysisLevelDraft);
-    if (!Number.isFinite(parsedLevel) || parsedLevel < 0) {
+    const parsedMinLevel = Number(minAnalysisLevelDraft);
+    if (!Number.isFinite(parsedMinLevel) || parsedMinLevel < 0) {
       setAnalysisStatusMessage('Min turn depth must be a number >= 0.');
       return;
     }
+    const parsedMaxLevel = Number(maxAnalysisLevelDraft);
+    if (!Number.isFinite(parsedMaxLevel) || parsedMaxLevel < 0) {
+      setAnalysisStatusMessage('Max turn depth must be a number >= 0.');
+      return;
+    }
 
-    const minAnalysisLevel = Math.trunc(parsedLevel);
+    const minAnalysisLevel = Math.trunc(parsedMinLevel);
+    const maxAnalysisLevel = Math.trunc(parsedMaxLevel);
+    const effectiveMaxAnalysisLevel = minAnalysisLevel <= maxAnalysisLevel ? maxAnalysisLevel : null;
     setMinAnalysisLevelDraft(minAnalysisLevel.toString());
+    setMaxAnalysisLevelDraft(maxAnalysisLevel.toString());
     saveCurrentAiPrefs({
       minAnalysisLevel,
+      maxAnalysisLevel,
       analysisMaxTimeIndex,
     });
     const maxTimeOption = analysisMaxTimeOptions[analysisMaxTimeIndex] ?? analysisMaxTimeOptions[0];
@@ -1863,6 +1888,42 @@ function PlayArea() {
     if (analysisIsRunning) {
       stopAnalysisWorker();
     }
+
+    if (
+      effectiveMaxAnalysisLevel !== null &&
+      cachedSuggestion &&
+      cachedSuggestion.analysisLevel >= effectiveMaxAnalysisLevel
+    ) {
+      setAiSuggestion(cachedSuggestion);
+      setAnalysisIsRunning(false);
+      analysisRunningLevelRef.current = null;
+      setAnalysisRunningLevel(null);
+      setAnalysisCurrentLevelElapsedMs(0);
+      setAnalysisElapsedMs(cachedSuggestion.elapsedMs);
+      const cacheStopPrefix = `Max turn depth reached from cache at L${cachedSuggestion.analysisLevel}.`;
+      if (!shouldAutoSubmitAtThisMoment()) {
+        setAnalysisStatusMessage(cacheStopPrefix);
+        return;
+      }
+      if (sourceTurnCounter !== turnCounterRef.current) {
+        setAnalysisStatusMessage(`${cacheStopPrefix} Auto-submit skipped because the position changed.`);
+        return;
+      }
+      const planned = entriesToMovesAndOrder(cachedSuggestion.bestTurn.suggestedTurn);
+      if (animationRef.current) {
+        queuedAutoSubmitRef.current = {
+          moves: planned.moves,
+          order: planned.order,
+          sourceTurnCounter,
+        };
+        setAnalysisStatusMessage(`${cacheStopPrefix} Suggested turn queued.`);
+        return;
+      }
+      setAnalysisStatusMessage(`${cacheStopPrefix} Suggested turn submitted.`);
+      submitPlan(planned.moves, planned.order, { animateFromCurrentState: true });
+      return;
+    }
+
     setAiSuggestion(cachedSuggestion);
     setAnalysisIsRunning(true);
     analysisRunningLevelRef.current = initialAnalysisLevel;
@@ -1940,6 +2001,11 @@ function PlayArea() {
 
     const requestCurrentLevel = () => {
       if (runId !== analysisRunIdRef.current) {
+        return;
+      }
+      if (effectiveMaxAnalysisLevel !== null && currentLevel > effectiveMaxAnalysisLevel) {
+        const deepestCompletedLevel = deepestCompletedSuggestion?.analysisLevel ?? effectiveMaxAnalysisLevel;
+        completeAndMaybeSubmit(`Max turn depth reached at L${deepestCompletedLevel}.`, { terminateWorker: true });
         return;
       }
       const now = performance.now();
@@ -2038,6 +2104,11 @@ function PlayArea() {
       upsertAiResultsCacheFromSuggestion(sourceStateJson, deepestCompletedSuggestion, Date.now());
       mostRecentCompletedLevelElapsedMs = completedLevelElapsedMs;
       setAiSuggestion(deepestCompletedSuggestion);
+
+      if (effectiveMaxAnalysisLevel !== null && currentLevel >= effectiveMaxAnalysisLevel) {
+        completeAndMaybeSubmit(`Max turn depth reached at L${currentLevel}.`);
+        return;
+      }
 
       if (isTerminalHeuristicScore(bestTurn.heuristicScore)) {
         completeAndMaybeSubmit(`${formatHeuristicScore(bestTurn.heuristicScore)} found at L${currentLevel}.`);
@@ -2231,6 +2302,7 @@ function PlayArea() {
       const next = stepNonNegativeIntegerText(prev, direction);
       saveCurrentAiPrefs({
         minAnalysisLevel: Number(next),
+        maxAnalysisLevel: parseMaxAnalysisLevelDraft(maxAnalysisLevelDraft) ?? defaultMaxAnalysisLevel,
         analysisMaxTimeIndex,
       });
       return next;
@@ -2245,6 +2317,35 @@ function PlayArea() {
     }
     saveCurrentAiPrefs({
       minAnalysisLevel: parsedMinAnalysisLevel,
+      maxAnalysisLevel: parseMaxAnalysisLevelDraft(maxAnalysisLevelDraft) ?? defaultMaxAnalysisLevel,
+      analysisMaxTimeIndex,
+    });
+  };
+
+  const handleMaxAnalysisLevelStep = (direction: StepDirection) => {
+    if (analysisIsRunning) {
+      return;
+    }
+    setMaxAnalysisLevelDraft((prev) => {
+      const next = stepNonNegativeIntegerText(prev, direction);
+      saveCurrentAiPrefs({
+        minAnalysisLevel: parseMinAnalysisLevelDraft(minAnalysisLevelDraft) ?? defaultMinAnalysisLevel,
+        maxAnalysisLevel: Number(next),
+        analysisMaxTimeIndex,
+      });
+      return next;
+    });
+  };
+
+  const handleMaxAnalysisLevelChange = (rawLevel: string) => {
+    setMaxAnalysisLevelDraft(rawLevel);
+    const parsedMaxAnalysisLevel = parseMaxAnalysisLevelDraft(rawLevel);
+    if (parsedMaxAnalysisLevel === null) {
+      return;
+    }
+    saveCurrentAiPrefs({
+      minAnalysisLevel: parseMinAnalysisLevelDraft(minAnalysisLevelDraft) ?? defaultMinAnalysisLevel,
+      maxAnalysisLevel: parsedMaxAnalysisLevel,
       analysisMaxTimeIndex,
     });
   };
@@ -2902,8 +3003,8 @@ function PlayArea() {
         <h4>AI Controls</h4>
         <ul>
           <li>
-            <strong>Think</strong>: runs analysis and updates the suggestion using the current Min Turn Depth and Max
-            Time.
+            <strong>Think</strong>: runs analysis and updates the suggestion using Min Turn Depth, Max Turn Depth, and
+            Max Time.
           </li>
           <li>
             <strong>Do</strong>: submits the current suggested turn if it is valid and not stale.
@@ -2934,6 +3035,11 @@ function PlayArea() {
         <ul>
           <li>
             <strong>Min Turn Depth</strong>: minimum search depth before the run is allowed to stop from time limits.
+          </li>
+          <li>
+            <strong>Max Turn Depth</strong>: when Min Turn Depth is less than or equal to Max Turn Depth, analysis will
+            stop as soon as a result reaches this depth (including a cached result at or above this depth). If Min Turn
+            Depth is greater than Max Turn Depth, Max Turn Depth is ignored.
           </li>
           <li>
             <strong>Max Time</strong>: total time budget for one run; analysis will stop when this budget is hit, unless
@@ -3560,6 +3666,41 @@ function PlayArea() {
                 className="number-stepper-button"
                 onClick={() => handleAnalysisLevelStep('up')}
                 aria-label="Increase min turn depth"
+                disabled={analysisIsRunning}
+              >
+                +
+              </button>
+            </div>
+          </div>
+          <div className="planner-line ai-level-line">
+            <label className="planner-label" htmlFor="analysis-max-level">
+              Max Turn Depth
+            </label>
+            <div className="number-stepper">
+              <input
+                id="analysis-max-level"
+                className="ai-level-input number-stepper-input"
+                type="number"
+                min="0"
+                step="1"
+                value={maxAnalysisLevelDraft}
+                onChange={(event) => handleMaxAnalysisLevelChange(event.target.value)}
+                disabled={analysisIsRunning}
+              />
+              <button
+                type="button"
+                className="number-stepper-button"
+                onClick={() => handleMaxAnalysisLevelStep('down')}
+                aria-label="Decrease max turn depth"
+                disabled={analysisIsRunning}
+              >
+                -
+              </button>
+              <button
+                type="button"
+                className="number-stepper-button"
+                onClick={() => handleMaxAnalysisLevelStep('up')}
+                aria-label="Increase max turn depth"
                 disabled={analysisIsRunning}
               >
                 +

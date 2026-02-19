@@ -28,6 +28,7 @@ const seedDefaultStateAndAiSetup = async (
   page: Page,
   options: {
     minAnalysisLevel: number;
+    maxAnalysisLevel?: number;
     analysisMaxTimeIndex: number;
     cacheEntry?: CachedAiEntrySeed;
   },
@@ -39,6 +40,7 @@ const seedDefaultStateAndAiSetup = async (
       aiPrefsStorageKeyArg,
       aiResultsCacheStorageKeyArg,
       minAnalysisLevelArg,
+      maxAnalysisLevelArg,
       analysisMaxTimeIndexArg,
       cacheEntryArg,
     }) => {
@@ -54,6 +56,7 @@ const seedDefaultStateAndAiSetup = async (
         aiPrefsStorageKeyArg,
         JSON.stringify({
           minAnalysisLevel: minAnalysisLevelArg,
+          maxAnalysisLevel: maxAnalysisLevelArg,
           analysisMaxTimeIndex: analysisMaxTimeIndexArg,
           controlP1: false,
           controlP3: false,
@@ -80,6 +83,7 @@ const seedDefaultStateAndAiSetup = async (
       aiPrefsStorageKeyArg: aiPrefsStorageKey,
       aiResultsCacheStorageKeyArg: aiResultsCacheStorageKey,
       minAnalysisLevelArg: options.minAnalysisLevel,
+      maxAnalysisLevelArg: options.maxAnalysisLevel ?? 15,
       analysisMaxTimeIndexArg: options.analysisMaxTimeIndex,
       cacheEntryArg: options.cacheEntry ?? null,
     },
@@ -102,9 +106,15 @@ const readAiStatusLevel = async (page: Page) => {
   if (!status) {
     return null;
   }
-  const match = status.match(/^L(\d+)\b/);
+  const match = status.match(/\bL(\d+)\b/);
   return match ? Number(match[1]) : null;
 };
+
+const readInputValue = async (page: Page, selector: string) =>
+  page.evaluate((selectorArg) => {
+    const element = document.querySelector(selectorArg) as HTMLInputElement | null;
+    return element?.value ?? null;
+  }, selector);
 
 const readCacheEntryForState = async (page: Page, stateJson: string) =>
   page.evaluate(
@@ -144,7 +154,7 @@ const cancelAiAnalysisIfRunning = async (page: Page) => {
   const aiPanel = page.locator('.ai-panel');
   const cancelButton = aiPanel.getByRole('button', { name: 'Cancel' });
   if (await cancelButton.isEnabled()) {
-    await cancelButton.click();
+    await cancelButton.click({ timeout: 1000 }).catch(() => {});
   }
 };
 
@@ -154,6 +164,7 @@ test.describe('AI results cache', () => {
 
     const seededStateJson = await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 2,
+      maxAnalysisLevel: 25,
       analysisMaxTimeIndex: 2,
     });
     await page.reload();
@@ -183,6 +194,7 @@ test.describe('AI results cache', () => {
     const staleLastUsedAtMs = 1700000000000;
     const seededStateJson = await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 0,
+      maxAnalysisLevel: 25,
       analysisMaxTimeIndex: 0,
       cacheEntry: {
         analysisLevel: 12,
@@ -218,6 +230,7 @@ test.describe('AI results cache', () => {
 
     await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 0,
+      maxAnalysisLevel: 25,
       analysisMaxTimeIndex: 0,
       cacheEntry: {
         analysisLevel: 12,
@@ -248,5 +261,110 @@ test.describe('AI results cache', () => {
 
     await aiPanel.getByRole('button', { name: 'Think' }).click();
     await expect.poll(() => readAiLineValue(page, 'Suggested'), { timeout: 5000 }).toBe('No suggestion yet.');
+  });
+
+  test('Max Turn Depth defaults to 15 and +/- buttons adjust it', async ({ page }) => {
+    await page.goto('/');
+
+    await page.evaluate((key) => {
+      window.localStorage.removeItem(key);
+    }, aiPrefsStorageKey);
+    await page.reload();
+
+    await cancelAiAnalysisIfRunning(page);
+
+    const aiPanel = page.locator('.ai-panel');
+    const decreaseButton = aiPanel.getByRole('button', { name: 'Decrease max turn depth' });
+    const increaseButton = aiPanel.getByRole('button', { name: 'Increase max turn depth' });
+
+    await expect.poll(() => readInputValue(page, '#analysis-max-level')).toBe('15');
+    await increaseButton.click();
+    await expect.poll(() => readInputValue(page, '#analysis-max-level')).toBe('16');
+    await decreaseButton.click();
+    await expect.poll(() => readInputValue(page, '#analysis-max-level')).toBe('15');
+  });
+
+  test('stops immediately when cached result already meets max turn depth', async ({ page }) => {
+    await page.goto('/');
+
+    await seedDefaultStateAndAiSetup(page, {
+      minAnalysisLevel: 0,
+      maxAnalysisLevel: 5,
+      analysisMaxTimeIndex: 0,
+      cacheEntry: {
+        analysisLevel: 7,
+        bestTurn: {
+          isValid: true,
+          validationMessage: '',
+          suggestedTurnText: 'P1@R13',
+          suggestedTurn: [{ pieceId: 'player1', roomId: 13 }],
+          heuristicScore: 1234,
+          numStatesVisited: 4321,
+          elapsedMs: 987,
+        },
+        previewRaw: '',
+        elapsedMs: 987,
+        levelElapsedMs: 321,
+        lastUsedAtMs: 1700000000000,
+      },
+    });
+    await page.reload();
+
+    const aiPanel = page.locator('.ai-panel');
+    await expect.poll(() => readAiLineValue(page, 'Suggested'), { timeout: 5000 }).toBe('P1@R13');
+    await expect.poll(() => readAiLineValue(page, 'Status'), { timeout: 5000 }).toBe(
+      'Max turn depth reached from cache at L7.',
+    );
+    await expect(aiPanel.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  });
+
+  test('stops when it completes max turn depth during analysis', async ({ page }) => {
+    await page.goto('/');
+
+    const seededStateJson = await seedDefaultStateAndAiSetup(page, {
+      minAnalysisLevel: 2,
+      maxAnalysisLevel: 2,
+      analysisMaxTimeIndex: 6,
+    });
+    await page.reload();
+
+    await expect
+      .poll(() => readAiLineValue(page, 'Status'), { timeout: 30000 })
+      .toBe('Max turn depth reached at L2.');
+    await expect
+      .poll(async () => {
+        const cacheEntry = await readCacheEntryForState(page, seededStateJson);
+        return cacheEntry?.analysisLevel ?? null;
+      }, { timeout: 10000 })
+      .toBe(2);
+  });
+
+  test('ignores max turn depth when min turn depth is greater', async ({ page }) => {
+    await page.goto('/');
+
+    await seedDefaultStateAndAiSetup(page, {
+      minAnalysisLevel: 13,
+      maxAnalysisLevel: 12,
+      analysisMaxTimeIndex: 0,
+      cacheEntry: {
+        analysisLevel: 12,
+        bestTurn: {
+          isValid: true,
+          validationMessage: '',
+          suggestedTurnText: 'P1@R13',
+          suggestedTurn: [{ pieceId: 'player1', roomId: 13 }],
+          heuristicScore: 1234,
+          numStatesVisited: 4321,
+          elapsedMs: 987,
+        },
+        previewRaw: '',
+        elapsedMs: 987,
+        levelElapsedMs: 321,
+        lastUsedAtMs: 1700000000000,
+      },
+    });
+    await page.reload();
+
+    await expect.poll(() => readAiStatusLevel(page), { timeout: 5000 }).toBeGreaterThanOrEqual(13);
   });
 });
