@@ -181,6 +181,8 @@ const playerStatsRowOrder: Array<Exclude<PieceId, 'doctor'>> = ['stranger2', 'pl
 const animationSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
 const defaultSpeedIndex = 8;
 const analysisMaxTimeOptions = [
+  { label: '50ms', ms: 50 },
+  { label: '500ms', ms: 500 },
   { label: '2s', ms: 2000 },
   { label: '6s', ms: 6000 },
   { label: '10s', ms: 10000 },
