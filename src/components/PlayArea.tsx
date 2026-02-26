@@ -3043,12 +3043,13 @@ function PlayArea() {
         <p>How to gain and use the cards...</p>
         <ul>
           <li>
-            Every time you loot a room as your action, you gain 1/3 of a move card, 1/3 of a weapon card, and 1/3 of a
-            failure card.
+            Every time you loot a room ("draw a card") as your action, you gain 1/3 of a move card, 1/3 of a weapon card, and 1/3 of a
+            failure card.  Looting a room is automatic; if you can loot during the action phase of your turn, then you do.
           </li>
           <li>
             Every time you attack as your action, you use 1 weapon card if you have 1 or more weapon cards. If you have
             less than 1 weapon card, you use the fractional weapon card you have. You can't decline weapon card use.
+            Like looting, attacking is automatically done if possible during your action phase.
           </li>
           <li>
             Every time you defend, cards can be fractionally converted into clovers. Cards are converted to clovers as
@@ -3066,7 +3067,9 @@ function PlayArea() {
         <h4>Movement / Turn Planning</h4>
         <p>
           There are a few ways to choose movements for your piece and the strangers. You can click the "Submit" button
-          to submit your plan, but there are other ways via middle clicks and double clicks to submit your plan.
+          to submit your plan, but there are other ways via middle clicks and double clicks to submit your plan.  Since
+          looting the room (drawing a card) and attacking are done automatically if possible during the action phase,
+          movements are the only decision to make.
         </p>
         <ul>
           <li>
