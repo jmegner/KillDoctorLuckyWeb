@@ -1237,7 +1237,7 @@ const formatHeuristicScore = (score: number) => {
   return `${score >= 0 ? '+' : ''}${score.toFixed(2)}`;
 };
 
-const formatPlayerStatDecimal = (value: number) => (Number.isFinite(value) ? value.toFixed(1) : '?');
+const formatPlayerStatDecimal = (value: number) => (Number.isFinite(value) ? value.toFixed(2) : '?');
 
 const formatPlayerInteger = (value: number) => (Number.isFinite(value) ? Math.trunc(value).toString() : '?');
 
