@@ -1239,6 +1239,10 @@ impl GameState<SimpleTurn> for MutableGameState {
         self.current_player_id
     }
 
+    fn doctor_room_id(&self) -> RoomId {
+        self.doctor_room_id
+    }
+
     fn num_players(&self) -> usize {
         MutableGameState::num_players(self)
     }
