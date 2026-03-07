@@ -3246,42 +3246,6 @@ function PlayArea() {
                   );
                 })}
               </g>
-              {distanceByRoom && selectedRoomId !== undefined && (
-                <g className="room-distance-layer">
-                  {boardRooms.map((room) => {
-                    if (room.coords.length !== 4) {
-                      return null;
-                    }
-                    if (room.id === selectedRoomId) {
-                      return null;
-                    }
-                    const distance = distanceByRoom.get(room.id);
-                    if (distance === undefined) {
-                      return null;
-                    }
-                    const rect = getRoomRect(room.coords);
-                    const boxWidth = 30;
-                    const boxHeight = 30;
-                    const boxX = rect.x + (rect.width - boxWidth) / 2;
-                    const boxY = rect.y + rect.height * 0.2;
-                    const textX = boxX + boxWidth / 2;
-                    const textY = boxY + boxHeight / 2 + 0.5;
-                    const isMovePossible = movePossibleByRoom?.get(room.id) ?? true;
-                    const boxClassName = isMovePossible
-                      ? 'room-distance-box room-distance-box--possible'
-                      : 'room-distance-box room-distance-box--too-far';
-
-                    return (
-                      <g key={`distance-${room.id}`}>
-                        <rect className={boxClassName} x={boxX} y={boxY} width={boxWidth} height={boxHeight} />
-                        <text className="room-distance-text" x={textX} y={textY}>
-                          {distance}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </g>
-              )}
               <g className="piece-layer">
                 {(animatedPieces ? animatedPieceList : renderPieces.filter((piece) => piece.kind === 'actual')).map(
                   (piece) => {
@@ -3415,6 +3379,42 @@ function PlayArea() {
                     );
                   })}
               </g>
+              {distanceByRoom && selectedRoomId !== undefined && (
+                <g className="room-distance-layer">
+                  {boardRooms.map((room) => {
+                    if (room.coords.length !== 4) {
+                      return null;
+                    }
+                    if (room.id === selectedRoomId) {
+                      return null;
+                    }
+                    const distance = distanceByRoom.get(room.id);
+                    if (distance === undefined) {
+                      return null;
+                    }
+                    const rect = getRoomRect(room.coords);
+                    const boxWidth = 30;
+                    const boxHeight = 30;
+                    const boxX = rect.x + (rect.width - boxWidth) / 2;
+                    const boxY = rect.y + rect.height * 0.2;
+                    const textX = boxX + boxWidth / 2;
+                    const textY = boxY + boxHeight / 2 + 0.5;
+                    const isMovePossible = movePossibleByRoom?.get(room.id) ?? true;
+                    const boxClassName = isMovePossible
+                      ? 'room-distance-box room-distance-box--possible'
+                      : 'room-distance-box room-distance-box--too-far';
+
+                    return (
+                      <g key={`distance-${room.id}`}>
+                        <rect className={boxClassName} x={boxX} y={boxY} width={boxWidth} height={boxHeight} />
+                        <text className="room-distance-text" x={textX} y={textY}>
+                          {distance}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
+              )}
               {boardOverlayText && actionOverlayLayout && (
                 <g className="action-overlay">
                   <rect
