@@ -1,27 +1,22 @@
-use crate::core::game_state::GameState;
-use crate::core::player::{AppraisedPlayerTurn, PlayerId};
+use crate::core::mutable_game_state::MutableGameState;
+use crate::core::player::{AppraisedPlayerTurn, AppraisalState, PlayerId};
 use crate::core::rule_helper;
+use crate::core::simple_turn::SimpleTurn;
 use crate::util::cancellation::CancellationToken;
 use std::cmp::Ordering;
-use std::marker::PhantomData;
 
-pub struct TreeSearch<TTurn, TGameState> {
-    _phantom: PhantomData<(TTurn, TGameState)>,
-}
+pub struct TreeSearch;
 
-impl<TTurn, TGameState> TreeSearch<TTurn, TGameState>
-where
-    TGameState: GameState<TTurn>,
-{
+impl TreeSearch {
     pub const ALPHA_INITIAL: f64 = rule_helper::HEURISTIC_SCORE_LOSS;
     pub const BETA_INITIAL: f64 = rule_helper::HEURISTIC_SCORE_WIN;
 
     pub fn find_best_turn(
-        state: &TGameState,
+        state: &MutableGameState,
         analysis_level: i32,
         cancellation_token: &impl CancellationToken,
         num_states_visited: &mut usize,
-    ) -> AppraisedPlayerTurn<TTurn, TGameState> {
+    ) -> AppraisedPlayerTurn<SimpleTurn, MutableGameState> {
         *num_states_visited = 0;
 
         if state.num_players() == 2 {
@@ -36,7 +31,7 @@ where
         } else {
             Self::find_best_turn_many_players(
                 state,
-                state.current_player_id(),
+                state.current_player_id,
                 analysis_level,
                 cancellation_token,
                 num_states_visited,
@@ -45,19 +40,19 @@ where
     }
 
     fn find_best_turn_many_players(
-        curr_state: &TGameState,
+        curr_state: &MutableGameState,
         analysis_player_id: PlayerId,
         analysis_level: i32,
         cancellation_token: &impl CancellationToken,
         num_states_visited: &mut usize,
-    ) -> AppraisedPlayerTurn<TTurn, TGameState> {
+    ) -> AppraisedPlayerTurn<SimpleTurn, MutableGameState> {
         *num_states_visited += 1;
 
         if curr_state.has_winner() || analysis_level == 0 {
             return AppraisedPlayerTurn::from_state(analysis_player_id, curr_state.clone());
         }
 
-        let curr_player_id = curr_state.current_player_id();
+        let curr_player_id = curr_state.current_player_id;
         let mut best_turn = AppraisedPlayerTurn::empty_minimum();
         let possible_turns = curr_state.possible_turns();
 
@@ -65,8 +60,8 @@ where
             if cancellation_token.is_cancellation_requested() {
                 return best_turn;
             }
-            let child_state = curr_state.after_turn(turn, true);
-            let child_player_id = child_state.current_player_id();
+            let child_state = Self::child_state(curr_state, turn);
+            let child_player_id = child_state.current_player_id;
             let child_turn = child_state.prev_turn();
             let mut hypo_appraised_turn = Self::find_best_turn_many_players(
                 &child_state,
@@ -87,7 +82,7 @@ where
                 best_turn.turn = child_turn;
 
                 if let Some(ending_state) = best_turn.ending_state.as_ref() {
-                    if ending_state.winner() == analysis_player_id {
+                    if ending_state.winner == analysis_player_id {
                         break;
                     }
                 }
@@ -98,23 +93,23 @@ where
     }
 
     fn find_best_turn_two_players(
-        curr_state: &TGameState,
+        curr_state: &MutableGameState,
         analysis_level: i32,
         cancellation_token: &impl CancellationToken,
         num_states_visited: &mut usize,
         alpha: f64,
         beta: f64,
-    ) -> AppraisedPlayerTurn<TTurn, TGameState> {
+    ) -> AppraisedPlayerTurn<SimpleTurn, MutableGameState> {
         *num_states_visited += 1;
 
         if curr_state.has_winner() || analysis_level == 0 {
             return AppraisedPlayerTurn::from_state(
-                curr_state.current_player_id(),
+                curr_state.current_player_id,
                 curr_state.clone(),
             );
         }
 
-        let curr_player_id = curr_state.current_player_id();
+        let curr_player_id = curr_state.current_player_id;
         let possible_turns = curr_state.possible_turns();
 
         let mut best_turn = AppraisedPlayerTurn::empty_minimum();
@@ -124,7 +119,7 @@ where
         if analysis_level > 1 {
             let mut scored_states = Vec::with_capacity(possible_turns.len());
             for turn in possible_turns {
-                let child_state = curr_state.after_turn(turn, true);
+                let child_state = Self::child_state(curr_state, turn);
                 let score = child_state.heuristic_score(curr_player_id);
                 scored_states.push((score, child_state));
             }
@@ -134,7 +129,7 @@ where
                 if cancellation_token.is_cancellation_requested() {
                     break;
                 }
-                let child_player_id = child_state.current_player_id();
+                let child_player_id = child_state.current_player_id;
                 let child_turn = child_state.prev_turn();
                 let child_is_us = curr_player_id == child_player_id;
                 let child_alpha = if child_is_us { alpha } else { -beta };
@@ -170,8 +165,8 @@ where
                 if cancellation_token.is_cancellation_requested() {
                     break;
                 }
-                let child_state = curr_state.after_turn(turn, true);
-                let child_player_id = child_state.current_player_id();
+                let child_state = Self::child_state(curr_state, turn);
+                let child_player_id = child_state.current_player_id;
                 let child_turn = child_state.prev_turn();
                 let child_is_us = curr_player_id == child_player_id;
                 let child_alpha = if child_is_us { alpha } else { -beta };
@@ -208,12 +203,9 @@ where
     }
 
     pub fn find_full_control_cycles(
-        begin_state: &TGameState,
+        begin_state: &MutableGameState,
         cancellation_token: &impl CancellationToken,
-    ) -> Vec<AppraisedPlayerTurn<TTurn, TGameState>>
-    where
-        TTurn: Clone,
-    {
+    ) -> Vec<AppraisedPlayerTurn<SimpleTurn, MutableGameState>> {
         let mut cycles = Vec::new();
         if begin_state.has_winner() {
             return cycles;
@@ -224,27 +216,25 @@ where
     }
 
     pub fn add_full_control_cycles(
-        begin_state: &TGameState,
+        begin_state: &MutableGameState,
         cancellation_token: &impl CancellationToken,
-        cycles: &mut Vec<AppraisedPlayerTurn<TTurn, TGameState>>,
-    ) where
-        TTurn: Clone,
-    {
-        let begin_player_id = begin_state.current_player_id();
-        let begin_doctor_room_id = begin_state.doctor_room_id();
+        cycles: &mut Vec<AppraisedPlayerTurn<SimpleTurn, MutableGameState>>,
+    ) {
+        let begin_player_id = begin_state.current_player_id;
+        let begin_doctor_room_id = begin_state.doctor_room_id;
 
         for turn in begin_state.possible_turns() {
             if cancellation_token.is_cancellation_requested() {
                 break;
             }
 
-            let child_state = begin_state.after_turn(turn.clone(), true);
-            if child_state.current_player_id() != begin_player_id {
+            let child_state = Self::child_state(begin_state, turn.clone());
+            if child_state.current_player_id != begin_player_id {
                 continue;
             }
 
-            if child_state.doctor_room_id() == begin_doctor_room_id
-                || child_state.winner() == begin_player_id
+            if child_state.doctor_room_id == begin_doctor_room_id
+                || child_state.winner == begin_player_id
             {
                 cycles.push(AppraisedPlayerTurn::new(
                     child_state.heuristic_score(begin_player_id),
@@ -256,6 +246,12 @@ where
 
             Self::add_full_control_cycles(&child_state, cancellation_token, cycles);
         }
+    }
+
+    fn child_state(curr_state: &MutableGameState, turn: SimpleTurn) -> MutableGameState {
+        let mut child_state = curr_state.copy_state();
+        child_state.after_normal_turn(turn, false);
+        child_state
     }
 }
 
@@ -274,10 +270,8 @@ fn compare_f64(a: f64, b: f64) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::player::AppraisalState;
     use crate::core::{
-        board::Board, common_game_state::CommonGameState, game_state::GameState,
-        mutable_game_state::MutableGameState, room::RoomId,
+        board::Board, common_game_state::CommonGameState, mutable_game_state::MutableGameState,
     };
     use crate::util::cancellation::{AtomicCancellationToken, CancellationToken, NeverCancelToken};
 
@@ -292,103 +286,6 @@ mod tests {
         let board = Board::from_embedded_json("Tiny").expect("Tiny should be available");
         let common = CommonGameState::from_num_normal_players(true, board, 3);
         MutableGameState::at_start(common)
-    }
-
-    #[derive(Clone)]
-    struct DummyCycleState {
-        node_id: usize,
-        prev_turn: Option<&'static str>,
-    }
-
-    impl DummyCycleState {
-        fn begin() -> Self {
-            Self {
-                node_id: 0,
-                prev_turn: None,
-            }
-        }
-
-        fn current_player_for(node_id: usize) -> PlayerId {
-            match node_id {
-                0 | 1 | 3 | 4 | 5 | 7 => PlayerId(0),
-                2 | 6 => PlayerId(1),
-                _ => panic!("unexpected node id {node_id}"),
-            }
-        }
-
-        fn doctor_room_for(node_id: usize) -> RoomId {
-            match node_id {
-                0 | 3 | 4 | 6 | 7 => RoomId(1),
-                1 | 2 => RoomId(2),
-                5 => RoomId(3),
-                _ => panic!("unexpected node id {node_id}"),
-            }
-        }
-
-        fn turns_for(node_id: usize) -> Vec<&'static str> {
-            match node_id {
-                0 => vec!["A", "B", "C"],
-                1 => vec!["D", "E"],
-                5 => vec!["F", "G"],
-                _ => Vec::new(),
-            }
-        }
-
-        fn next_node(node_id: usize, turn: &str) -> usize {
-            match (node_id, turn) {
-                (0, "A") => 1,
-                (0, "B") => 2,
-                (0, "C") => 3,
-                (1, "D") => 4,
-                (1, "E") => 5,
-                (5, "F") => 6,
-                (5, "G") => 7,
-                _ => panic!("unexpected edge {turn} from node {node_id}"),
-            }
-        }
-    }
-
-    impl AppraisalState<&'static str> for DummyCycleState {
-        fn heuristic_score(&self, analysis_player_id: PlayerId) -> f64 {
-            self.node_id as f64 + analysis_player_id.0 as f64 * 0.01
-        }
-
-        fn prev_turn(&self) -> Option<&'static str> {
-            self.prev_turn
-        }
-    }
-
-    impl GameState<&'static str> for DummyCycleState {
-        fn current_player_id(&self) -> PlayerId {
-            Self::current_player_for(self.node_id)
-        }
-
-        fn doctor_room_id(&self) -> RoomId {
-            Self::doctor_room_for(self.node_id)
-        }
-
-        fn num_players(&self) -> usize {
-            2
-        }
-
-        fn has_winner(&self) -> bool {
-            false
-        }
-
-        fn winner(&self) -> PlayerId {
-            PlayerId::INVALID
-        }
-
-        fn possible_turns(&self) -> Vec<&'static str> {
-            Self::turns_for(self.node_id)
-        }
-
-        fn after_turn(&self, turn: &'static str, _must_return_new_object: bool) -> Self {
-            Self {
-                node_id: Self::next_node(self.node_id, turn),
-                prev_turn: Some(turn),
-            }
-        }
     }
 
     fn run_snapshot_line(
@@ -480,57 +377,9 @@ mod tests {
         );
     }
 
-    #[cfg(any())]
-    #[test]
-    fn find_full_control_cycles_returns_only_controlled_cycles() {
-        let begin = DummyCycleState::begin();
-        let token = NeverCancelToken;
-        let begin_player_id = begin.current_player_id();
-        let cycles = TreeSearch::find_full_control_cycles(&begin, &token);
-
-        let lines = cycles
-            .iter()
-            .map(|cycle| {
-                let ending_state = cycle
-                    .ending_state
-                    .as_ref()
-                    .expect("expected ending_state on cycle");
-                format!(
-                    "{}->{}",
-                    cycle.turn.expect("expected cycle to keep first turn"),
-                    ending_state.node_id
-                )
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(lines, vec!["A->4", "A->7", "C->3"]);
-
-        for cycle in &cycles {
-            let ending_state = cycle
-                .ending_state
-                .as_ref()
-                .expect("expected ending_state on cycle");
-            assert_eq!(ending_state.current_player_id(), begin_player_id);
-            assert_eq!(
-                ending_state.doctor_room_id(),
-                begin.doctor_room_id(),
-                "doctor room should complete one full loop"
-            );
-            assert_eq!(
-                cycle.appraisal,
-                ending_state.heuristic_score(begin_player_id),
-                "appraisal should reflect the ending state for the begin player"
-            );
-            assert_ne!(
-                ending_state.node_id, 6,
-                "node 6 changes active player, so that branch must be pruned"
-            );
-        }
-    }
-
     #[test]
     fn find_full_control_cycles_honors_cancellation() {
-        let begin = DummyCycleState::begin();
+        let begin = alt_down_two_player_start();
         let token = AtomicCancellationToken::new();
         token.cancel();
 

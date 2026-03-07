@@ -1656,6 +1656,7 @@ function PlayArea() {
       if (prev[pieceId] === undefined) {
         return prev;
       }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [pieceId]: _removed, ...remainingMoves } = prev;
       return remainingMoves;
     });

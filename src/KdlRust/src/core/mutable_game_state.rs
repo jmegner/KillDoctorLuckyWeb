@@ -1,7 +1,6 @@
 use crate::core::{
     board::Board,
     common_game_state::CommonGameState,
-    game_state::GameState,
     player::{AppraisalState, PlayerAction, PlayerId, PlayerMove, PlayerType},
     room::RoomId,
     rule_helper,
@@ -1231,39 +1230,6 @@ impl AppraisalState<SimpleTurn> for MutableGameState {
 
     fn prev_turn(&self) -> Option<SimpleTurn> {
         Some(self.prev_turn.clone())
-    }
-}
-
-impl GameState<SimpleTurn> for MutableGameState {
-    fn current_player_id(&self) -> PlayerId {
-        self.current_player_id
-    }
-
-    fn doctor_room_id(&self) -> RoomId {
-        self.doctor_room_id
-    }
-
-    fn num_players(&self) -> usize {
-        MutableGameState::num_players(self)
-    }
-
-    fn has_winner(&self) -> bool {
-        MutableGameState::has_winner(self)
-    }
-
-    fn winner(&self) -> PlayerId {
-        self.winner
-    }
-
-    fn possible_turns(&self) -> Vec<SimpleTurn> {
-        MutableGameState::possible_turns(self)
-    }
-
-    fn after_turn(&self, turn: SimpleTurn, must_return_new_object: bool) -> Self {
-        let mut new_state = self.clone();
-        let _ = must_return_new_object;
-        new_state.after_normal_turn(turn, false);
-        new_state
     }
 }
 
