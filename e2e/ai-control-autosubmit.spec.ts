@@ -115,7 +115,7 @@ const seedStateAndCacheForControlAutoSubmit = async (page: Page, targetCurrentPl
         JSON.stringify({
           minAnalysisLevel: 0,
           maxAnalysisLevel: 6000,
-          analysisMaxTimeIndex: 0,
+          analysisMaxTimeIndex: 2,
           controlP1: false,
           controlP3: false,
           showOnBoardP1: false,

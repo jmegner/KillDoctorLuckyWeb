@@ -195,7 +195,7 @@ test.describe('AI results cache', () => {
     const seededStateJson = await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 0,
       maxAnalysisLevel: 25,
-      analysisMaxTimeIndex: 0,
+      analysisMaxTimeIndex: 2,
       cacheEntry: {
         analysisLevel: 12,
         bestTurn: {
@@ -231,7 +231,7 @@ test.describe('AI results cache', () => {
     await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 0,
       maxAnalysisLevel: 25,
-      analysisMaxTimeIndex: 0,
+      analysisMaxTimeIndex: 2,
       cacheEntry: {
         analysisLevel: 12,
         bestTurn: {
