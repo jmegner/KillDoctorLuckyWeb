@@ -128,6 +128,23 @@ const seedDefaultStateForCurrentPlayerSelection = async (page: Page): Promise<Se
 };
 
 test.describe('selected-piece current-room click behavior', () => {
+  test('clicking another piece in the same room deselects the selected piece', async ({ page }) => {
+    await page.goto('/');
+    const seed = await seedDefaultStateForCurrentPlayerSelection(page);
+    const selectedPieceLabel = pieceLabelById[seed.pieceId];
+    const selectedPiece = page.locator(`.piece-layer [aria-label="${selectedPieceLabel} piece"]`).first();
+    const opposingNormalPiece = page.locator('.piece-layer [aria-label="P3 piece"]').first();
+    const selectedLine = plannerLine(page, 'Selected');
+    const plannedLine = plannerLine(page, 'Planned');
+
+    await selectedPiece.click();
+    await expect(selectedLine).toContainText(selectedPieceLabel);
+
+    await opposingNormalPiece.click();
+    await expect(selectedLine).toContainText('None');
+    await expect(plannedLine).toContainText('No moves planned.');
+  });
+
   test('clicking current room deselects piece when no planned move exists', async ({ page }) => {
     await page.goto('/');
     const seed = await seedDefaultStateForCurrentPlayerSelection(page);

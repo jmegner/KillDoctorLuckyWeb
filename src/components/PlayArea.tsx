@@ -1662,9 +1662,37 @@ function PlayArea() {
     setPlanOrder((prev) => (prev.includes(pieceId) ? prev.filter((id) => id !== pieceId) : prev));
   };
 
+  const handleSelectedPieceDestination = (roomId: number) => {
+    if (!selectedPieceId) {
+      return false;
+    }
+    if (pieceRoomMap.get(selectedPieceId) === roomId) {
+      const plannedRoomId = plannedMoves[selectedPieceId];
+      if (plannedRoomId !== undefined && plannedRoomId !== roomId) {
+        clearPlannedMoveForPiece(selectedPieceId);
+      }
+      setSelectedPieceId(null);
+      setValidationMessage(null);
+      return true;
+    }
+
+    setPlannedMoves((prev) => ({ ...prev, [selectedPieceId]: roomId }));
+    setPlanOrder((prev) => (prev.includes(selectedPieceId) ? prev : [...prev, selectedPieceId]));
+    setSelectedPieceId(null);
+    setValidationMessage(null);
+    return true;
+  };
+
   const handlePieceClick = (pieceId: PieceId) => {
     clearPendingEmptyRoomTouchTap();
     if (hasWinner) {
+      return;
+    }
+    if (selectedPieceId) {
+      const roomId = pieceRoomMap.get(pieceId);
+      if (roomId !== undefined) {
+        handleSelectedPieceDestination(roomId);
+      }
       return;
     }
     if (selectedPieceId === pieceId) {
@@ -1707,19 +1735,7 @@ function PlayArea() {
       return;
     }
     clearPendingEmptyRoomTouchTap();
-    if (pieceRoomMap.get(selectedPieceId) === roomId) {
-      const plannedRoomId = plannedMoves[selectedPieceId];
-      if (plannedRoomId !== undefined && plannedRoomId !== roomId) {
-        clearPlannedMoveForPiece(selectedPieceId);
-      }
-      setSelectedPieceId(null);
-      setValidationMessage(null);
-      return;
-    }
-    setPlannedMoves((prev) => ({ ...prev, [selectedPieceId]: roomId }));
-    setPlanOrder((prev) => (prev.includes(selectedPieceId) ? prev : [...prev, selectedPieceId]));
-    setSelectedPieceId(null);
-    setValidationMessage(null);
+    handleSelectedPieceDestination(roomId);
   };
 
   const stopAnalysisTimer = () => {
