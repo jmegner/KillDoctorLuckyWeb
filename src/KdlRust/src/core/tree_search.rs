@@ -1,9 +1,10 @@
 use crate::core::mutable_game_state::MutableGameState;
-use crate::core::player::{AppraisedPlayerTurn, AppraisalState, PlayerId};
+use crate::core::player::{AppraisalState, AppraisedPlayerTurn, PlayerId};
 use crate::core::rule_helper;
 use crate::core::simple_turn::SimpleTurn;
 use crate::util::cancellation::CancellationToken;
 use std::cmp::Ordering;
+use std::collections::HashSet;
 
 pub struct TreeSearch;
 
@@ -211,47 +212,76 @@ impl TreeSearch {
             return cycles;
         }
 
-        Self::add_full_control_cycles(begin_state, cancellation_token, &mut cycles);
+        let mut end_states = HashSet::new();
+        Self::add_full_control_cycles(
+            begin_state,
+            begin_state,
+            cancellation_token,
+            &mut end_states,
+        );
+
+        for end_state in end_states {
+            let mut first_turn = None;
+            let mut some_state = &end_state;
+
+            while some_state.prev_state.is_some() {
+                let prev_state = some_state.prev_state.as_ref().unwrap();
+                if prev_state.turn_id == begin_state.turn_id {
+                    first_turn = Some(prev_state.prev_turn.clone());
+                    break;
+                }
+            }
+            cycles.push(AppraisedPlayerTurn::new(
+                end_state.heuristic_score(begin_state.current_player_id),
+                first_turn.unwrap(),
+                end_state,
+            ));
+        }
+
+        cycles.sort_by(|a, b| b.appraisal.total_cmp(&a.appraisal));
         cycles
     }
 
     pub fn add_full_control_cycles(
         begin_state: &MutableGameState,
+        parent_state: &MutableGameState,
         cancellation_token: &impl CancellationToken,
-        cycles: &mut Vec<AppraisedPlayerTurn<SimpleTurn, MutableGameState>>,
+        end_states: &mut HashSet<MutableGameState>,
     ) {
         let begin_player_id = begin_state.current_player_id;
         let begin_doctor_room_id = begin_state.doctor_room_id;
 
-        for turn in begin_state.possible_turns() {
+        for turn in parent_state.possible_turns() {
             if cancellation_token.is_cancellation_requested() {
                 break;
             }
 
-            let child_state = Self::child_state(begin_state, turn.clone());
+            let child_state = parent_state.after_turn(turn);
             if child_state.current_player_id != begin_player_id {
                 continue;
             }
 
+            // if doctor has seemingly moved "less" than the number of turns, we have completed a loop but skipped
+            // over the exact beginning dr room
+            let num_rooms_doctor_moved =
+                begin_state.doctor_moves_until_room(child_state.doctor_room_id);
+            let num_turns = child_state.turn_id - begin_state.turn_id;
+
             if child_state.doctor_room_id == begin_doctor_room_id
+                || num_rooms_doctor_moved < num_turns
                 || child_state.winner == begin_player_id
             {
-                cycles.push(AppraisedPlayerTurn::new(
-                    child_state.heuristic_score(begin_player_id),
-                    turn,
-                    child_state,
-                ));
+                end_states.insert(child_state);
                 continue;
             }
 
-            Self::add_full_control_cycles(&child_state, cancellation_token, cycles);
+            Self::add_full_control_cycles(
+                begin_state,
+                &child_state,
+                cancellation_token,
+                end_states,
+            );
         }
-    }
-
-    fn child_state(curr_state: &MutableGameState, turn: SimpleTurn) -> MutableGameState {
-        let mut child_state = curr_state.copy_state();
-        child_state.after_normal_turn(turn, false);
-        child_state
     }
 }
 

@@ -1,3 +1,4 @@
+use crossterm::{event, terminal};
 use kill_doctor_lucky_rust::core::{
     board::Board,
     common_game_state::CommonGameState,
@@ -8,14 +9,11 @@ use kill_doctor_lucky_rust::core::{
     simple_turn::SimpleTurn,
     tree_search::TreeSearch,
 };
-use kill_doctor_lucky_rust::util::cancellation::{
-    AtomicCancellationToken, CancellationToken,
-};
-use crossterm::{event, terminal};
+use kill_doctor_lucky_rust::util::cancellation::{AtomicCancellationToken, CancellationToken};
 use std::io::{self, Write};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::{Duration, Instant};
 
@@ -567,7 +565,7 @@ impl Session {
             "",
         )
         .map_err(|err| {
-            println!("exception while constructing GameState: {err:?}");
+            println!("exception while constructing MutableGameState: {err:?}");
             vec![format!("{err:?}")]
         })?;
 

@@ -326,19 +326,10 @@ impl MutableGameState {
         Ok(())
     }
 
-    pub fn after_turn(
-        &mut self,
-        turn: SimpleTurn,
-        must_return_new_object: bool,
-    ) -> MutableGameState {
-        if must_return_new_object {
-            let mut new_state = self.copy_state();
-            new_state.after_normal_turn(turn, false);
-            new_state
-        } else {
-            self.after_normal_turn(turn, false);
-            self.clone()
-        }
+    pub fn after_turn(&self, turn: SimpleTurn) -> MutableGameState {
+        let mut new_state = self.copy_state();
+        new_state.after_normal_turn(turn, false);
+        new_state
     }
 
     pub fn after_normal_turn(&mut self, turn: SimpleTurn, want_log: bool) -> &mut Self {
@@ -762,7 +753,9 @@ impl MutableGameState {
             let move_a = PlayerMove::new(movable_player_a, *dst_room_a);
 
             for dst_room_b in room_ids {
-                if distance[src_room_b.0][dst_room_b.0] > dist_remaining || src_room_b == *dst_room_b {
+                if distance[src_room_b.0][dst_room_b.0] > dist_remaining
+                    || src_room_b == *dst_room_b
+                {
                     continue;
                 }
 
@@ -1412,11 +1405,17 @@ mod tests {
         let before = game.clone();
 
         let returned_new_state = MutableGameState::after_turn(&mut game, turn.clone(), true);
-        assert_eq!(game, before, "state should not mutate when cloning is requested");
+        assert_eq!(
+            game, before,
+            "state should not mutate when cloning is requested"
+        );
         assert_ne!(returned_new_state, before);
 
         let _ = MutableGameState::after_turn(&mut game, turn, false);
-        assert_ne!(game, before, "state should mutate when cloning is not requested");
+        assert_ne!(
+            game, before,
+            "state should mutate when cloning is not requested"
+        );
     }
 
     #[test]
