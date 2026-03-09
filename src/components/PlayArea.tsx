@@ -163,6 +163,17 @@ type RoomRect = {
   height: number;
 };
 
+type SlotPosition = {
+  col: number;
+  row: number;
+};
+
+type SlotLayout = {
+  cols: number;
+  rows: number;
+  slots: SlotPosition[];
+};
+
 const boardLayout = boardData as BoardLayout;
 const boardWidth = 1480;
 const boardHeight = 965;
@@ -821,6 +832,7 @@ const pieceConfig: Record<
 
 const pieceSizeTarget = 80;
 const pieceGap = 3;
+const emptyLayoutCellPenalty = 0.45;
 
 const getRoomRect = (coords: number[]): RoomRect => ({
   x: coords[0],
@@ -829,55 +841,51 @@ const getRoomRect = (coords: number[]): RoomRect => ({
   height: coords[3] - coords[1],
 });
 
-const getSlotLayout = (count: number) => {
+const getSlotLayout = (count: number, roomRect: RoomRect): SlotLayout => {
   if (count <= 1) {
     return { cols: 1, rows: 1, slots: [{ col: 0, row: 0 }] };
   }
-  if (count === 2) {
-    return {
-      cols: 2,
-      rows: 1,
-      slots: [
-        { col: 0, row: 0 },
-        { col: 1, row: 0 },
-      ],
-    };
-  }
-  if (count === 3) {
-    return {
-      cols: 3,
-      rows: 1,
-      slots: [
-        { col: 0, row: 0 },
-        { col: 1, row: 0 },
-        { col: 2, row: 0 },
-      ],
-    };
-  }
-  if (count === 4) {
-    return {
-      cols: 2,
-      rows: 2,
-      slots: [
-        { col: 0, row: 0 },
-        { col: 1, row: 0 },
-        { col: 0, row: 1 },
-        { col: 1, row: 1 },
-      ],
-    };
+
+  const roomAspect = roomRect.width > 0 && roomRect.height > 0 ? roomRect.width / roomRect.height : 1;
+  let bestLayout: SlotLayout | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  let bestUncappedSize = 0;
+
+  for (let cols = 1; cols <= count; cols += 1) {
+    const rows = Math.ceil(count / cols);
+    const emptyCells = cols * rows - count;
+    const layoutAspect = cols / rows;
+    const aspectPenalty = Math.abs(Math.log(layoutAspect / roomAspect));
+    const uncappedSize = Math.min(
+      (roomRect.width - pieceGap * (cols - 1)) / cols,
+      (roomRect.height - pieceGap * (rows - 1)) / rows,
+    );
+    const score = aspectPenalty + emptyCells * emptyLayoutCellPenalty;
+
+    if (
+      !bestLayout ||
+      score < bestScore - 0.0001 ||
+      (Math.abs(score - bestScore) <= 0.0001 && uncappedSize > bestUncappedSize)
+    ) {
+      const slots: SlotPosition[] = [];
+      let placed = 0;
+      for (let row = 0; row < rows && placed < count; row += 1) {
+        const remaining = count - placed;
+        const itemsInRow = Math.min(cols, remaining);
+        const startCol = (cols - itemsInRow) / 2;
+        for (let index = 0; index < itemsInRow; index += 1) {
+          slots.push({ col: startCol + index, row });
+          placed += 1;
+        }
+      }
+
+      bestLayout = { cols, rows, slots };
+      bestScore = score;
+      bestUncappedSize = uncappedSize;
+    }
   }
 
-  return {
-    cols: 3,
-    rows: 2,
-    slots: [
-      { col: 1, row: 0 },
-      { col: 0, row: 0 },
-      { col: 2, row: 0 },
-      { col: 0, row: 1 },
-      { col: 2, row: 1 },
-    ],
-  };
+  return bestLayout ?? { cols: 1, rows: count, slots: Array.from({ length: count }, (_, row) => ({ col: 0, row })) };
 };
 
 const getPiecePositionsInRoom = (count: number, roomRect: RoomRect) => {
@@ -885,7 +893,7 @@ const getPiecePositionsInRoom = (count: number, roomRect: RoomRect) => {
     return { size: pieceSizeTarget, positions: [] as Array<{ x: number; y: number }> };
   }
 
-  const { cols, rows, slots } = getSlotLayout(count);
+  const { cols, rows, slots } = getSlotLayout(count, roomRect);
   const maxPieceWidth = (roomRect.width - pieceGap * (cols - 1)) / cols;
   const maxPieceHeight = (roomRect.height - pieceGap * (rows - 1)) / rows;
   const size = Math.min(pieceSizeTarget, maxPieceWidth, maxPieceHeight);
@@ -4075,3 +4083,4 @@ function PlayArea() {
 }
 
 export default PlayArea;
+
