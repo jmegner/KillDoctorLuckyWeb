@@ -64,41 +64,30 @@ pub fn player_moves_to_nice_string(moves: impl IntoIterator<Item = PieceMove>) -
 pub struct AppraisedPlayerTurn {
     pub appraisal: f64,
     pub turn: SimpleTurn,
-    pub ending_state: MutableGameState,
 }
 
 impl AppraisedPlayerTurn {
-    pub fn new(appraisal: f64, turn: SimpleTurn, ending_state: MutableGameState) -> Self {
-        Self {
-            appraisal,
-            turn,
-            ending_state,
-        }
+    pub fn new(appraisal: f64, turn: SimpleTurn) -> Self {
+        Self { appraisal, turn }
     }
 
-    pub fn from_state(analysis_player_id: PlayerId, state: MutableGameState) -> Self {
+    pub fn from_state(state: &MutableGameState, analysis_player_id: PlayerId) -> Self {
         let appraisal = state.heuristic_score(analysis_player_id);
         let turn = state.prev_turn.clone();
-        Self {
-            appraisal,
-            turn,
-            ending_state: state,
-        }
+        Self { appraisal, turn }
     }
 
-    pub fn empty_minimum(ending_state: MutableGameState) -> Self {
+    pub fn empty_minimum() -> Self {
         Self {
             appraisal: f64::NEG_INFINITY,
             turn: SimpleTurn::default(),
-            ending_state,
         }
     }
 
-    pub fn empty_maximum(ending_state: MutableGameState) -> Self {
+    pub fn empty_maximum() -> Self {
         Self {
             appraisal: f64::INFINITY,
             turn: SimpleTurn::default(),
-            ending_state,
         }
     }
 }
@@ -153,27 +142,12 @@ mod tests {
         state.prev_turn = SimpleTurn::from_move(PieceMove::new(PlayerId(1), RoomId(2)));
         let expected_appraisal = state.heuristic_score(PlayerId(2));
 
-        let appraised = AppraisedPlayerTurn::from_state(PlayerId(2), state);
+        let appraised = AppraisedPlayerTurn::from_state(&state, PlayerId(2));
 
         assert_eq!(appraised.appraisal, expected_appraisal);
         assert_eq!(
             appraised.turn,
             SimpleTurn::from_move(PieceMove::new(PlayerId(1), RoomId(2)))
         );
-        assert_eq!(appraised.ending_state.player_move_cards[0], 1.5);
-    }
-
-    #[test]
-    fn empty_minimum_and_maximum_mimic_static_defaults() {
-        let state = sample_state();
-        let empty_min = AppraisedPlayerTurn::empty_minimum(state.clone());
-        assert_eq!(empty_min.appraisal, f64::NEG_INFINITY);
-        assert_eq!(empty_min.turn, SimpleTurn::default());
-        assert_eq!(empty_min.ending_state, state);
-
-        let empty_max = AppraisedPlayerTurn::empty_maximum(state.clone());
-        assert_eq!(empty_max.appraisal, f64::INFINITY);
-        assert_eq!(empty_max.turn, SimpleTurn::default());
-        assert_eq!(empty_max.ending_state, state);
     }
 }

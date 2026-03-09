@@ -566,7 +566,7 @@ impl GameStateHandle {
             return message;
         }
 
-        self.state.after_normal_turn(turn, true);
+        self.state.apply_turn(turn);
         String::new()
     }
 
@@ -583,8 +583,7 @@ impl GameStateHandle {
 
         let current_player_loots = current_player_loots_after_turn(&self.state, &turn);
         let prior_attack_count = self.state.attacker_hist.len();
-        let mut preview_state = self.state.copy_state();
-        preview_state.after_normal_turn(turn, false);
+        let preview_state = self.state.after_turn(turn);
 
         let mut seen_attackers = HashSet::new();
         let mut attackers = Vec::new();
@@ -772,9 +771,9 @@ impl GameStateHandle {
 
         for (turn_idx, turn) in snapshot.normal_turns.into_iter().enumerate() {
             if let Err(message) = restored.check_normal_turn(&turn) {
-                return format!("Saved game turn {} is invalid: {message}", turn_idx + 1);
+                return format!("Saved turn {} is invalid: {message}", turn_idx + 1);
             }
-            restored.after_normal_turn(turn, true);
+            restored.apply_turn(turn);
         }
 
         self.normal_setup = snapshot.normal_setup;

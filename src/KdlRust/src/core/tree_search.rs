@@ -1,5 +1,5 @@
 use crate::core::mutable_game_state::MutableGameState;
-use crate::core::player::{AppraisedPlayerTurn, PlayerId};
+use crate::core::player::AppraisedPlayerTurn;
 use crate::core::rule_helper;
 use crate::util::cancellation::CancellationToken;
 use std::cmp::Ordering;
@@ -29,65 +29,8 @@ impl TreeSearch {
                 Self::BETA_INITIAL,
             )
         } else {
-            Self::find_best_turn_many_players(
-                state,
-                state.current_player_id,
-                analysis_level,
-                cancellation_token,
-                num_states_visited,
-            )
+            panic!("TreeSearch only supports 2 player games");
         }
-    }
-
-    fn find_best_turn_many_players(
-        curr_state: &MutableGameState,
-        analysis_player_id: PlayerId,
-        analysis_level: i32,
-        cancellation_token: &impl CancellationToken,
-        num_states_visited: &mut usize,
-    ) -> AppraisedPlayerTurn {
-        *num_states_visited += 1;
-
-        if curr_state.has_winner() || analysis_level == 0 {
-            return AppraisedPlayerTurn::from_state(analysis_player_id, curr_state.clone());
-        }
-
-        let curr_player_id = curr_state.current_player_id;
-        let mut best_turn = AppraisedPlayerTurn::empty_minimum(curr_state.clone());
-        let possible_turns = curr_state.possible_turns();
-
-        for turn in possible_turns {
-            if cancellation_token.is_cancellation_requested() {
-                return best_turn;
-            }
-            let child_state = curr_state.after_turn(turn);
-            let child_player_id = child_state.current_player_id;
-            let child_turn = child_state.prev_turn.clone();
-            let mut hypo_appraised_turn = Self::find_best_turn_many_players(
-                &child_state,
-                curr_player_id,
-                analysis_level - 1,
-                cancellation_token,
-                num_states_visited,
-            );
-
-            if curr_player_id != child_player_id {
-                hypo_appraised_turn.appraisal = hypo_appraised_turn
-                    .ending_state
-                    .heuristic_score(curr_player_id);
-            }
-
-            if best_turn.appraisal < hypo_appraised_turn.appraisal {
-                best_turn = hypo_appraised_turn;
-                best_turn.turn = child_turn;
-
-                if best_turn.ending_state.winner == analysis_player_id {
-                    break;
-                }
-            }
-        }
-
-        best_turn
     }
 
     fn find_best_turn_two_players(
@@ -101,16 +44,13 @@ impl TreeSearch {
         *num_states_visited += 1;
 
         if curr_state.has_winner() || analysis_level == 0 {
-            return AppraisedPlayerTurn::from_state(
-                curr_state.current_player_id,
-                curr_state.clone(),
-            );
+            return AppraisedPlayerTurn::from_state(curr_state, curr_state.current_player_id);
         }
 
         let curr_player_id = curr_state.current_player_id;
         let possible_turns = curr_state.possible_turns();
 
-        let mut best_turn = AppraisedPlayerTurn::empty_minimum(curr_state.clone());
+        let mut best_turn = AppraisedPlayerTurn::empty_minimum();
         let mut alpha = alpha;
         let beta = beta;
 
@@ -127,9 +67,7 @@ impl TreeSearch {
                 if cancellation_token.is_cancellation_requested() {
                     break;
                 }
-                let child_player_id = child_state.current_player_id;
-                let child_turn = child_state.prev_turn.clone();
-                let child_is_us = curr_player_id == child_player_id;
+                let child_is_us = curr_player_id == child_state.current_player_id;
                 let child_alpha = if child_is_us { alpha } else { -beta };
                 let child_beta = if child_is_us { beta } else { -alpha };
                 let mut hypo_turn = Self::find_best_turn_two_players(
@@ -147,7 +85,7 @@ impl TreeSearch {
 
                 if best_turn.appraisal < hypo_turn.appraisal {
                     best_turn = hypo_turn;
-                    best_turn.turn = child_turn;
+                    best_turn.turn = child_state.prev_turn;
 
                     if best_turn.appraisal > alpha {
                         alpha = best_turn.appraisal;
@@ -164,9 +102,7 @@ impl TreeSearch {
                     break;
                 }
                 let child_state = curr_state.after_turn(turn);
-                let child_player_id = child_state.current_player_id;
-                let child_turn = child_state.prev_turn.clone();
-                let child_is_us = curr_player_id == child_player_id;
+                let child_is_us = curr_player_id == child_state.current_player_id;
                 let child_alpha = if child_is_us { alpha } else { -beta };
                 let child_beta = if child_is_us { beta } else { -alpha };
                 let mut hypo_turn = Self::find_best_turn_two_players(
@@ -184,7 +120,7 @@ impl TreeSearch {
 
                 if best_turn.appraisal < hypo_turn.appraisal {
                     best_turn = hypo_turn;
-                    best_turn.turn = child_turn;
+                    best_turn.turn = child_state.prev_turn;
 
                     if best_turn.appraisal > alpha {
                         alpha = best_turn.appraisal;
@@ -232,7 +168,6 @@ impl TreeSearch {
             cycles.push(AppraisedPlayerTurn::new(
                 end_state.heuristic_score(begin_state.current_player_id),
                 first_turn.unwrap(),
-                end_state,
             ));
         }
 
@@ -311,12 +246,6 @@ mod tests {
         MutableGameState::at_start(common)
     }
 
-    fn tiny_three_player_start() -> MutableGameState {
-        let board = Board::from_embedded_json("Tiny").expect("Tiny should be available");
-        let common = CommonGameState::from_num_normal_players(true, board, 3);
-        MutableGameState::at_start(common)
-    }
-
     fn run_snapshot_line(
         state: &MutableGameState,
         analysis_level: i32,
@@ -364,7 +293,7 @@ mod tests {
             .into_iter()
             .find(|turn| turn.to_string() == "1@13;")
             .expect("expected to find opening turn 1@13;");
-        state.after_normal_turn(opening_turn, false);
+        state.apply_turn(opening_turn);
 
         let token = NeverCancelToken;
         let snapshot = (1..=3)
@@ -378,26 +307,6 @@ mod tests {
                 "L1|turn=2@14;|appraisal=-0.647815|states=517\n",
                 "L2|turn=3@14 2@2;|appraisal=+0.104624|states=6214\n",
                 "L3|turn=3@15 2@4;|appraisal=-0.034230|states=10820"
-            )
-        );
-    }
-
-    #[test]
-    fn tree_search_snapshot_tiny_three_player_start_levels_0_to_3() {
-        let state = tiny_three_player_start();
-        let token = NeverCancelToken;
-        let snapshot = (0..=3)
-            .map(|analysis_level| run_snapshot_line(&state, analysis_level, &token))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        assert_eq!(
-            snapshot,
-            concat!(
-                "L0|turn=1000@0;|appraisal=+0.475000|states=1\n",
-                "L1|turn=1@2;|appraisal=+0.149219|states=5\n",
-                "L2|turn=1@2;|appraisal=+0.149219|states=21\n",
-                "L3|turn=1@2;|appraisal=+0.725000|states=85"
             )
         );
     }

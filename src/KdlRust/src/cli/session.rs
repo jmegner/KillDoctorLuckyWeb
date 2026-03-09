@@ -473,9 +473,7 @@ impl Session {
         }
 
         if let Some(game) = self.game.as_ref() {
-            let mut new_state = game.clone();
-            new_state.after_normal_turn(turn, true);
-            self.game = Some(new_state);
+            self.game = Some(game.after_turn(turn));
         }
     }
 
