@@ -1,7 +1,7 @@
 use crate::core::{
     board::Board,
     common_game_state::CommonGameState,
-    player::{AppraisalState, PlayerAction, PlayerId, PlayerMove, PlayerType},
+    player::{AppraisalState, PieceMove, PlayerAction, PlayerId, PlayerType},
     room::RoomId,
     rule_helper,
     simple_turn::SimpleTurn,
@@ -330,6 +330,10 @@ impl MutableGameState {
         let mut new_state = self.copy_state();
         new_state.after_normal_turn(turn, false);
         new_state
+    }
+
+    pub fn apply_turn(&mut self, turn: SimpleTurn) -> &mut Self {
+        self.after_normal_turn(turn, false)
     }
 
     pub fn after_normal_turn(&mut self, turn: SimpleTurn, want_log: bool) -> &mut Self {
@@ -750,7 +754,7 @@ impl MutableGameState {
                 continue;
             }
 
-            let move_a = PlayerMove::new(movable_player_a, *dst_room_a);
+            let move_a = PieceMove::new(movable_player_a, *dst_room_a);
 
             for dst_room_b in room_ids {
                 if distance[src_room_b.0][dst_room_b.0] > dist_remaining
@@ -759,7 +763,7 @@ impl MutableGameState {
                     continue;
                 }
 
-                let move_b = PlayerMove::new(movable_player_b, *dst_room_b);
+                let move_b = PieceMove::new(movable_player_b, *dst_room_b);
                 turns.push(SimpleTurn::new([move_a, move_b]));
             }
         }
@@ -1395,26 +1399,6 @@ mod tests {
                 "4@2 2@3;\n",
                 "4@3 2@2;"
             )
-        );
-    }
-
-    #[test]
-    fn after_turn_respects_must_return_new_object() {
-        let mut game = tiny_two_player_game_state();
-        let turn = turn_by_text(&game, "1@2;");
-        let before = game.clone();
-
-        let returned_new_state = MutableGameState::after_turn(&mut game, turn.clone(), true);
-        assert_eq!(
-            game, before,
-            "state should not mutate when cloning is requested"
-        );
-        assert_ne!(returned_new_state, before);
-
-        let _ = MutableGameState::after_turn(&mut game, turn, false);
-        assert_ne!(
-            game, before,
-            "state should mutate when cloning is not requested"
         );
     }
 

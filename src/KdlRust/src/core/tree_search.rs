@@ -61,7 +61,7 @@ impl TreeSearch {
             if cancellation_token.is_cancellation_requested() {
                 return best_turn;
             }
-            let child_state = Self::child_state(curr_state, turn);
+            let child_state = curr_state.after_turn(turn);
             let child_player_id = child_state.current_player_id;
             let child_turn = child_state.prev_turn();
             let mut hypo_appraised_turn = Self::find_best_turn_many_players(
@@ -120,7 +120,7 @@ impl TreeSearch {
         if analysis_level > 1 {
             let mut scored_states = Vec::with_capacity(possible_turns.len());
             for turn in possible_turns {
-                let child_state = Self::child_state(curr_state, turn);
+                let child_state = curr_state.after_turn(turn);
                 let score = child_state.heuristic_score(curr_player_id);
                 scored_states.push((score, child_state));
             }
@@ -166,7 +166,7 @@ impl TreeSearch {
                 if cancellation_token.is_cancellation_requested() {
                     break;
                 }
-                let child_state = Self::child_state(curr_state, turn);
+                let child_state = curr_state.after_turn(turn);
                 let child_player_id = child_state.current_player_id;
                 let child_turn = child_state.prev_turn();
                 let child_is_us = curr_player_id == child_player_id;
@@ -230,6 +230,7 @@ impl TreeSearch {
                     first_turn = Some(prev_state.prev_turn.clone());
                     break;
                 }
+                some_state = prev_state;
             }
             cycles.push(AppraisedPlayerTurn::new(
                 end_state.heuristic_score(begin_state.current_player_id),

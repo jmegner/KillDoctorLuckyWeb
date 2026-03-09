@@ -32,12 +32,12 @@ pub enum PlayerType {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 #[readonly::make]
-pub struct PlayerMove {
+pub struct PieceMove {
     pub player_id: PlayerId,
     pub dest_room_id: RoomId,
 }
 
-impl PlayerMove {
+impl PieceMove {
     pub fn new(player_id: PlayerId, dest_room_id: RoomId) -> Self {
         Self {
             player_id,
@@ -46,13 +46,13 @@ impl PlayerMove {
     }
 }
 
-impl fmt::Display for PlayerMove {
+impl fmt::Display for PieceMove {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}@{}", self.player_id.0 + 1, self.dest_room_id)
     }
 }
 
-pub fn player_moves_to_nice_string(moves: impl IntoIterator<Item = PlayerMove>) -> String {
+pub fn player_moves_to_nice_string(moves: impl IntoIterator<Item = PieceMove>) -> String {
     let joined = moves
         .into_iter()
         .map(|player_move| player_move.to_string())
@@ -131,15 +131,15 @@ mod tests {
 
     #[test]
     fn player_move_display_matches_csharp() {
-        let player_move = PlayerMove::new(PlayerId(0), RoomId(7));
+        let player_move = PieceMove::new(PlayerId(0), RoomId(7));
         assert_eq!(player_move.to_string(), "1@7");
     }
 
     #[test]
     fn player_moves_to_nice_string_matches_extension_method() {
         let moves = vec![
-            PlayerMove::new(PlayerId(0), RoomId(4)),
-            PlayerMove::new(PlayerId(2), RoomId(9)),
+            PieceMove::new(PlayerId(0), RoomId(4)),
+            PieceMove::new(PlayerId(2), RoomId(9)),
         ];
         assert_eq!(player_moves_to_nice_string(moves), "1@4 3@9;");
     }
@@ -147,15 +147,15 @@ mod tests {
     #[derive(Clone)]
     struct DummyState {
         score: f64,
-        turn: Option<PlayerMove>,
+        turn: Option<PieceMove>,
     }
 
-    impl AppraisalState<PlayerMove> for DummyState {
+    impl AppraisalState<PieceMove> for DummyState {
         fn heuristic_score(&self, analysis_player_id: PlayerId) -> f64 {
             self.score + analysis_player_id.0 as f64
         }
 
-        fn prev_turn(&self) -> Option<PlayerMove> {
+        fn prev_turn(&self) -> Option<PieceMove> {
             self.turn
         }
     }
@@ -164,16 +164,13 @@ mod tests {
     fn appraised_player_turn_from_state_uses_state_data() {
         let state = DummyState {
             score: 1.5,
-            turn: Some(PlayerMove::new(PlayerId(1), RoomId(5))),
+            turn: Some(PieceMove::new(PlayerId(1), RoomId(5))),
         };
 
         let appraised = AppraisedPlayerTurn::from_state(PlayerId(2), state);
 
         assert_eq!(appraised.appraisal, 3.5);
-        assert_eq!(
-            appraised.turn,
-            Some(PlayerMove::new(PlayerId(1), RoomId(5)))
-        );
+        assert_eq!(appraised.turn, Some(PieceMove::new(PlayerId(1), RoomId(5))));
         let ending_state = appraised
             .ending_state
             .expect("ending state should be present");
@@ -182,13 +179,13 @@ mod tests {
 
     #[test]
     fn empty_minimum_and_maximum_mimic_static_defaults() {
-        let empty_min: AppraisedPlayerTurn<PlayerMove, DummyState> =
+        let empty_min: AppraisedPlayerTurn<PieceMove, DummyState> =
             AppraisedPlayerTurn::empty_minimum();
         assert_eq!(empty_min.appraisal, f64::NEG_INFINITY);
         assert!(empty_min.turn.is_none());
         assert!(empty_min.ending_state.is_none());
 
-        let empty_max: AppraisedPlayerTurn<PlayerMove, DummyState> =
+        let empty_max: AppraisedPlayerTurn<PieceMove, DummyState> =
             AppraisedPlayerTurn::empty_maximum();
         assert_eq!(empty_max.appraisal, f64::INFINITY);
         assert!(empty_max.turn.is_none());

@@ -807,7 +807,7 @@ fn parse_turn_plan(turn_plan_json: &str) -> Result<core::simple_turn::SimpleTurn
                 return Err("Doctor cannot be moved.".to_string());
             };
 
-            Ok(core::player::PlayerMove::new(
+            Ok(core::player::PieceMove::new(
                 player_id,
                 core::room::RoomId(entry.room_id),
             ))

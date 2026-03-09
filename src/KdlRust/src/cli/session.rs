@@ -3,7 +3,7 @@ use kill_doctor_lucky_rust::core::{
     board::Board,
     common_game_state::CommonGameState,
     mutable_game_state::MutableGameState,
-    player::{PlayerId, PlayerMove},
+    player::{PlayerId, PieceMove},
     room::RoomId,
     rule_helper,
     simple_turn::SimpleTurn,
@@ -447,7 +447,7 @@ impl Session {
                 }
 
                 let player_id = PlayerId(player_display_num - 1);
-                moves.push(PlayerMove::new(player_id, RoomId(dest_room_id)));
+                moves.push(PieceMove::new(player_id, RoomId(dest_room_id)));
             } else {
                 println!("  failed parse for room id from '{token}'");
                 has_parse_errors = true;
