@@ -3,7 +3,7 @@ use kill_doctor_lucky_rust::core::{
     board::Board,
     common_game_state::CommonGameState,
     mutable_game_state::MutableGameState,
-    player::{PlayerId, PieceMove},
+    player::{PieceMove, PlayerId},
     room::RoomId,
     rule_helper,
     simple_turn::SimpleTurn,
@@ -365,8 +365,9 @@ impl Session {
             println!("analysis cancelled early");
         }
 
-        if let Some(turn) = appraised_turn.turn.clone() {
-            self.recent_analyzed_turn = Some(turn);
+        let turn = appraised_turn.turn.clone();
+        if !was_cancelled {
+            self.recent_analyzed_turn = Some(turn.clone());
         }
 
         let score_text = if appraised_turn.appraisal == rule_helper::HEURISTIC_SCORE_WIN {
@@ -377,11 +378,11 @@ impl Session {
             format!("{:+0.4}", appraised_turn.appraisal)
         };
 
-        let best_turn_text = appraised_turn
-            .turn
-            .as_ref()
-            .map(|turn| turn.to_string())
-            .unwrap_or_default();
+        let best_turn_text = if was_cancelled {
+            String::new()
+        } else {
+            turn.to_string()
+        };
 
         println!(
             "bestTurn={:<10} level={} appraisal={} states={} timeSec={:.2}",
@@ -393,9 +394,7 @@ impl Session {
         );
 
         if do_suggested_move && !was_cancelled {
-            if let Some(turn) = appraised_turn.turn {
-                self.do_moves_turn(turn);
-            }
+            self.do_moves_turn(turn);
         }
         was_cancelled
     }

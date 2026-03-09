@@ -1,4 +1,4 @@
-use crate::core::room::RoomId;
+use crate::core::{mutable_game_state::MutableGameState, room::RoomId, simple_turn::SimpleTurn};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -61,73 +61,58 @@ pub fn player_moves_to_nice_string(moves: impl IntoIterator<Item = PieceMove>) -
     format!("{joined};")
 }
 
-pub trait AppraisalState<TTurn> {
-    fn heuristic_score(&self, analysis_player_id: PlayerId) -> f64;
-    fn prev_turn(&self) -> Option<TTurn>;
-}
-
-pub struct AppraisedPlayerTurn<TTurn, TGameState> {
+pub struct AppraisedPlayerTurn {
     pub appraisal: f64,
-    pub turn: Option<TTurn>,
-    pub ending_state: Option<TGameState>,
+    pub turn: SimpleTurn,
+    pub ending_state: MutableGameState,
 }
 
-impl<TTurn, TGameState> AppraisedPlayerTurn<TTurn, TGameState> {
-    pub fn new(appraisal: f64, turn: TTurn, ending_state: TGameState) -> Self {
-        Self {
-            appraisal,
-            turn: Some(turn),
-            ending_state: Some(ending_state),
-        }
-    }
-
-    pub fn from_state(analysis_player_id: PlayerId, state: TGameState) -> Self
-    where
-        TGameState: AppraisalState<TTurn>,
-    {
-        let appraisal = state.heuristic_score(analysis_player_id);
-        let turn = state.prev_turn();
+impl AppraisedPlayerTurn {
+    pub fn new(appraisal: f64, turn: SimpleTurn, ending_state: MutableGameState) -> Self {
         Self {
             appraisal,
             turn,
-            ending_state: Some(state),
+            ending_state,
         }
     }
 
-    pub fn empty_minimum() -> Self {
+    pub fn from_state(analysis_player_id: PlayerId, state: MutableGameState) -> Self {
+        let appraisal = state.heuristic_score(analysis_player_id);
+        let turn = state.prev_turn.clone();
+        Self {
+            appraisal,
+            turn,
+            ending_state: state,
+        }
+    }
+
+    pub fn empty_minimum(ending_state: MutableGameState) -> Self {
         Self {
             appraisal: f64::NEG_INFINITY,
-            turn: None,
-            ending_state: None,
+            turn: SimpleTurn::default(),
+            ending_state,
         }
     }
 
-    pub fn empty_maximum() -> Self {
+    pub fn empty_maximum(ending_state: MutableGameState) -> Self {
         Self {
             appraisal: f64::INFINITY,
-            turn: None,
-            ending_state: None,
+            turn: SimpleTurn::default(),
+            ending_state,
         }
     }
 }
 
-impl<TTurn, TGameState> fmt::Display for AppraisedPlayerTurn<TTurn, TGameState>
-where
-    TTurn: fmt::Display,
-{
+impl fmt::Display for AppraisedPlayerTurn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let turn_text = self
-            .turn
-            .as_ref()
-            .map(|turn| turn.to_string())
-            .unwrap_or_default();
-        write!(f, "{}{}", turn_text, self.appraisal)
+        write!(f, "{}{}", self.turn, self.appraisal)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::{board::Board, common_game_state::CommonGameState, room::Room};
 
     #[test]
     fn player_move_display_matches_csharp() {
@@ -144,51 +129,51 @@ mod tests {
         assert_eq!(player_moves_to_nice_string(moves), "1@4 3@9;");
     }
 
-    #[derive(Clone)]
-    struct DummyState {
-        score: f64,
-        turn: Option<PieceMove>,
-    }
-
-    impl AppraisalState<PieceMove> for DummyState {
-        fn heuristic_score(&self, analysis_player_id: PlayerId) -> f64 {
-            self.score + analysis_player_id.0 as f64
-        }
-
-        fn prev_turn(&self) -> Option<PieceMove> {
-            self.turn
-        }
+    fn sample_state() -> MutableGameState {
+        let board = Board::new(
+            "tiny",
+            [
+                Room::new(RoomId(1), "A", [RoomId(2)], [RoomId(2)]),
+                Room::new(RoomId(2), "B", [RoomId(1)], [RoomId(1)]),
+            ],
+            RoomId(1),
+            RoomId(1),
+            RoomId(1),
+            RoomId(1),
+            None,
+        );
+        let common = CommonGameState::from_num_normal_players(true, board, 3);
+        MutableGameState::at_start(common)
     }
 
     #[test]
     fn appraised_player_turn_from_state_uses_state_data() {
-        let state = DummyState {
-            score: 1.5,
-            turn: Some(PieceMove::new(PlayerId(1), RoomId(5))),
-        };
+        let mut state = sample_state();
+        state.player_move_cards[0] = 1.5;
+        state.prev_turn = SimpleTurn::from_move(PieceMove::new(PlayerId(1), RoomId(2)));
+        let expected_appraisal = state.heuristic_score(PlayerId(2));
 
         let appraised = AppraisedPlayerTurn::from_state(PlayerId(2), state);
 
-        assert_eq!(appraised.appraisal, 3.5);
-        assert_eq!(appraised.turn, Some(PieceMove::new(PlayerId(1), RoomId(5))));
-        let ending_state = appraised
-            .ending_state
-            .expect("ending state should be present");
-        assert_eq!(ending_state.score, 1.5);
+        assert_eq!(appraised.appraisal, expected_appraisal);
+        assert_eq!(
+            appraised.turn,
+            SimpleTurn::from_move(PieceMove::new(PlayerId(1), RoomId(2)))
+        );
+        assert_eq!(appraised.ending_state.player_move_cards[0], 1.5);
     }
 
     #[test]
     fn empty_minimum_and_maximum_mimic_static_defaults() {
-        let empty_min: AppraisedPlayerTurn<PieceMove, DummyState> =
-            AppraisedPlayerTurn::empty_minimum();
+        let state = sample_state();
+        let empty_min = AppraisedPlayerTurn::empty_minimum(state.clone());
         assert_eq!(empty_min.appraisal, f64::NEG_INFINITY);
-        assert!(empty_min.turn.is_none());
-        assert!(empty_min.ending_state.is_none());
+        assert_eq!(empty_min.turn, SimpleTurn::default());
+        assert_eq!(empty_min.ending_state, state);
 
-        let empty_max: AppraisedPlayerTurn<PieceMove, DummyState> =
-            AppraisedPlayerTurn::empty_maximum();
+        let empty_max = AppraisedPlayerTurn::empty_maximum(state.clone());
         assert_eq!(empty_max.appraisal, f64::INFINITY);
-        assert!(empty_max.turn.is_none());
-        assert!(empty_max.ending_state.is_none());
+        assert_eq!(empty_max.turn, SimpleTurn::default());
+        assert_eq!(empty_max.ending_state, state);
     }
 }

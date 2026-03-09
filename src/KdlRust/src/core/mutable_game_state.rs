@@ -1,7 +1,7 @@
 use crate::core::{
     board::Board,
     common_game_state::CommonGameState,
-    player::{AppraisalState, PieceMove, PlayerAction, PlayerId, PlayerType},
+    player::{PieceMove, PlayerAction, PlayerId, PlayerType},
     room::RoomId,
     rule_helper,
     simple_turn::SimpleTurn,
@@ -1217,16 +1217,6 @@ impl Hash for MutableGameState {
         (self.doctor_room_id.0 << 3).hash(state);
         (self.winner.0 << 8).hash(state);
         self.player_room_ids.hash(state);
-    }
-}
-
-impl AppraisalState<SimpleTurn> for MutableGameState {
-    fn heuristic_score(&self, analysis_player_id: PlayerId) -> f64 {
-        MutableGameState::heuristic_score(self, analysis_player_id)
-    }
-
-    fn prev_turn(&self) -> Option<SimpleTurn> {
-        Some(self.prev_turn.clone())
     }
 }
 

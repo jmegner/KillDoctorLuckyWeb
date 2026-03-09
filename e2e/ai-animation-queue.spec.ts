@@ -112,7 +112,7 @@ const seedTwoCachedStates = async (
           JSON.stringify({
             minAnalysisLevel: 0,
             maxAnalysisLevel: 5,
-            analysisMaxTimeIndex: 0,
+            analysisMaxTimeIndex: 2,
             controlP1: controlP1Arg,
             controlP3: controlP3Arg,
             showOnBoardP1: false,

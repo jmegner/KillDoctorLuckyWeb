@@ -1,7 +1,6 @@
 use crate::core::mutable_game_state::MutableGameState;
-use crate::core::player::{AppraisalState, AppraisedPlayerTurn, PlayerId};
+use crate::core::player::{AppraisedPlayerTurn, PlayerId};
 use crate::core::rule_helper;
-use crate::core::simple_turn::SimpleTurn;
 use crate::util::cancellation::CancellationToken;
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -17,7 +16,7 @@ impl TreeSearch {
         analysis_level: i32,
         cancellation_token: &impl CancellationToken,
         num_states_visited: &mut usize,
-    ) -> AppraisedPlayerTurn<SimpleTurn, MutableGameState> {
+    ) -> AppraisedPlayerTurn {
         *num_states_visited = 0;
 
         if state.num_players() == 2 {
@@ -46,7 +45,7 @@ impl TreeSearch {
         analysis_level: i32,
         cancellation_token: &impl CancellationToken,
         num_states_visited: &mut usize,
-    ) -> AppraisedPlayerTurn<SimpleTurn, MutableGameState> {
+    ) -> AppraisedPlayerTurn {
         *num_states_visited += 1;
 
         if curr_state.has_winner() || analysis_level == 0 {
@@ -54,7 +53,7 @@ impl TreeSearch {
         }
 
         let curr_player_id = curr_state.current_player_id;
-        let mut best_turn = AppraisedPlayerTurn::empty_minimum();
+        let mut best_turn = AppraisedPlayerTurn::empty_minimum(curr_state.clone());
         let possible_turns = curr_state.possible_turns();
 
         for turn in possible_turns {
@@ -63,7 +62,7 @@ impl TreeSearch {
             }
             let child_state = curr_state.after_turn(turn);
             let child_player_id = child_state.current_player_id;
-            let child_turn = child_state.prev_turn();
+            let child_turn = child_state.prev_turn.clone();
             let mut hypo_appraised_turn = Self::find_best_turn_many_players(
                 &child_state,
                 curr_player_id,
@@ -73,19 +72,17 @@ impl TreeSearch {
             );
 
             if curr_player_id != child_player_id {
-                if let Some(ending_state) = hypo_appraised_turn.ending_state.as_ref() {
-                    hypo_appraised_turn.appraisal = ending_state.heuristic_score(curr_player_id);
-                }
+                hypo_appraised_turn.appraisal = hypo_appraised_turn
+                    .ending_state
+                    .heuristic_score(curr_player_id);
             }
 
             if best_turn.appraisal < hypo_appraised_turn.appraisal {
                 best_turn = hypo_appraised_turn;
                 best_turn.turn = child_turn;
 
-                if let Some(ending_state) = best_turn.ending_state.as_ref() {
-                    if ending_state.winner == analysis_player_id {
-                        break;
-                    }
+                if best_turn.ending_state.winner == analysis_player_id {
+                    break;
                 }
             }
         }
@@ -100,7 +97,7 @@ impl TreeSearch {
         num_states_visited: &mut usize,
         alpha: f64,
         beta: f64,
-    ) -> AppraisedPlayerTurn<SimpleTurn, MutableGameState> {
+    ) -> AppraisedPlayerTurn {
         *num_states_visited += 1;
 
         if curr_state.has_winner() || analysis_level == 0 {
@@ -113,7 +110,7 @@ impl TreeSearch {
         let curr_player_id = curr_state.current_player_id;
         let possible_turns = curr_state.possible_turns();
 
-        let mut best_turn = AppraisedPlayerTurn::empty_minimum();
+        let mut best_turn = AppraisedPlayerTurn::empty_minimum(curr_state.clone());
         let mut alpha = alpha;
         let beta = beta;
 
@@ -131,7 +128,7 @@ impl TreeSearch {
                     break;
                 }
                 let child_player_id = child_state.current_player_id;
-                let child_turn = child_state.prev_turn();
+                let child_turn = child_state.prev_turn.clone();
                 let child_is_us = curr_player_id == child_player_id;
                 let child_alpha = if child_is_us { alpha } else { -beta };
                 let child_beta = if child_is_us { beta } else { -alpha };
@@ -168,7 +165,7 @@ impl TreeSearch {
                 }
                 let child_state = curr_state.after_turn(turn);
                 let child_player_id = child_state.current_player_id;
-                let child_turn = child_state.prev_turn();
+                let child_turn = child_state.prev_turn.clone();
                 let child_is_us = curr_player_id == child_player_id;
                 let child_alpha = if child_is_us { alpha } else { -beta };
                 let child_beta = if child_is_us { beta } else { -alpha };
@@ -206,7 +203,7 @@ impl TreeSearch {
     pub fn find_full_control_cycles(
         begin_state: &MutableGameState,
         cancellation_token: &impl CancellationToken,
-    ) -> Vec<AppraisedPlayerTurn<SimpleTurn, MutableGameState>> {
+    ) -> Vec<AppraisedPlayerTurn> {
         let mut cycles = Vec::new();
         if begin_state.has_winner() {
             return cycles;
@@ -303,6 +300,7 @@ mod tests {
     use super::*;
     use crate::core::{
         board::Board, common_game_state::CommonGameState, mutable_game_state::MutableGameState,
+        simple_turn::SimpleTurn,
     };
     use crate::util::cancellation::{AtomicCancellationToken, CancellationToken, NeverCancelToken};
 
@@ -331,11 +329,7 @@ mod tests {
             cancellation_token,
             &mut num_states_visited,
         );
-        let best_turn_text = appraised_turn
-            .turn
-            .as_ref()
-            .map(|turn| turn.to_string())
-            .unwrap_or_else(|| "<none>".to_string());
+        let best_turn_text = appraised_turn.turn.to_string();
         format!(
             "L{analysis_level}|turn={best_turn_text}|appraisal={:+0.6}|states={num_states_visited}",
             appraised_turn.appraisal
@@ -427,7 +421,7 @@ mod tests {
         let mut num_states_visited = 123usize;
         let appraised_turn = TreeSearch::find_best_turn(&state, 4, &token, &mut num_states_visited);
 
-        assert!(appraised_turn.turn.is_none());
+        assert_eq!(appraised_turn.turn, SimpleTurn::default());
         assert_eq!(appraised_turn.appraisal, f64::NEG_INFINITY);
         assert_eq!(num_states_visited, 1);
     }

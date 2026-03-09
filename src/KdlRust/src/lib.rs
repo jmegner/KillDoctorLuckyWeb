@@ -240,8 +240,10 @@ fn new_state_with_normal_setup(
 }
 
 fn normal_piece_id_for_state(state: &core::mutable_game_state::MutableGameState) -> PieceId {
-    let normal_id =
-        core::rule_helper::to_normal_player_id(state.current_player_id, state.common.num_normal_players);
+    let normal_id = core::rule_helper::to_normal_player_id(
+        state.current_player_id,
+        state.common.num_normal_players,
+    );
     if normal_id == core::rule_helper::SIDE_A_NORMAL_PLAYER_ID {
         PieceId::Player1
     } else {
@@ -249,12 +251,15 @@ fn normal_piece_id_for_state(state: &core::mutable_game_state::MutableGameState)
     }
 }
 
-fn winner_piece_id_for_state(state: &core::mutable_game_state::MutableGameState) -> Option<PieceId> {
+fn winner_piece_id_for_state(
+    state: &core::mutable_game_state::MutableGameState,
+) -> Option<PieceId> {
     if !state.has_winner() {
         return None;
     }
 
-    let normal_id = core::rule_helper::to_normal_player_id(state.winner, state.common.num_normal_players);
+    let normal_id =
+        core::rule_helper::to_normal_player_id(state.winner, state.common.num_normal_players);
     Some(if normal_id == core::rule_helper::SIDE_A_NORMAL_PLAYER_ID {
         PieceId::Player1
     } else {
@@ -338,10 +343,13 @@ fn current_player_loots_after_turn(
         preview_state.player_room_ids[player_idx] = mv.dest_room_id;
     }
 
-    preview_state.best_action_allowed(moved_stranger_that_saw_doctor) == core::player::PlayerAction::Loot
+    preview_state.best_action_allowed(moved_stranger_that_saw_doctor)
+        == core::player::PlayerAction::Loot
 }
 
-fn collect_normal_turns(state: &core::mutable_game_state::MutableGameState) -> Vec<core::simple_turn::SimpleTurn> {
+fn collect_normal_turns(
+    state: &core::mutable_game_state::MutableGameState,
+) -> Vec<core::simple_turn::SimpleTurn> {
     let mut states = Vec::new();
     let mut cursor = Some(state);
 
@@ -594,8 +602,14 @@ impl GameStateHandle {
         let mut moved_strangers = Vec::new();
         if preview_state.common.has_strangers() {
             let stranger_rooms = [
-                (core::rule_helper::STRANGER_PLAYER_ID_FIRST, PieceId::Stranger1),
-                (core::rule_helper::STRANGER_PLAYER_ID_SECOND, PieceId::Stranger2),
+                (
+                    core::rule_helper::STRANGER_PLAYER_ID_FIRST,
+                    PieceId::Stranger1,
+                ),
+                (
+                    core::rule_helper::STRANGER_PLAYER_ID_SECOND,
+                    PieceId::Stranger2,
+                ),
             ];
             for (player_id, piece_id) in stranger_rooms {
                 let current_room_id = self.state.player_room_ids[player_id.0].0;
@@ -613,7 +627,9 @@ impl GameStateHandle {
         to_preview_json(&TurnPlanPreview {
             is_valid: true,
             validation_message: String::new(),
-            next_player_piece_id: normal_piece_id_for_state(&preview_state).as_str().to_string(),
+            next_player_piece_id: normal_piece_id_for_state(&preview_state)
+                .as_str()
+                .to_string(),
             has_winner: winner_piece_id.is_some(),
             winner_piece_id: winner_piece_id
                 .map(|piece_id| piece_id.as_str().to_string())
@@ -628,7 +644,11 @@ impl GameStateHandle {
     #[wasm_bindgen(js_name = "findBestTurn")]
     pub fn find_best_turn(&self, analysis_level: i32) -> String {
         if self.state.has_winner() {
-            return invalid_best_turn_analysis_json("Game already has a winner.".to_string(), 0, 0.0);
+            return invalid_best_turn_analysis_json(
+                "Game already has a winner.".to_string(),
+                0,
+                0.0,
+            );
         }
 
         let analysis_level = analysis_level.max(0);
@@ -643,20 +663,16 @@ impl GameStateHandle {
         );
         let elapsed_ms = (now_ms() - started_ms).max(0.0);
 
-        let Some(turn) = appraised_turn.turn.as_ref() else {
-            return invalid_best_turn_analysis_json(
-                "No legal turn found.".to_string(),
-                num_states_visited,
-                elapsed_ms,
-            );
-        };
-
         let has_strangers = self.state.common.has_strangers();
-        let mut suggested_turn = Vec::with_capacity(turn.moves.len());
-        for player_move in &turn.moves {
-            let Some(piece_id) = PieceId::from_player_id(player_move.player_id, has_strangers) else {
+        let mut suggested_turn = Vec::with_capacity(appraised_turn.turn.moves.len());
+        for player_move in &appraised_turn.turn.moves {
+            let Some(piece_id) = PieceId::from_player_id(player_move.player_id, has_strangers)
+            else {
                 return invalid_best_turn_analysis_json(
-                    format!("Could not map player {} to a piece id.", player_move.player_id.0),
+                    format!(
+                        "Could not map player {} to a piece id.",
+                        player_move.player_id.0
+                    ),
                     num_states_visited,
                     elapsed_ms,
                 );
@@ -671,7 +687,7 @@ impl GameStateHandle {
         to_best_turn_analysis_json(&BestTurnAnalysisResponse {
             is_valid: true,
             validation_message: String::new(),
-            suggested_turn_text: turn.to_string(),
+            suggested_turn_text: appraised_turn.turn.to_string(),
             suggested_turn,
             heuristic_score: appraised_turn.appraisal,
             num_states_visited,
@@ -737,10 +753,7 @@ impl GameStateHandle {
         };
 
         if snapshot.version != PERSISTED_GAME_STATE_VERSION {
-            return format!(
-                "Unsupported saved game version {}.",
-                snapshot.version
-            );
+            return format!("Unsupported saved game version {}.", snapshot.version);
         }
 
         if snapshot.board_name != self.state.common.board.name {
@@ -759,10 +772,7 @@ impl GameStateHandle {
 
         for (turn_idx, turn) in snapshot.normal_turns.into_iter().enumerate() {
             if let Err(message) = restored.check_normal_turn(&turn) {
-                return format!(
-                    "Saved game turn {} is invalid: {message}",
-                    turn_idx + 1
-                );
+                return format!("Saved game turn {} is invalid: {message}", turn_idx + 1);
             }
             restored.after_normal_turn(turn, true);
         }
@@ -780,7 +790,10 @@ pub fn new_default_game_state() -> Result<GameStateHandle, JsValue> {
     let common = core::common_game_state::CommonGameState::from_num_normal_players(true, board, 2);
     let normal_setup = default_normal_setup();
     let state = new_state_with_normal_setup(common, &normal_setup);
-    Ok(GameStateHandle { state, normal_setup })
+    Ok(GameStateHandle {
+        state,
+        normal_setup,
+    })
 }
 
 fn parse_turn_plan(turn_plan_json: &str) -> Result<core::simple_turn::SimpleTurn, String> {
