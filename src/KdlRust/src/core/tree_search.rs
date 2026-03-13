@@ -278,9 +278,9 @@ mod tests {
             snapshot,
             concat!(
                 "L0|turn=1000@0;|appraisal=+1.433623|states=1\n",
-                "L1|turn=1@1;|appraisal=-0.953516|states=391\n",
-                "L2|turn=1@13;|appraisal=+0.647815|states=2167\n",
-                "L3|turn=1@13;|appraisal=-0.104624|states=14933"
+                "L1|turn=1@1;|appraisal=-0.953516|states=389\n",
+                "L2|turn=1@13;|appraisal=+0.647815|states=2199\n",
+                "L3|turn=1@13;|appraisal=-0.104624|states=14594"
             )
         );
     }
@@ -304,9 +304,9 @@ mod tests {
         assert_eq!(
             snapshot,
             concat!(
-                "L1|turn=2@14;|appraisal=-0.647815|states=517\n",
-                "L2|turn=3@14 2@2;|appraisal=+0.104624|states=6214\n",
-                "L3|turn=3@15 2@4;|appraisal=-0.034230|states=10820"
+                "L1|turn=2@14;|appraisal=-0.647815|states=515\n",
+                "L2|turn=3@14 2@2;|appraisal=+0.104624|states=6043\n",
+                "L3|turn=3@15 2@4;|appraisal=-0.034230|states=10563"
             )
         );
     }

@@ -669,7 +669,11 @@ impl MutableGameState {
             return Vec::new();
         }
         let dist_allowed = self.player_move_cards[self.current_player_id.0 as usize] as i32 + 1;
-        let mut turns = self.possible_turns_single(dist_allowed, self.current_player_id);
+        let mut turns = vec![SimpleTurn::single(
+            self.current_player_id,
+            self.player_room_ids[self.current_player_id.0 as usize],
+        )];
+        turns.extend(self.possible_turns_single(dist_allowed, self.current_player_id));
 
         if self.common.has_strangers() {
             let allied_stranger = rule_helper::allied_stranger(self.current_player_id);
@@ -733,7 +737,7 @@ impl MutableGameState {
         let mut turns = Vec::with_capacity(room_ids.len());
 
         for dest_room in room_ids {
-            if distance[dest_room.0] <= dist_allowed {
+            if *dest_room != movable_room && distance[dest_room.0] <= dist_allowed {
                 turns.push(SimpleTurn::single(movable_player, *dest_room));
             }
         }
@@ -1358,16 +1362,14 @@ mod tests {
         assert_eq!(
             snapshot,
             concat!(
-                "count=21\n",
+                "count=19\n",
                 "1@1;\n",
                 "1@2;\n",
                 "1@3;\n",
                 "1@4;\n",
-                "4@1;\n",
                 "4@2;\n",
                 "4@3;\n",
                 "4@4;\n",
-                "2@1;\n",
                 "2@2;\n",
                 "2@3;\n",
                 "2@4;\n",
@@ -1382,6 +1384,23 @@ mod tests {
                 "4@3 2@2;"
             )
         );
+    }
+
+    #[test]
+    fn possible_turns_include_only_one_no_move_turn() {
+        let game = tiny_two_player_game_state();
+        let no_move_turns = game
+            .possible_turns()
+            .into_iter()
+            .filter(|turn| {
+                turn.moves.iter().all(|mv| {
+                    game.player_room_ids[mv.player_id.0 as usize] == mv.dest_room_id
+                })
+            })
+            .map(|turn| turn.to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(no_move_turns, vec!["1@1;"]);
     }
 
     #[test]
@@ -1463,8 +1482,8 @@ mod tests {
         assert_eq!(
             snapshot,
             concat!(
-                "count=21\n",
-                "head=3@1;|3@2;|3@3;|3@4;|2@1;|2@2;|2@3;|2@4;\n",
+                "count=19\n",
+                "head=3@1;|3@2;|3@3;|3@4;|2@1;|2@2;|2@3;|4@2;\n",
                 "tail=3@2 2@3;|3@3 2@3;|3@2 4@2;|3@2 4@3;|3@3 4@2;|2@2 4@2;|2@3 4@2;|2@3 4@3;"
             )
         );
