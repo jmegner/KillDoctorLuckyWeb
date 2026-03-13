@@ -57,7 +57,7 @@ impl TreeSearch {
         if analysis_level > 1 {
             let mut scored_states = Vec::with_capacity(possible_turns.len());
             for turn in possible_turns {
-                let child_state = curr_state.after_turn(turn);
+                let child_state = curr_state.after_turn_without_memory(turn);
                 let score = child_state.heuristic_score(curr_player_id);
                 scored_states.push((score, child_state));
             }
@@ -101,7 +101,7 @@ impl TreeSearch {
                 if cancellation_token.is_cancellation_requested() {
                     break;
                 }
-                let child_state = curr_state.after_turn(turn);
+                let child_state = curr_state.after_turn_without_memory(turn);
                 let child_is_us = curr_player_id == child_state.current_player_id;
                 let child_alpha = if child_is_us { alpha } else { -beta };
                 let child_beta = if child_is_us { beta } else { -alpha };
@@ -189,7 +189,7 @@ impl TreeSearch {
                 break;
             }
 
-            let child_state = parent_state.after_turn(turn);
+            let child_state = parent_state.after_turn(turn); // todo: do another way of recovering the first turn plan and switch to after_turn_without_memory to avoid the extra cloning and memory usage
             if child_state.current_player_id != begin_player_id {
                 continue;
             }

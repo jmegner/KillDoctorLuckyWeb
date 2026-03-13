@@ -328,16 +328,27 @@ impl MutableGameState {
 
     pub fn after_turn(&self, turn: SimpleTurn) -> MutableGameState {
         let mut new_state = self.copy_state();
-        new_state.apply_normal_turn(turn, false);
+        new_state.apply_normal_turn(turn, true, false);
+        new_state
+    }
+
+    pub fn after_turn_without_memory(&self, turn: SimpleTurn) -> MutableGameState {
+        let mut new_state = self.copy_state();
+        new_state.apply_normal_turn(turn, false, false);
         new_state
     }
 
     pub fn apply_turn(&mut self, turn: SimpleTurn) -> &mut Self {
-        self.apply_normal_turn(turn, false)
+        self.apply_normal_turn(turn, true, false)
     }
 
-    fn apply_normal_turn(&mut self, turn: SimpleTurn, want_log: bool) -> &mut Self {
-        if want_log {
+    fn apply_normal_turn(
+        &mut self,
+        turn: SimpleTurn,
+        remember_prev_state: bool,
+        want_log: bool,
+    ) -> &mut Self {
+        if remember_prev_state {
             self.prev_state = Some(Rc::new(self.copy_state()));
         }
 
@@ -392,14 +403,14 @@ impl MutableGameState {
         }
 
         if !self.has_winner() && !self.is_normal_turn() {
-            return self.apply_stranger_turn(want_log);
+            return self.apply_stranger_turn(remember_prev_state, want_log);
         }
 
         self
     }
 
-    fn apply_stranger_turn(&mut self, want_log: bool) -> &mut Self {
-        if want_log {
+    fn apply_stranger_turn(&mut self, remember_prev_state: bool, want_log: bool) -> &mut Self {
+        if remember_prev_state {
             self.prev_state = Some(Rc::new(self.copy_state()));
         }
 
@@ -439,7 +450,7 @@ impl MutableGameState {
         }
 
         if !self.has_winner() && !self.is_normal_turn() {
-            return self.apply_stranger_turn(want_log);
+            return self.apply_stranger_turn(remember_prev_state, want_log);
         }
 
         self
@@ -501,9 +512,7 @@ impl MutableGameState {
 
         text
     }
-}
 
-impl MutableGameState {
     pub fn heuristic_score(&self, analysis_player_id: PlayerId) -> f64 {
         if self.has_winner() {
             return if analysis_player_id
@@ -1325,7 +1334,7 @@ mod tests {
         game.player_room_ids = vec![RoomId(1), RoomId(3), RoomId(3)];
         let turn = SimpleTurn::single(PlayerId(0), RoomId(2));
         let starting_move_cards = game.player_move_cards[0];
-        game.apply_normal_turn(turn.clone(), false);
+        game.apply_normal_turn(turn.clone(), false, false);
 
         assert_eq!(game.player_room_ids[0], RoomId(2));
         assert!(
@@ -1396,9 +1405,9 @@ mod tests {
     fn tiny_two_player_state_snapshots_after_two_normal_turns() {
         let mut game = tiny_two_player_game_state();
         let turn_1 = turn_by_text(&game, "1@2;");
-        game.apply_normal_turn(turn_1, true);
+        game.apply_normal_turn(turn_1, true, true);
         let turn_2 = turn_by_text(&game, "3@2;");
-        game.apply_normal_turn(turn_2, true);
+        game.apply_normal_turn(turn_2, true, true);
 
         let frames = game
             .animation_frames_since_normal()
@@ -1443,7 +1452,7 @@ mod tests {
     fn possible_turns_snapshot_tiny_two_player_after_opening() {
         let mut game = tiny_two_player_game_state();
         let opening_turn = turn_by_text(&game, "1@2;");
-        game.apply_normal_turn(opening_turn, true);
+        game.apply_normal_turn(opening_turn, true, true);
 
         let turn_texts = game
             .possible_turns()
