@@ -45,12 +45,15 @@ impl BoardSpecification {
 #[readonly::make]
 pub struct Board {
     pub name: String,
-    pub rooms: HashMap<RoomId, Room>, // key is room id
-    pub room_ids: Vec<RoomId>,        // sorted
-    pub adjacency: Vec<Vec<bool>>,    // double-indexed by room id
-    pub sight: Vec<Vec<bool>>,        // double-indexed by room id
-    pub distance: Vec<Vec<i32>>,      // double-indexed by room id
-    pub adjacency_count: Vec<usize>,  // indexed by room id
+    pub rooms: HashMap<RoomId, Room>,       // key is room id
+    pub room_ids: Vec<RoomId>,              // sorted
+    pub room_visit_order_index: Vec<usize>, // indexed by room id
+    pub adjacency: Vec<Vec<bool>>,          // double-indexed by room id
+    pub sight: Vec<Vec<bool>>,              // double-indexed by room id
+    pub distance: Vec<Vec<i32>>,            // double-indexed by room id
+    pub adjacency_count: Vec<usize>,        // indexed by room id
+    pub doctor_future_visit_distance: Vec<Vec<i32>>, // [future first doctor room][target room]
+    pub doctor_future_near_distance: Vec<Vec<i32>>, // [future first doctor room][target or adjacent room]
     pub stranger_loop_room_ids: HashMap<RoomId, HashSet<RoomId>>, // enemy room id -> allied stranger room ids
     pub player_start_room_id: RoomId,
     pub doctor_start_room_id: RoomId,
@@ -107,16 +110,24 @@ impl Board {
         }
 
         let distance = adjacency_to_distance(&adjacency);
+        let room_visit_order_index = room_visit_order_index(matrix_dim, &room_ids);
+        let doctor_future_visit_distance =
+            doctor_future_visit_distance(&room_ids, &room_visit_order_index);
+        let doctor_future_near_distance =
+            doctor_future_near_distance(&room_ids, &distance, &doctor_future_visit_distance);
         let stranger_loop_room_ids = distance_to_stranger_loop_info(&room_ids, &distance, &sight);
 
         Board {
             name: name.into(),
             rooms,
             room_ids,
+            room_visit_order_index,
             adjacency,
             sight,
             distance,
             adjacency_count,
+            doctor_future_visit_distance,
+            doctor_future_near_distance,
             stranger_loop_room_ids,
             player_start_room_id,
             doctor_start_room_id,
@@ -317,15 +328,34 @@ impl Board {
         room_ids[next_idx]
     }
 
+    pub fn next_room_id_in_doctor_visit_order(&self, room_id: RoomId, delta: i32) -> RoomId {
+        let idx = self.room_visit_order_index[room_id.0];
+        let next_idx = positive_remainder(idx as i32 + delta, self.room_ids.len());
+        self.room_ids[next_idx]
+    }
+
     pub fn room_ids_in_doctor_visit_order(&self, start_room_id: RoomId) -> Vec<RoomId> {
-        let start_idx = self
-            .room_ids
-            .binary_search_by_key(&start_room_id.0, |room_id| room_id.0)
-            .expect("start room not found in room_ids");
+        let start_idx = self.room_visit_order_index[start_room_id.0];
 
         (0..self.room_ids.len())
             .map(|i| self.room_ids[(start_idx + i) % self.room_ids.len()])
             .collect()
+    }
+
+    pub fn doctor_future_visit_distance(
+        &self,
+        start_room_id: RoomId,
+        target_room_id: RoomId,
+    ) -> i32 {
+        self.doctor_future_visit_distance[start_room_id.0][target_room_id.0]
+    }
+
+    pub fn doctor_future_near_distance(
+        &self,
+        start_room_id: RoomId,
+        target_room_id: RoomId,
+    ) -> i32 {
+        self.doctor_future_near_distance[start_room_id.0][target_room_id.0]
     }
 }
 
@@ -390,12 +420,9 @@ impl std::error::Error for BoardLoadError {
 fn embedded_board_entry(board_name: &str) -> Option<(&'static str, &'static str)> {
     let trimmed = trim_json_suffix(board_name);
     let normalized = strip_board_prefix(trimmed);
-    EMBEDDED_BOARD_DATA
-        .iter()
-        .copied()
-        .find(|(name, _)| {
-            name.eq_ignore_ascii_case(trimmed) || name.eq_ignore_ascii_case(normalized)
-        })
+    EMBEDDED_BOARD_DATA.iter().copied().find(|(name, _)| {
+        name.eq_ignore_ascii_case(trimmed) || name.eq_ignore_ascii_case(normalized)
+    })
 }
 
 fn trim_json_suffix(board_name: &str) -> &str {
@@ -520,6 +547,58 @@ fn positive_remainder(x: i32, modulus: usize) -> usize {
     }
 }
 
+fn room_visit_order_index(matrix_dim: usize, room_ids: &[RoomId]) -> Vec<usize> {
+    let mut indices = vec![usize::MAX; matrix_dim];
+    for (idx, room_id) in room_ids.iter().enumerate() {
+        indices[room_id.0] = idx;
+    }
+    indices
+}
+
+fn doctor_future_visit_distance(
+    room_ids: &[RoomId],
+    room_visit_order_index: &[usize],
+) -> Vec<Vec<i32>> {
+    let matrix_dim = room_visit_order_index.len();
+    let mut distances = vec![vec![0; matrix_dim]; matrix_dim];
+
+    for start_room_id in room_ids {
+        let start_idx = room_visit_order_index[start_room_id.0];
+        for target_room_id in room_ids {
+            let target_idx = room_visit_order_index[target_room_id.0];
+            let delta = positive_remainder(target_idx as i32 - start_idx as i32, room_ids.len());
+            distances[start_room_id.0][target_room_id.0] = delta as i32 + 1;
+        }
+    }
+
+    distances
+}
+
+fn doctor_future_near_distance(
+    room_ids: &[RoomId],
+    distance: &[Vec<i32>],
+    doctor_future_visit_distance: &[Vec<i32>],
+) -> Vec<Vec<i32>> {
+    let matrix_dim = distance.len();
+    let mut near_distances = vec![vec![0; matrix_dim]; matrix_dim];
+
+    for start_room_id in room_ids {
+        for target_room_id in room_ids {
+            let nearest_doctor_step = room_ids
+                .iter()
+                .filter(|doctor_room_id| distance[target_room_id.0][doctor_room_id.0] <= 1)
+                .map(|doctor_room_id| {
+                    doctor_future_visit_distance[start_room_id.0][doctor_room_id.0]
+                })
+                .min()
+                .expect("room should eventually be visited by doctor");
+            near_distances[start_room_id.0][target_room_id.0] = nearest_doctor_step;
+        }
+    }
+
+    near_distances
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -587,6 +666,29 @@ mod tests {
         let ids = vec![RoomId(1), RoomId(2), RoomId(3)];
         assert_eq!(Board::next_room_id(RoomId(1), -1, &ids), RoomId(3));
         assert_eq!(Board::next_room_id(RoomId(1), -2, &ids), RoomId(2));
+    }
+
+    #[test]
+    fn doctor_visit_distance_tables_match_visit_order_logic() {
+        let rooms = sample_rooms();
+        let board = Board::new(
+            "test",
+            rooms,
+            RoomId(1),
+            RoomId(1),
+            RoomId(1),
+            RoomId(1),
+            None,
+        );
+
+        assert_eq!(
+            board.next_room_id_in_doctor_visit_order(RoomId(4), 1),
+            RoomId(1)
+        );
+        assert_eq!(board.doctor_future_visit_distance(RoomId(3), RoomId(3)), 1);
+        assert_eq!(board.doctor_future_visit_distance(RoomId(3), RoomId(1)), 3);
+        assert_eq!(board.doctor_future_near_distance(RoomId(3), RoomId(2)), 1);
+        assert_eq!(board.doctor_future_near_distance(RoomId(2), RoomId(4)), 2);
     }
 
     #[test]

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Deserializer, Serialize};
 use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize)]
@@ -46,11 +46,7 @@ impl<'de> Deserialize<'de> for RoomId {
             where
                 E: de::Error,
             {
-                value
-                    .trim()
-                    .parse::<usize>()
-                    .map(RoomId)
-                    .map_err(E::custom)
+                value.trim().parse::<usize>().map(RoomId).map_err(E::custom)
             }
 
             fn visit_string<E>(self, value: String) -> Result<Self::Value, E>

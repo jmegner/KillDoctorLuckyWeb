@@ -629,37 +629,34 @@ impl MutableGameState {
 
         let num_players_not_had_turn = self.common.num_all_players as i32 - self.turn_id;
         let doctor_delta_for_activation = (num_players_not_had_turn + 1).max(1);
-        let next_doctor_room_id = Board::next_room_id(
-            self.doctor_room_id,
-            doctor_delta_for_activation,
-            &self.common.board.room_ids,
-        );
-
-        let mut doctor_rooms = self
+        let next_doctor_room_id = self
             .common
             .board
-            .room_ids_in_doctor_visit_order(next_doctor_room_id);
-        doctor_rooms.insert(0, self.doctor_room_id);
+            .next_room_id_in_doctor_visit_order(self.doctor_room_id, doctor_delta_for_activation);
 
-        let my_starting_search_idx = if num_players_not_had_turn > 0 { 1 } else { 0 };
-        let mut my_doctor_dist = 999;
+        let my_doctor_dist = if num_players_not_had_turn <= 0 && self.doctor_room_id == my_room {
+            0
+        } else {
+            self.common
+                .board
+                .doctor_future_near_distance(next_doctor_room_id, my_room)
+        };
 
-        for i in my_starting_search_idx..doctor_rooms.len() {
-            if doctor_rooms[i] == my_room {
-                my_doctor_dist = i as i32;
-                break;
-            } else if i > 0 && self.common.board.distance[my_room.0][doctor_rooms[i].0] <= 1 {
-                my_doctor_dist = i as i32;
-                break;
-            }
-        }
-
-        let stranger_ally_doctor_dist =
-            find_index_from(&doctor_rooms, stranger_ally_room, 1).unwrap_or(-1) as f64;
-        let normal_enemy_doctor_dist =
-            find_index_from(&doctor_rooms, normal_enemy_room, 1).unwrap_or(-1) as f64;
-        let stranger_enemy_doctor_dist =
-            find_index_from(&doctor_rooms, stranger_enemy_room, 1).unwrap_or(-1) as f64;
+        let stranger_ally_doctor_dist = self
+            .common
+            .board
+            .doctor_future_visit_distance(next_doctor_room_id, stranger_ally_room)
+            as f64;
+        let normal_enemy_doctor_dist = self
+            .common
+            .board
+            .doctor_future_visit_distance(next_doctor_room_id, normal_enemy_room)
+            as f64;
+        let stranger_enemy_doctor_dist = self
+            .common
+            .board
+            .doctor_future_visit_distance(next_doctor_room_id, stranger_enemy_room)
+            as f64;
 
         DECAY_FACTOR_NORMAL.powi(my_doctor_dist)
             + DECAY_FACTOR_STRANGER.powf(stranger_ally_doctor_dist)
@@ -1237,20 +1234,6 @@ fn positive_remainder(x: i32, modulus: usize) -> usize {
     } else {
         (remainder + modulus) as usize
     }
-}
-
-fn find_index_from(room_ids: &[RoomId], target: RoomId, start: usize) -> Option<i32> {
-    room_ids
-        .iter()
-        .enumerate()
-        .skip(start)
-        .find_map(|(idx, room_id)| {
-            if *room_id == target {
-                Some(idx as i32)
-            } else {
-                None
-            }
-        })
 }
 
 #[cfg(test)]

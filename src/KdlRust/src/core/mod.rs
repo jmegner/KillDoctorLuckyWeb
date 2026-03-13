@@ -1,9 +1,9 @@
-pub mod room;
-pub mod wing;
 pub mod board;
-pub mod player;
-pub mod simple_turn;
-pub mod rule_helper;
 pub mod common_game_state;
 pub mod mutable_game_state;
+pub mod player;
+pub mod room;
+pub mod rule_helper;
+pub mod simple_turn;
 pub mod tree_search;
+pub mod wing;
