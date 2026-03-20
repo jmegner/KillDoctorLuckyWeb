@@ -1,5 +1,5 @@
 import { useRef, useState, type MouseEvent } from 'react';
-import { newDefaultGameState, type GameStateHandle } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
+import wasmBindgenInit, { newDefaultGameState, type GameStateHandle } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
 import boardData from '../data/boards/BoardAltDown.json';
 
 type PieceId = 'doctor' | 'player1' | 'player2' | 'stranger1' | 'stranger2';
@@ -73,12 +73,19 @@ type BestTurnResponse = {
   elapsedMs: number;
 };
 
-type TreeSearchWorkerRequest = {
+type TreeSearchWorkerInitRequest = {
+  type: 'init';
+  wasmModule: WebAssembly.Module;
+};
+
+type TreeSearchWorkerAnalyzeRequest = {
   type: 'analyze';
   runId: number;
   stateJson: string;
   analysisLevel: number;
 };
+
+type TreeSearchWorkerRequest = TreeSearchWorkerInitRequest | TreeSearchWorkerAnalyzeRequest;
 
 type TreeSearchWorkerResponse =
   | {
@@ -115,6 +122,10 @@ type AiResultsCacheEntry = {
 type AiResultsCacheStore = {
   version: 1;
   entries: AiResultsCacheEntry[];
+};
+
+type WasmBindgenInitWithModule = typeof wasmBindgenInit & {
+  __wbindgen_wasm_module?: WebAssembly.Module;
 };
 
 type BoardRoomRaw = {
@@ -1310,6 +1321,7 @@ function PlayArea() {
   const analysisDeadlineTimerRef = useRef<number | null>(null);
   const analysisTimingRef = useRef<{ runStartMs: number; levelStartMs: number } | null>(null);
   const analysisWorkerRef = useRef<Worker | null>(null);
+  const analysisWorkerInitializedRef = useRef(false);
   const analysisRunIdRef = useRef(0);
   const [animationEnabled, setAnimationEnabled] = useState(() => loadAnimationPrefs().animationEnabled);
   const [animationSpeedIndex, setAnimationSpeedIndex] = useState(() => loadAnimationPrefs().animationSpeedIndex);
@@ -1767,6 +1779,7 @@ function PlayArea() {
     }
     analysisWorkerRef.current.terminate();
     analysisWorkerRef.current = null;
+    analysisWorkerInitializedRef.current = false;
   };
 
   const stopAnalysisRun = (
@@ -2029,6 +2042,7 @@ function PlayArea() {
         return;
       }
       analysisWorkerRef.current = worker;
+      analysisWorkerInitializedRef.current = false;
     }
 
     let currentLevel = initialAnalysisLevel;
@@ -2139,6 +2153,20 @@ function PlayArea() {
       setAnalysisCurrentLevelElapsedMs(0);
       analysisRunningLevelRef.current = currentLevel;
       setAnalysisRunningLevel(currentLevel);
+      if (!analysisWorkerInitializedRef.current) {
+        const wasmModule = (wasmBindgenInit as WasmBindgenInitWithModule).__wbindgen_wasm_module;
+        if (!wasmModule) {
+          debugAnalysisStopReason(currentLevel, 'analysis worker wasm module was unavailable');
+          stopAnalysisRun('Failed to initialize analysis worker.');
+          return;
+        }
+        const initRequest: TreeSearchWorkerRequest = {
+          type: 'init',
+          wasmModule,
+        };
+        worker.postMessage(initRequest);
+        analysisWorkerInitializedRef.current = true;
+      }
       const request: TreeSearchWorkerRequest = {
         type: 'analyze',
         runId,

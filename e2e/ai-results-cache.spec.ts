@@ -367,4 +367,25 @@ test.describe('AI results cache', () => {
 
     await expect.poll(() => readAiStatusLevel(page), { timeout: 5000 }).toBeGreaterThanOrEqual(13);
   });
+
+  test('fresh analysis worker can start while offline after the page is already loaded', async ({ page }) => {
+    await page.goto('/');
+
+    await seedDefaultStateAndAiSetup(page, {
+      minAnalysisLevel: 1,
+      maxAnalysisLevel: 2,
+      analysisMaxTimeIndex: 2,
+    });
+    await page.reload();
+
+    await cancelAiAnalysisIfRunning(page);
+    await page.context().setOffline(true);
+
+    const aiPanel = page.locator('.ai-panel');
+    await aiPanel.getByRole('button', { name: 'Think' }).click();
+
+    await expect.poll(() => readAiStatusLevel(page), { timeout: 15000 }).toBeGreaterThanOrEqual(1);
+    await expect.poll(() => readAiLineValue(page, 'Suggested'), { timeout: 15000 }).toBeTruthy();
+    await expect.poll(() => readAiLineValue(page, 'Status'), { timeout: 15000 }).not.toContain('failed');
+  });
 });

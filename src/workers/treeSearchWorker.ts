@@ -1,4 +1,9 @@
-import wasmBindgenInit, { newDefaultGameState } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
+import wasmBindgenInit, { initSync, newDefaultGameState } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
+
+type InitRequest = {
+  type: 'init';
+  wasmModule: WebAssembly.Module;
+};
 
 type AnalyzeRequest = {
   type: 'analyze';
@@ -7,7 +12,7 @@ type AnalyzeRequest = {
   analysisLevel: number;
 };
 
-type WorkerRequest = AnalyzeRequest;
+type WorkerRequest = InitRequest | AnalyzeRequest;
 
 type WorkerResponse =
   | {
@@ -23,10 +28,20 @@ type WorkerResponse =
     };
 
 let wasmReadyPromise: Promise<void> | null = null;
+let wasmModule: WebAssembly.Module | null = null;
 
 const ensureWasmReady = () => {
   if (!wasmReadyPromise) {
-    wasmReadyPromise = wasmBindgenInit().then(() => undefined);
+    if (wasmModule) {
+      try {
+        initSync(wasmModule);
+        wasmReadyPromise = Promise.resolve();
+      } catch (error) {
+        wasmReadyPromise = Promise.reject(error);
+      }
+    } else {
+      wasmReadyPromise = wasmBindgenInit().then(() => undefined);
+    }
   }
   return wasmReadyPromise;
 };
@@ -40,6 +55,11 @@ const workerScope = self as unknown as WorkerScope;
 
 workerScope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   const message = event.data;
+  if (message.type === 'init') {
+    wasmModule = message.wasmModule;
+    wasmReadyPromise = null;
+    return;
+  }
   if (message.type !== 'analyze') {
     return;
   }
