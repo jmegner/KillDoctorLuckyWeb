@@ -8,6 +8,7 @@
     "build": "npm run build:wasm && npm run build:react",
     "build:wasm": "cd src/KdlRust && wasm-pack build --target web",
     "build:cli": "cd src/KdlRust && cargo build --bin kdl_cli --release --target x86_64-pc-windows-msvc --manifest-path Cargo.toml",
+    "build:tree-search-profile": "powershell -ExecutionPolicy Bypass -File ./scripts/build-tree-search-profile.ps1",
     "build:react": "tsc -b && vite build",
     "build:gh": "npm run build:wasm && tsc -b && vite build --base=/KillDoctorLuckyWeb/",
     "build:cf": "curl https://sh.rustup.rs -sSf | sh -s -- -y && . $HOME/.cargo/env && npm run build",
@@ -17,7 +18,8 @@
     "test:react": "playwright test",
     "test:wasm": "cd src/KdlRust && cargo test",
     "bench": "cd src/KdlRust && cargo run --release --bin tree_search_bench",
-    "cli": "cd src/KdlRust && cargo run --bin kdl_cli --release --target x86_64-pc-windows-msvc --manifest-path Cargo.toml --"
+    "cli": "cd src/KdlRust && cargo run --bin kdl_cli --release --target x86_64-pc-windows-msvc --manifest-path Cargo.toml --",
+    "profile:tree-search": "powershell -ExecutionPolicy Bypass -File ./scripts/profile-tree-search.ps1"
   },
   "dependencies": {
     "react": "^19.2.0",

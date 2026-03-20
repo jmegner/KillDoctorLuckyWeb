@@ -1,11 +1,13 @@
 {
   "folders": [
     {
-      "path": "."
+      "path": ".",
     },
     {
-      "path": "src/KdlRust"
-    }
+      "path": "src/KdlRust",
+    },
   ],
-  "settings": {}
+  "settings": {
+    "powershell.cwd": "KillDoctorLuckyWeb",
+  },
 }

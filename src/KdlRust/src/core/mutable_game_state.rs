@@ -1393,9 +1393,9 @@ mod tests {
             .possible_turns()
             .into_iter()
             .filter(|turn| {
-                turn.moves.iter().all(|mv| {
-                    game.player_room_ids[mv.player_id.0 as usize] == mv.dest_room_id
-                })
+                turn.moves
+                    .iter()
+                    .all(|mv| game.player_room_ids[mv.player_id.0 as usize] == mv.dest_room_id)
             })
             .map(|turn| turn.to_string())
             .collect::<Vec<_>>();
