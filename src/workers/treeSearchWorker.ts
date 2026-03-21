@@ -34,7 +34,7 @@ const ensureWasmReady = () => {
   if (!wasmReadyPromise) {
     if (wasmModule) {
       try {
-        initSync(wasmModule);
+        initSync({ module: wasmModule });
         wasmReadyPromise = Promise.resolve();
       } catch (error) {
         wasmReadyPromise = Promise.reject(error);
