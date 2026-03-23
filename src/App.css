@@ -250,6 +250,10 @@
   pointer-events: none;
 }
 
+.piece-label--indicator {
+  font-weight: 700;
+}
+
 @keyframes piece-outline-blink {
   0%,
   49% {

@@ -78,6 +78,13 @@ type TreeSearchWorkerInitRequest = {
   wasmModule: WebAssembly.Module;
 };
 
+type PieceRenderPosition = {
+  pieceId: PieceId;
+  x: number;
+  y: number;
+  size: number;
+};
+
 type TreeSearchWorkerAnalyzeRequest = {
   type: 'analyze';
   runId: number;
@@ -1260,6 +1267,9 @@ const formatPlayerStatDecimal = (value: number) => (Number.isFinite(value) ? val
 
 const formatPlayerInteger = (value: number) => (Number.isFinite(value) ? Math.trunc(value).toString() : '?');
 
+const isNormalPlayerPieceId = (pieceId: PieceId): pieceId is 'player1' | 'player2' =>
+  pieceId === 'player1' || pieceId === 'player2';
+
 function PlayArea() {
   const [gameState] = useState<GameStateHandle | null>(() => {
     try {
@@ -1499,6 +1509,63 @@ function PlayArea() {
       .filter((row): row is PlayerStatsRow => row !== null)
       .sort((a, b) => playerStatsRowOrder.indexOf(a.pieceId) - playerStatsRowOrder.indexOf(b.pieceId));
   })();
+  const playerStatsByPieceId = new Map(playerStatsRows.map((row) => [row.pieceId, row] as const));
+  const getPieceIndicators = (pieceId: PieceId) => {
+    if (pieceId === 'doctor') {
+      return { top: null, bottom: null };
+    }
+    const stats = playerStatsByPieceId.get(pieceId);
+    if (!stats) {
+      return { top: null, bottom: null };
+    }
+    return {
+      top: isNormalPlayerPieceId(pieceId) ? formatPlayerInteger(Math.floor(stats.moveCards)) : null,
+      bottom: formatPlayerInteger(stats.strength + (isNormalPlayerPieceId(pieceId) && stats.weaponCards >= 1 ? 2 : 0)),
+    };
+  };
+  const renderPieceLabelStack = (
+    piece: PieceRenderPosition,
+    label: string,
+    labelFill: string,
+    labelClassName: string,
+    labelSize: number,
+  ) => {
+    const { top, bottom } = getPieceIndicators(piece.pieceId);
+    const centerX = piece.x + piece.size / 2;
+    const centerY = piece.y + piece.size / 2;
+    const indicatorSize = Math.min(piece.size * 0.35, labelSize * 0.8, 30);
+    const indicatorOffset = piece.size * 0.3;
+
+    return (
+      <>
+        {top && (
+          <text
+            className={`${labelClassName} piece-label--indicator`}
+            x={centerX - indicatorOffset}
+            y={centerY - indicatorOffset}
+            fontSize={indicatorSize}
+            fill={labelFill}
+          >
+            {top}
+          </text>
+        )}
+        <text className={labelClassName} x={centerX} y={centerY} fontSize={labelSize} fill={labelFill}>
+          {label}
+        </text>
+        {bottom && (
+          <text
+            className={`${labelClassName} piece-label--indicator`}
+            x={isNormalPlayerPieceId(piece.pieceId) ? centerX + indicatorOffset : centerX}
+            y={centerY + indicatorOffset}
+            fontSize={indicatorSize}
+            fill={labelFill}
+          >
+            {bottom}
+          </text>
+        )}
+      </>
+    );
+  };
   const plannedEntries = pieceOrder
     .map((pieceId) => {
       const roomId = plannedMoves[pieceId];
@@ -3365,17 +3432,7 @@ function PlayArea() {
                       <g key={piece.pieceId}>
                         {outlineShape}
                         {shape}
-                        {config.showLabel && (
-                          <text
-                            className="piece-label"
-                            x={piece.x + piece.size / 2}
-                            y={piece.y + piece.size / 2}
-                            fontSize={labelSize}
-                            fill={labelFill}
-                          >
-                            {config.label}
-                          </text>
-                        )}
+                        {config.showLabel && renderPieceLabelStack(piece, config.label, labelFill, 'piece-label', labelSize)}
                       </g>
                     );
                   },
@@ -3417,17 +3474,14 @@ function PlayArea() {
                     return (
                       <g key={`ghost-${piece.pieceId}`} pointerEvents="none">
                         {shape}
-                        {config.showLabel && (
-                          <text
-                            className="piece-label piece-label--planned"
-                            x={piece.x + piece.size / 2}
-                            y={piece.y + piece.size / 2}
-                            fontSize={labelSize}
-                            fill="#1f4f7a"
-                          >
-                            {config.label}
-                          </text>
-                        )}
+                        {config.showLabel &&
+                          renderPieceLabelStack(
+                            piece,
+                            config.label,
+                            '#1f4f7a',
+                            'piece-label piece-label--planned',
+                            labelSize,
+                          )}
                       </g>
                     );
                   })}
