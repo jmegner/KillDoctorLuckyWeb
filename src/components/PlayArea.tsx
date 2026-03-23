@@ -3217,6 +3217,16 @@ function PlayArea() {
           </li>
           <li>Reminder: you can not move or select the Dr or the normal opponent piece.</li>
         </ul>
+        <h4>Piece Indicators</h4>
+        <p>The small numbers on the pieces give quick reminders of movement and attack strength.</p>
+        <ul>
+          <li>The number above a normal player piece is that player's move cards, rounded down.</li>
+          <li>
+            The number below a normal player piece is that player's next attack strength: natural strength plus 2 if
+            they have at least 1 weapon card.
+          </li>
+          <li>The number below a stranger piece is that stranger's natural strength.</li>
+        </ul>
         <h4>Undo/Redo</h4>
         <p>
           Clicking the Undo button will undo everything up to the last submitted plan, which includes all Dr movement
