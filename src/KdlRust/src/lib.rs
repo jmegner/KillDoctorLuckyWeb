@@ -267,6 +267,30 @@ fn winner_piece_id_for_state(
     })
 }
 
+fn player_id_for_piece_id(piece_id: PieceId) -> Option<core::player::PlayerId> {
+    piece_id.to_player_id()
+}
+
+fn player_id_for_piece_id_str(piece_id: &str) -> Option<core::player::PlayerId> {
+    let piece_id = PieceId::parse(piece_id)?;
+    player_id_for_piece_id(piece_id)
+}
+
+fn piece_attack_strength_for_state(
+    state: &core::mutable_game_state::MutableGameState,
+    player_id: core::player::PlayerId,
+) -> i32 {
+    let idx = player_id.0;
+    let weapon_bonus = if state.common.get_player_type(player_id) == core::player::PlayerType::Normal
+        && state.player_weapons[idx] >= 1.0
+    {
+        2
+    } else {
+        0
+    };
+    state.player_strengths[idx] + weapon_bonus
+}
+
 fn to_preview_json(preview: &TurnPlanPreview) -> String {
     serde_json::to_string(preview).unwrap_or_else(|_| {
         "{\"isValid\":false,\"validationMessage\":\"Preview serialization failed.\",\"nextPlayerPieceId\":\"\",\"hasWinner\":false,\"winnerPieceId\":\"\",\"attackers\":[],\"currentPlayerLoots\":false,\"doctorRoomId\":0,\"movedStrangers\":[]}".to_string()
@@ -411,6 +435,62 @@ impl GameStateHandle {
             self.state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_FIRST.0].0 as u32,
             self.state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_SECOND.0].0 as u32,
         ]
+    }
+
+    #[wasm_bindgen(js_name = "pieceDoctorDistance")]
+    pub fn piece_doctor_distance(&self, piece_id: &str) -> i32 {
+        let Some(player_id) = player_id_for_piece_id_str(piece_id) else {
+            return 0;
+        };
+        self.state.doctor_moves_until_player_room(player_id)
+    }
+
+    #[wasm_bindgen(js_name = "pieceStrength")]
+    pub fn piece_strength(&self, piece_id: &str) -> i32 {
+        let Some(player_id) = player_id_for_piece_id_str(piece_id) else {
+            return 0;
+        };
+        self.state.player_strengths[player_id.0]
+    }
+
+    #[wasm_bindgen(js_name = "pieceMoveCards")]
+    pub fn piece_move_cards(&self, piece_id: &str) -> f64 {
+        let Some(player_id) = player_id_for_piece_id_str(piece_id) else {
+            return 0.0;
+        };
+        self.state.player_move_cards[player_id.0]
+    }
+
+    #[wasm_bindgen(js_name = "pieceWeaponCards")]
+    pub fn piece_weapon_cards(&self, piece_id: &str) -> f64 {
+        let Some(player_id) = player_id_for_piece_id_str(piece_id) else {
+            return 0.0;
+        };
+        self.state.player_weapons[player_id.0]
+    }
+
+    #[wasm_bindgen(js_name = "pieceFailureCards")]
+    pub fn piece_failure_cards(&self, piece_id: &str) -> f64 {
+        let Some(player_id) = player_id_for_piece_id_str(piece_id) else {
+            return 0.0;
+        };
+        self.state.player_failures[player_id.0]
+    }
+
+    #[wasm_bindgen(js_name = "pieceEquivalentClovers")]
+    pub fn piece_equivalent_clovers(&self, piece_id: &str) -> f64 {
+        let Some(player_id) = player_id_for_piece_id_str(piece_id) else {
+            return 0.0;
+        };
+        self.state.player_equivalent_clovers(player_id)
+    }
+
+    #[wasm_bindgen(js_name = "pieceAttackStrength")]
+    pub fn piece_attack_strength(&self, piece_id: &str) -> i32 {
+        let Some(player_id) = player_id_for_piece_id_str(piece_id) else {
+            return 0;
+        };
+        piece_attack_strength_for_state(&self.state, player_id)
     }
 
     #[wasm_bindgen(js_name = "playerStatsJson")]

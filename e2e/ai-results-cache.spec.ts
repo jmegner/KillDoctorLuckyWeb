@@ -30,6 +30,8 @@ const seedDefaultStateAndAiSetup = async (
     minAnalysisLevel: number;
     maxAnalysisLevel?: number;
     analysisMaxTimeIndex: number;
+    showOnBoardP1?: boolean;
+    showOnBoardP3?: boolean;
     cacheEntry?: CachedAiEntrySeed;
   },
 ) =>
@@ -42,6 +44,8 @@ const seedDefaultStateAndAiSetup = async (
       minAnalysisLevelArg,
       maxAnalysisLevelArg,
       analysisMaxTimeIndexArg,
+      showOnBoardP1Arg,
+      showOnBoardP3Arg,
       cacheEntryArg,
     }) => {
       const wasm = await import('/src/KdlRust/pkg/kill_doctor_lucky_rust.js');
@@ -60,8 +64,8 @@ const seedDefaultStateAndAiSetup = async (
           analysisMaxTimeIndex: analysisMaxTimeIndexArg,
           controlP1: false,
           controlP3: false,
-          showOnBoardP1: false,
-          showOnBoardP3: false,
+          showOnBoardP1: showOnBoardP1Arg,
+          showOnBoardP3: showOnBoardP3Arg,
         }),
       );
       if (cacheEntryArg) {
@@ -85,6 +89,8 @@ const seedDefaultStateAndAiSetup = async (
       minAnalysisLevelArg: options.minAnalysisLevel,
       maxAnalysisLevelArg: options.maxAnalysisLevel ?? 15,
       analysisMaxTimeIndexArg: options.analysisMaxTimeIndex,
+      showOnBoardP1Arg: options.showOnBoardP1 ?? false,
+      showOnBoardP3Arg: options.showOnBoardP3 ?? false,
       cacheEntryArg: options.cacheEntry ?? null,
     },
   );
@@ -115,6 +121,9 @@ const readInputValue = async (page: Page, selector: string) =>
     const element = document.querySelector(selectorArg) as HTMLInputElement | null;
     return element?.value ?? null;
   }, selector);
+
+const readBoardOverlayText = async (page: Page) =>
+  page.evaluate(() => document.querySelector('.action-overlay-text')?.textContent?.trim() ?? null);
 
 const readCacheEntryForState = async (page: Page, stateJson: string) =>
   page.evaluate(
@@ -315,6 +324,46 @@ test.describe('AI results cache', () => {
     await expect.poll(() => readAiLineValue(page, 'Status'), { timeout: 5000 }).toBe(
       'Max turn depth reached from cache at L7.',
     );
+    await expect(aiPanel.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  });
+
+  test('stops immediately when cached result already found a loss and shows done, loss on board', async ({ page }) => {
+    await page.goto('/');
+
+    const seededStateJson = await seedDefaultStateAndAiSetup(page, {
+      minAnalysisLevel: 0,
+      maxAnalysisLevel: 25,
+      analysisMaxTimeIndex: 2,
+      showOnBoardP1: true,
+      cacheEntry: {
+        analysisLevel: 7,
+        bestTurn: {
+          isValid: true,
+          validationMessage: '',
+          suggestedTurnText: 'P1@R13',
+          suggestedTurn: [{ pieceId: 'player1', roomId: 13 }],
+          heuristicScore: -1e13,
+          numStatesVisited: 4321,
+          elapsedMs: 987,
+        },
+        previewRaw: '',
+        elapsedMs: 987,
+        levelElapsedMs: 321,
+        lastUsedAtMs: 1700000000000,
+      },
+    });
+    await page.reload();
+
+    const aiPanel = page.locator('.ai-panel');
+    await expect.poll(() => readAiLineValue(page, 'Suggested'), { timeout: 5000 }).toBe('P1@R13');
+    await expect.poll(() => readAiLineValue(page, 'Status'), { timeout: 5000 }).toBe('LOSS found from cache at L7.');
+    await expect.poll(() => readBoardOverlayText(page), { timeout: 5000 }).toBe('L7: P1@13 (done, loss)');
+    await expect
+      .poll(async () => {
+        const cacheEntry = await readCacheEntryForState(page, seededStateJson);
+        return cacheEntry?.analysisLevel ?? null;
+      }, { timeout: 5000 })
+      .toBe(7);
     await expect(aiPanel.getByRole('button', { name: 'Cancel' })).toBeDisabled();
   });
 

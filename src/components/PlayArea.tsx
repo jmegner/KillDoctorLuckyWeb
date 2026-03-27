@@ -44,16 +44,6 @@ type PreviewDisplay = {
 
 type InfoPopupKind = 'rules' | 'turnPlanner' | 'ai' | 'playerInfoBox';
 
-type PlayerStatsResponseRow = {
-  pieceId: string;
-  doctorDistance: number;
-  strength: number;
-  moveCards: number;
-  weaponCards: number;
-  failureCards: number;
-  equivalentClovers: number;
-};
-
 type PlayerStatsRow = {
   pieceId: Exclude<PieceId, 'doctor'>;
   doctorDistance: number;
@@ -62,6 +52,53 @@ type PlayerStatsRow = {
   weaponCards: number;
   failureCards: number;
   equivalentClovers: number;
+};
+
+type PieceIndicators = {
+  top: string | null;
+  bottom: string | null;
+};
+
+type AnimatedPieceIndicators = Partial<Record<PieceId, PieceIndicators>>;
+
+const getLivePieceIndicators = (gameState: GameStateHandle | null, pieceId: PieceId): PieceIndicators => {
+  if (!gameState || pieceId === 'doctor') {
+    return { top: null, bottom: null };
+  }
+  const isNormalPlayer = pieceId === 'player1' || pieceId === 'player2';
+  return {
+    top: isNormalPlayer ? formatPlayerInteger(Math.floor(gameState.pieceMoveCards(pieceId))) : null,
+    bottom: formatPlayerInteger(gameState.pieceAttackStrength(pieceId)),
+  };
+};
+
+const capturePieceIndicators = (gameState: GameStateHandle | null) => {
+  if (!gameState) {
+    return null as AnimatedPieceIndicators | null;
+  }
+  const indicators: AnimatedPieceIndicators = {};
+  pieceOrder.forEach((pieceId) => {
+    if (pieceId === 'doctor') {
+      return;
+    }
+    indicators[pieceId] = getLivePieceIndicators(gameState, pieceId);
+  });
+  return indicators;
+};
+
+const getPlayerStatsRows = (gameState: GameStateHandle | null) => {
+  if (!gameState) {
+    return [] as PlayerStatsRow[];
+  }
+  return playerStatsRowOrder.map((pieceId) => ({
+    pieceId,
+    doctorDistance: gameState.pieceDoctorDistance(pieceId),
+    strength: gameState.pieceStrength(pieceId),
+    moveCards: gameState.pieceMoveCards(pieceId),
+    weaponCards: gameState.pieceWeaponCards(pieceId),
+    failureCards: gameState.pieceFailureCards(pieceId),
+    equivalentClovers: gameState.pieceEquivalentClovers(pieceId),
+  }));
 };
 
 type BestTurnResponse = {
@@ -1210,6 +1247,10 @@ const formatWholeSeconds = (elapsedMs: number) => {
 };
 
 const isTerminalHeuristicScore = (score: number) => Number.isFinite(score) && Math.abs(score) > 1e12;
+const terminalHeuristicOutcomeLabel = (score: number) =>
+  isTerminalHeuristicScore(score) ? (score > 0 ? 'win' : 'loss') : null;
+const terminalHeuristicOutcomeText = (score: number) =>
+  isTerminalHeuristicScore(score) ? (score > 0 ? 'WIN' : 'LOSS') : null;
 
 const formatSuggestedTurnText = (bestTurn: BestTurnResponse) => {
   if (bestTurn.suggestedTurn.length > 0) {
@@ -1345,6 +1386,7 @@ function PlayArea() {
     y: number;
     size: number;
   }> | null>(null);
+  const [animatedPieceIndicators, setAnimatedPieceIndicators] = useState<AnimatedPieceIndicators | null>(null);
   const animationRef = useRef<{
     segments: Array<{
       from: Array<{ pieceId: PieceId; roomId: number; x: number; y: number; size: number }>;
@@ -1485,47 +1527,9 @@ function PlayArea() {
     });
     return map;
   })();
-  const playerStatsRows = (() => {
-    if (!gameState) {
-      return [] as PlayerStatsRow[];
-    }
-    let parsedRows: PlayerStatsResponseRow[];
-    try {
-      parsedRows = JSON.parse(gameState.playerStatsJson()) as PlayerStatsResponseRow[];
-    } catch {
-      return [] as PlayerStatsRow[];
-    }
-    return parsedRows
-      .map((row) => {
-        if (!isPieceId(row.pieceId) || row.pieceId === 'doctor') {
-          return null;
-        }
-        return {
-          pieceId: row.pieceId,
-          doctorDistance: row.doctorDistance,
-          strength: row.strength,
-          moveCards: row.moveCards,
-          weaponCards: row.weaponCards,
-          failureCards: row.failureCards,
-          equivalentClovers: row.equivalentClovers,
-        };
-      })
-      .filter((row): row is PlayerStatsRow => row !== null)
-      .sort((a, b) => playerStatsRowOrder.indexOf(a.pieceId) - playerStatsRowOrder.indexOf(b.pieceId));
-  })();
-  const playerStatsByPieceId = new Map(playerStatsRows.map((row) => [row.pieceId, row] as const));
+  const playerStatsRows = getPlayerStatsRows(gameState);
   const getPieceIndicators = (pieceId: PieceId) => {
-    if (pieceId === 'doctor') {
-      return { top: null, bottom: null };
-    }
-    const stats = playerStatsByPieceId.get(pieceId);
-    if (!stats) {
-      return { top: null, bottom: null };
-    }
-    return {
-      top: isNormalPlayerPieceId(pieceId) ? formatPlayerInteger(Math.floor(stats.moveCards)) : null,
-      bottom: formatPlayerInteger(stats.strength + (isNormalPlayerPieceId(pieceId) && stats.weaponCards >= 1 ? 2 : 0)),
-    };
+    return animatedPieceIndicators?.[pieceId] ?? getLivePieceIndicators(gameState, pieceId);
   };
   const renderPieceLabelStack = (
     piece: PieceRenderPosition,
@@ -1889,6 +1893,7 @@ function PlayArea() {
     if (!gameState || gameState.hasWinner()) {
       return;
     }
+    const initialPieceIndicatorsForAnimation = capturePieceIndicators(gameState);
     const initialRoomsForAnimation = options?.animateFromCurrentState
       ? Array.from(gameState.piecePositions(), (value) => Number(value))
       : null;
@@ -1928,7 +1933,7 @@ function PlayArea() {
     saveRedoStateStack([]);
     saveGameStateSnapshot(gameState);
     const nextTurnCounter = advanceTurnCounter();
-    startAnimationFromState(initialRoomsForAnimation);
+    startAnimationFromState(initialRoomsForAnimation, { indicators: initialPieceIndicatorsForAnimation });
     if (!gameState.hasWinner()) {
       startBestTurnAnalysis(false, nextTurnCounter);
     }
@@ -2057,6 +2062,44 @@ function PlayArea() {
       setAnalysisCurrentLevelElapsedMs(0);
       setAnalysisElapsedMs(cachedSuggestion.elapsedMs);
       const cacheStopPrefix = `Max turn depth reached from cache at L${cachedSuggestion.analysisLevel}.`;
+      if (!shouldAutoSubmitAtThisMoment()) {
+        setAnalysisStatusMessage(cacheStopPrefix);
+        return;
+      }
+      if (sourceTurnCounter !== turnCounterRef.current) {
+        setAnalysisStatusMessage(`${cacheStopPrefix} Auto-submit skipped because the position changed.`);
+        return;
+      }
+      const planned = entriesToMovesAndOrder(cachedSuggestion.bestTurn.suggestedTurn);
+      if (animationRef.current) {
+        queuedAutoSubmitRef.current = {
+          moves: planned.moves,
+          order: planned.order,
+          sourceTurnCounter,
+        };
+        setAnalysisStatusMessage(`${cacheStopPrefix} Suggested turn queued.`);
+        return;
+      }
+      setAnalysisStatusMessage(`${cacheStopPrefix} Suggested turn submitted.`);
+      submitPlan(planned.moves, planned.order, { animateFromCurrentState: true });
+      return;
+    }
+    const cachedTerminalOutcomeText =
+      cachedSuggestion && cachedSuggestion.bestTurn.isValid
+        ? terminalHeuristicOutcomeText(cachedSuggestion.bestTurn.heuristicScore)
+        : null;
+    if (cachedSuggestion && cachedTerminalOutcomeText) {
+      debugAnalysisStopReason(
+        cachedSuggestion.analysisLevel,
+        `${cachedTerminalOutcomeText} was found from cache at L${cachedSuggestion.analysisLevel}`,
+      );
+      setAiSuggestion(cachedSuggestion);
+      setAnalysisIsRunning(false);
+      analysisRunningLevelRef.current = null;
+      setAnalysisRunningLevel(null);
+      setAnalysisCurrentLevelElapsedMs(0);
+      setAnalysisElapsedMs(cachedSuggestion.elapsedMs);
+      const cacheStopPrefix = `${cachedTerminalOutcomeText} found from cache at L${cachedSuggestion.analysisLevel}.`;
       if (!shouldAutoSubmitAtThisMoment()) {
         setAnalysisStatusMessage(cacheStopPrefix);
         return;
@@ -2459,6 +2502,7 @@ function PlayArea() {
     nextRedoStateStack: string[],
     options?: {
       animateFromRooms?: number[] | null;
+      animateIndicators?: AnimatedPieceIndicators | null;
       validationMessage?: string | null;
     },
   ) => {
@@ -2479,7 +2523,10 @@ function PlayArea() {
       startBestTurnAnalysis(false, nextTurnCounter);
     }
     if (options?.animateFromRooms) {
-      startAnimationFromState(options.animateFromRooms, { force: true });
+      startAnimationFromState(options.animateFromRooms, {
+        force: true,
+        indicators: options.animateIndicators ?? null,
+      });
     }
   };
 
@@ -2532,6 +2579,7 @@ function PlayArea() {
     let appliedRedoCount = 0;
     let redoError: string | null = null;
     const animateFromCurrentState = options?.animateFromCurrentState ?? false;
+    const initialPieceIndicatorsForAnimation = animateFromCurrentState ? capturePieceIndicators(gameState) : null;
     const initialRoomsForAnimation = animateFromCurrentState
       ? Array.from(gameState.piecePositions(), (value) => Number(value))
       : null;
@@ -2555,6 +2603,7 @@ function PlayArea() {
       return false;
     }
     finalizeHistoryMutation(nextRedoStateStack, {
+      animateIndicators: initialPieceIndicatorsForAnimation,
       animateFromRooms: animateFromCurrentState ? initialRoomsForAnimation : null,
       validationMessage: redoError,
     });
@@ -2961,7 +3010,12 @@ function PlayArea() {
     if (!suggestedTurnTextForBoard) {
       return null;
     }
-    const statusText = analysisIsRunning ? runningTimeText : '(done)';
+    const terminalOutcomeLabel = terminalHeuristicOutcomeLabel(aiSuggestion.bestTurn.heuristicScore);
+    const statusText = analysisIsRunning
+      ? runningTimeText
+      : terminalOutcomeLabel
+        ? `(done, ${terminalOutcomeLabel})`
+        : '(done)';
     return `L${aiSuggestion.analysisLevel}: ${suggestedTurnTextForBoard} ${statusText}`;
   })();
 
@@ -3043,6 +3097,7 @@ function PlayArea() {
     }
     animationRef.current = null;
     setAnimatedPieces(null);
+    setAnimatedPieceIndicators(null);
     setActionOverlay(null);
     setActionHighlightPieceId(null);
     if (!queuedAutoSubmit) {
@@ -3101,7 +3156,10 @@ function PlayArea() {
       );
   };
 
-  const startAnimationFromState = (initialRoomsOverride?: number[] | null, options?: { force?: boolean }) => {
+  const startAnimationFromState = (
+    initialRoomsOverride?: number[] | null,
+    options?: { force?: boolean; indicators?: AnimatedPieceIndicators | null },
+  ) => {
     if (!gameState || (!animationEnabled && !options?.force)) {
       return;
     }
@@ -3244,6 +3302,7 @@ function PlayArea() {
     };
 
     animationRef.current = animationState;
+    setAnimatedPieceIndicators(options?.indicators ?? null);
     setAnimatedPieces(segments[0].from);
     setActionOverlay(segments[0].actionText);
     setActionHighlightPieceId(segments[0].highlightPieceId);

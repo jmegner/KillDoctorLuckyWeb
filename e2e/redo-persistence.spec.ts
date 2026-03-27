@@ -226,7 +226,7 @@ test('undo clears AI control for the undone player before analysis can auto-subm
   ).toBe(false);
 });
 
-test('Anim Redo redoes the turn even when animation checkbox is off', async ({ page }) => {
+test('Ani Redo redoes the turn even when animation checkbox is off', async ({ page }) => {
   await page.goto('/');
 
   await page.evaluate(async ({ gameStateStorageKeyArg, redoStateStackStorageKeyArg }) => {
@@ -247,7 +247,7 @@ test('Anim Redo redoes the turn even when animation checkbox is off', async ({ p
 
   const animationsPanel = page.locator('.planner-animations');
   const animationOnCheckbox = animationsPanel.getByRole('checkbox', { name: 'On' });
-  const animRedoButton = page.getByRole('button', { name: 'Anim Redo' });
+  const animRedoButton = page.getByRole('button', { name: 'Ani Redo' });
   const redoButton = page.getByRole('button', { name: 'Redo', exact: true });
 
   await expect(animationOnCheckbox).toBeChecked();
