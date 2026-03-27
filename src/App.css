@@ -402,11 +402,16 @@
   gap: 8px;
 }
 
+.planner-actions--turn-secondary {
+  margin-top: 8px;
+}
+
 .planner-actions--turn .planner-button {
   flex: 1 1 0;
   min-width: 0;
-  padding: 0.42rem 0.52rem;
-  font-size: 0.84rem;
+  padding: 0.34rem 0.4rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .ai-level-line {
@@ -764,10 +769,6 @@ body:has(.info-overlay) {
   font-size: 0.9rem;
   min-width: 52px;
   text-align: center;
-}
-
-.planner-animations-redo-button {
-  margin-left: auto;
 }
 
 .play-area-summary {

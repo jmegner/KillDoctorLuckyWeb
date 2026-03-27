@@ -190,7 +190,7 @@ test.describe('mobile forgiving double-tap', () => {
   test('does not submit turn when second tap is on a different room', async ({ page }) => {
     await page.goto('/');
 
-    const undoButton = page.getByRole('button', { name: 'Undo' });
+    const undoButton = page.getByRole('button', { name: 'Undo', exact: true });
     const firstRoom = page.locator('.room-layer rect[aria-label="dining hall"]');
     const secondRoom = page.locator('.room-layer rect[aria-label="kitchen"]');
 

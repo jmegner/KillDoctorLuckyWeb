@@ -3,6 +3,7 @@ import wasmBindgenInit, { newDefaultGameState, type GameStateHandle } from '@/Kd
 import boardData from '../data/boards/BoardAltDown.json';
 
 type PieceId = 'doctor' | 'player1' | 'player2' | 'stranger1' | 'stranger2';
+type NormalPlayerPieceId = 'player1' | 'player2';
 
 type TurnPlanEntry = {
   pieceId: PieceId;
@@ -1267,7 +1268,7 @@ const formatPlayerStatDecimal = (value: number) => (Number.isFinite(value) ? val
 
 const formatPlayerInteger = (value: number) => (Number.isFinite(value) ? Math.trunc(value).toString() : '?');
 
-const isNormalPlayerPieceId = (pieceId: PieceId): pieceId is 'player1' | 'player2' =>
+const isNormalPlayerPieceId = (pieceId: PieceId): pieceId is NormalPlayerPieceId =>
   pieceId === 'player1' || pieceId === 'player2';
 
 function PlayArea() {
@@ -1381,8 +1382,11 @@ function PlayArea() {
       : `${currentNormalTurnCount}/${highestRememberedUndoneTurnCount}`;
   const currentTurnTitleText = `Turn ${currentTurnCountText}: ${currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].label : '??'}`;
   const hasWinner = gameState ? gameState.hasWinner() : false;
+  const completedNormalTurnCount = Math.max(0, currentNormalTurnCount - 1);
   const canUndo = history.trim().length > 0;
   const canRedo = redoStateStack.length > 0;
+  const canUndoAll = canUndo;
+  const canRedoAll = canRedo;
   const canCancelTurnPlan = selectedPieceId !== null || planOrder.length > 0 || validationMessage !== null;
   const winnerPieceIdRaw = gameState ? gameState.winnerPieceId() : '';
   const winnerPieceId =
@@ -2126,7 +2130,8 @@ function PlayArea() {
       },
     ) => {
       const terminateWorker = options?.terminateWorker ?? false;
-      const stopLevel = options?.stopLevel ?? deepestCompletedSuggestion?.analysisLevel ?? analysisRunningLevelRef.current;
+      const stopLevel =
+        options?.stopLevel ?? deepestCompletedSuggestion?.analysisLevel ?? analysisRunningLevelRef.current;
       debugAnalysisStopReason(stopLevel, debugReason);
       if (!shouldAutoSubmitAtThisMoment()) {
         stopAnalysisRun(completionMessage, { terminateWorker });
@@ -2254,10 +2259,14 @@ function PlayArea() {
       }
       analysisRunIdRef.current += 1;
       const stopLevel = deepestCompletedSuggestion?.analysisLevel ?? levelAtTimeout;
-      completeAndMaybeSubmit(`Time limit during L${levelAtTimeout}.`, `time limit was reached during L${levelAtTimeout}`, {
-        terminateWorker: true,
-        stopLevel,
-      });
+      completeAndMaybeSubmit(
+        `Time limit during L${levelAtTimeout}.`,
+        `time limit was reached during L${levelAtTimeout}`,
+        {
+          terminateWorker: true,
+          stopLevel,
+        },
+      );
     }, maxTimeMs);
 
     worker.onmessage = (event: MessageEvent<TreeSearchWorkerResponse>) => {
@@ -2269,7 +2278,10 @@ function PlayArea() {
 
       const message = event.data;
       if (message.type === 'analysisError') {
-        debugAnalysisStopReason(deepestCompletedSuggestion?.analysisLevel ?? currentLevel, `analysis error: ${message.message}`);
+        debugAnalysisStopReason(
+          deepestCompletedSuggestion?.analysisLevel ?? currentLevel,
+          `analysis error: ${message.message}`,
+        );
         stopAnalysisRun(`Analysis failed: ${message.message}`);
         return;
       }
@@ -2278,7 +2290,10 @@ function PlayArea() {
       try {
         bestTurn = JSON.parse(message.analysisRaw) as BestTurnResponse;
       } catch {
-        debugAnalysisStopReason(deepestCompletedSuggestion?.analysisLevel ?? currentLevel, 'analysis response JSON was invalid');
+        debugAnalysisStopReason(
+          deepestCompletedSuggestion?.analysisLevel ?? currentLevel,
+          'analysis response JSON was invalid',
+        );
         stopAnalysisRun('Analysis failed: invalid JSON response.');
         return;
       }
@@ -2309,12 +2324,18 @@ function PlayArea() {
       upsertAiResultsCacheFromSuggestion(sourceStateJson, deepestCompletedSuggestion, Date.now());
       mostRecentCompletedLevelElapsedMs = completedLevelElapsedMs;
       setAiSuggestion(deepestCompletedSuggestion);
-      emitAnalysisDebugLog(formatAnalysisLevelDebugLine(sourceNormalTurnCount, currentLevel, completedLevelElapsedMs, bestTurn));
+      emitAnalysisDebugLog(
+        formatAnalysisLevelDebugLine(sourceNormalTurnCount, currentLevel, completedLevelElapsedMs, bestTurn),
+      );
 
       if (effectiveMaxAnalysisLevel !== null && currentLevel >= effectiveMaxAnalysisLevel) {
-        completeAndMaybeSubmit(`Max turn depth reached at L${currentLevel}.`, `max turn depth is L${effectiveMaxAnalysisLevel}`, {
-          stopLevel: currentLevel,
-        });
+        completeAndMaybeSubmit(
+          `Max turn depth reached at L${currentLevel}.`,
+          `max turn depth is L${effectiveMaxAnalysisLevel}`,
+          {
+            stopLevel: currentLevel,
+          },
+        );
         return;
       }
 
@@ -2328,9 +2349,13 @@ function PlayArea() {
       }
 
       if (completedElapsedMs >= maxTimeMs) {
-        completeAndMaybeSubmit(`Time limit during L${currentLevel}.`, `time limit was reached during L${currentLevel}`, {
-          stopLevel: currentLevel,
-        });
+        completeAndMaybeSubmit(
+          `Time limit during L${currentLevel}.`,
+          `time limit was reached during L${currentLevel}`,
+          {
+            stopLevel: currentLevel,
+          },
+        );
         return;
       }
 
@@ -2389,6 +2414,153 @@ function PlayArea() {
     submitPlan(planned.moves, planned.order, { animateFromCurrentState: true });
   };
 
+  const isAiControlledNormalPlayer = (pieceId: NormalPlayerPieceId) =>
+    pieceId === 'player1' ? aiControlP1Ref.current : aiControlP3Ref.current;
+
+  const countUndoStepsForMostRecentAiSequence = () => {
+    if (!gameState) {
+      return 0;
+    }
+    const snapshot = gameState.exportStateJson();
+    const simulation = newDefaultGameState();
+    try {
+      const importError = simulation.importStateJson(snapshot);
+      if (importError) {
+        return 0;
+      }
+      let undoCount = 0;
+      let targetPieceId: NormalPlayerPieceId | null = null;
+      while (simulation.undoLastTurn()) {
+        undoCount += 1;
+        const actorRaw = simulation.currentPlayerPieceId();
+        if (targetPieceId === null) {
+          if (actorRaw === 'player1' || actorRaw === 'player2') {
+            if (isAiControlledNormalPlayer(actorRaw)) {
+              targetPieceId = actorRaw;
+            }
+          }
+          continue;
+        }
+        const currentPieceIdRaw = simulation.currentPlayerPieceId();
+        const otherNormalPlayerPieceId = targetPieceId === 'player1' ? 'player2' : 'player1';
+        if (currentPieceIdRaw === otherNormalPlayerPieceId) {
+          return undoCount;
+        }
+      }
+      return targetPieceId ? undoCount : 0;
+    } finally {
+      simulation.free();
+    }
+  };
+  const undoAiUndoCount = countUndoStepsForMostRecentAiSequence();
+  const canUndoAi = undoAiUndoCount > 0;
+
+  const finalizeHistoryMutation = (
+    nextRedoStateStack: string[],
+    options?: {
+      animateFromRooms?: number[] | null;
+      validationMessage?: string | null;
+    },
+  ) => {
+    if (!gameState) {
+      return;
+    }
+    setRedoStateStack(nextRedoStateStack);
+    saveRedoStateStack(nextRedoStateStack);
+    stopAnimation();
+    setPlannedMoves({});
+    setPlanOrder([]);
+    setSelectedPieceId(null);
+    setValidationMessage(options?.validationMessage ?? null);
+    resetAiOutputs();
+    saveGameStateSnapshot(gameState);
+    const nextTurnCounter = advanceTurnCounter();
+    if (!gameState.hasWinner()) {
+      startBestTurnAnalysis(false, nextTurnCounter);
+    }
+    if (options?.animateFromRooms) {
+      startAnimationFromState(options.animateFromRooms, { force: true });
+    }
+  };
+
+  const applyUndoSteps = (
+    undoCount: number,
+    options?: {
+      preserveAiControl?: boolean;
+    },
+  ) => {
+    if (!gameState) {
+      return false;
+    }
+    let nextRedoStateStack = redoStateStack.slice();
+    let appliedUndoCount = 0;
+    for (let index = 0; index < undoCount; index += 1) {
+      const snapshotBeforeUndo = gameState.exportStateJson();
+      const didUndo = gameState.undoLastTurn();
+      if (!didUndo) {
+        break;
+      }
+      nextRedoStateStack = [...nextRedoStateStack, snapshotBeforeUndo];
+      appliedUndoCount += 1;
+    }
+    if (appliedUndoCount === 0) {
+      return false;
+    }
+    if (!options?.preserveAiControl) {
+      const undonePlayerPieceIdRaw = gameState.currentPlayerPieceId();
+      const undonePlayerPieceId = isPieceId(undonePlayerPieceIdRaw) ? undonePlayerPieceIdRaw : null;
+      const nextAiControlP1 = undonePlayerPieceId === 'player1' ? false : aiControlP1Ref.current;
+      const nextAiControlP3 = undonePlayerPieceId === 'player2' ? false : aiControlP3Ref.current;
+      if (nextAiControlP1 !== aiControlP1Ref.current || nextAiControlP3 !== aiControlP3Ref.current) {
+        updateAiControlPrefs(nextAiControlP1, nextAiControlP3);
+      }
+    }
+    finalizeHistoryMutation(nextRedoStateStack);
+    return true;
+  };
+
+  const applyRedoSteps = (
+    redoCount: number,
+    options?: {
+      animateFromCurrentState?: boolean;
+    },
+  ) => {
+    if (!gameState) {
+      return false;
+    }
+    let nextRedoStateStack = redoStateStack.slice();
+    let appliedRedoCount = 0;
+    let redoError: string | null = null;
+    const animateFromCurrentState = options?.animateFromCurrentState ?? false;
+    const initialRoomsForAnimation = animateFromCurrentState
+      ? Array.from(gameState.piecePositions(), (value) => Number(value))
+      : null;
+    for (let index = 0; index < redoCount; index += 1) {
+      const redoSnapshot = nextRedoStateStack[nextRedoStateStack.length - 1];
+      if (!redoSnapshot) {
+        break;
+      }
+      const importError = gameState.importStateJson(redoSnapshot);
+      if (importError) {
+        redoError = `Redo failed: ${importError}`;
+        break;
+      }
+      nextRedoStateStack = nextRedoStateStack.slice(0, -1);
+      appliedRedoCount += 1;
+    }
+    if (appliedRedoCount === 0) {
+      if (redoError) {
+        setValidationMessage(redoError);
+      }
+      return false;
+    }
+    finalizeHistoryMutation(nextRedoStateStack, {
+      animateFromRooms: animateFromCurrentState ? initialRoomsForAnimation : null,
+      validationMessage: redoError,
+    });
+    return true;
+  };
+
   const handleUndo = () => {
     if (!gameState) {
       return;
@@ -2397,32 +2569,34 @@ function PlayArea() {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
-    const snapshotBeforeUndo = gameState.exportStateJson();
-    const didUndo = gameState.undoLastTurn();
-    if (!didUndo) {
+    if (!applyUndoSteps(1)) {
       setValidationMessage('No previous turn to undo.');
+    }
+  };
+
+  const handleUndoAi = () => {
+    if (!gameState) {
       return;
     }
-    const nextRedoStateStack = [...redoStateStack, snapshotBeforeUndo];
-    setRedoStateStack(nextRedoStateStack);
-    saveRedoStateStack(nextRedoStateStack);
-    const undonePlayerPieceIdRaw = gameState.currentPlayerPieceId();
-    const undonePlayerPieceId = isPieceId(undonePlayerPieceIdRaw) ? undonePlayerPieceIdRaw : null;
-    const nextAiControlP1 = undonePlayerPieceId === 'player1' ? false : aiControlP1Ref.current;
-    const nextAiControlP3 = undonePlayerPieceId === 'player2' ? false : aiControlP3Ref.current;
-    if (nextAiControlP1 !== aiControlP1Ref.current || nextAiControlP3 !== aiControlP3Ref.current) {
-      updateAiControlPrefs(nextAiControlP1, nextAiControlP3);
+    if (analysisIsRunning) {
+      analysisRunIdRef.current += 1;
+      stopAnalysisRun('Analysis stopped because the position changed.');
     }
-    stopAnimation();
-    setPlannedMoves({});
-    setPlanOrder([]);
-    setSelectedPieceId(null);
-    setValidationMessage(null);
-    resetAiOutputs();
-    saveGameStateSnapshot(gameState);
-    const nextTurnCounter = advanceTurnCounter();
-    if (!(gameState?.hasWinner() ?? true)) {
-      startBestTurnAnalysis(false, nextTurnCounter);
+    if (undoAiUndoCount <= 0 || !applyUndoSteps(undoAiUndoCount, { preserveAiControl: true })) {
+      setValidationMessage('No previous AI-controlled turn to undo.');
+    }
+  };
+
+  const handleUndoAll = () => {
+    if (!gameState) {
+      return;
+    }
+    if (analysisIsRunning) {
+      analysisRunIdRef.current += 1;
+      stopAnalysisRun('Analysis stopped because the position changed.');
+    }
+    if (!applyUndoSteps(completedNormalTurnCount)) {
+      setValidationMessage('No previous turn to undo.');
     }
   };
 
@@ -2435,42 +2609,30 @@ function PlayArea() {
       return;
     }
     const animateFromCurrentState = options?.animateFromCurrentState ?? false;
-    const initialRoomsForAnimation = animateFromCurrentState
-      ? Array.from(gameState.piecePositions(), (value) => Number(value))
-      : null;
     if (analysisIsRunning) {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
-
-    const redoSnapshot = redoStateStack[redoStateStack.length - 1];
-    const importError = gameState.importStateJson(redoSnapshot);
-    if (importError) {
-      setValidationMessage(`Redo failed: ${importError}`);
-      return;
-    }
-
-    const nextRedoStateStack = redoStateStack.slice(0, -1);
-    setRedoStateStack(nextRedoStateStack);
-    saveRedoStateStack(nextRedoStateStack);
-    stopAnimation();
-    setPlannedMoves({});
-    setPlanOrder([]);
-    setSelectedPieceId(null);
-    setValidationMessage(null);
-    resetAiOutputs();
-    saveGameStateSnapshot(gameState);
-    const nextTurnCounter = advanceTurnCounter();
-    if (!(gameState?.hasWinner() ?? true)) {
-      startBestTurnAnalysis(false, nextTurnCounter);
-    }
-    if (animateFromCurrentState) {
-      startAnimationFromState(initialRoomsForAnimation, { force: true });
-    }
+    applyRedoSteps(1, { animateFromCurrentState });
   };
 
   const handleRedo = () => {
     runRedo();
+  };
+
+  const handleRedoAll = () => {
+    if (!gameState) {
+      return;
+    }
+    if (redoStateStack.length === 0) {
+      setValidationMessage('No undone turn to redo.');
+      return;
+    }
+    if (analysisIsRunning) {
+      analysisRunIdRef.current += 1;
+      stopAnalysisRun('Analysis stopped because the position changed.');
+    }
+    applyRedoSteps(redoStateStack.length);
   };
 
   const handleReset = () => {
@@ -3163,8 +3325,9 @@ function PlayArea() {
         <p>How to gain and use the cards...</p>
         <ul>
           <li>
-            Every time you loot a room ("draw a card") as your action, you gain 1/3 of a move card, 1/3 of a weapon card, and 1/3 of a
-            failure card.  Looting a room is automatic; if you can loot during the action phase of your turn, then you do.
+            Every time you loot a room ("draw a card") as your action, you gain 1/3 of a move card, 1/3 of a weapon
+            card, and 1/3 of a failure card. Looting a room is automatic; if you can loot during the action phase of
+            your turn, then you do.
           </li>
           <li>
             Every time you attack as your action, you use 1 weapon card if you have 1 or more weapon cards. If you have
@@ -3187,7 +3350,7 @@ function PlayArea() {
         <h4>Movement / Turn Planning</h4>
         <p>
           There are a few ways to choose movements for your piece and the strangers. You can click the "Submit" button
-          to submit your plan, but there are other ways via middle clicks and double clicks to submit your plan.  Since
+          to submit your plan, but there are other ways via middle clicks and double clicks to submit your plan. Since
           looting the room (drawing a card) and attacking are done automatically if possible during the action phase,
           movements are the only decision to make.
         </p>
@@ -3230,10 +3393,19 @@ function PlayArea() {
         <h4>Undo/Redo</h4>
         <p>
           Clicking the Undo button will undo everything up to the last submitted plan, which includes all Dr movement
-          and stranger turns. Clicking Redo will redo the last undone plan, and you can redo multiple times if you had
-          undone multiple times. Anim Redo does the same redo operation but always plays the animation for that redone
-          turn.
+          and stranger turns.
         </p>
+        <ul>
+          <li>Undo: undoes the most recent submitted turn.</li>
+          <li>
+            Undo AI: undoes later turns until the board is back on the opponent turn of the most recent AI-controlled
+            player, without changing Control checkmarks.
+          </li>
+          <li>Undo all: undoes every turn, getting you back to start of game.</li>
+          <li>Redo: redoes the most recent undone turn.</li>
+          <li>Redo all: redoes every currently undone turn.</li>
+          <li>Ani Redo: redoes the most recent undone turn and always plays its animation.</li>
+        </ul>
       </>
     ) : infoPopup === 'ai' ? (
       <>
@@ -3442,7 +3614,8 @@ function PlayArea() {
                       <g key={piece.pieceId}>
                         {outlineShape}
                         {shape}
-                        {config.showLabel && renderPieceLabelStack(piece, config.label, labelFill, 'piece-label', labelSize)}
+                        {config.showLabel &&
+                          renderPieceLabelStack(piece, config.label, labelFill, 'piece-label', labelSize)}
                       </g>
                     );
                   },
@@ -3697,6 +3870,24 @@ function PlayArea() {
               Redo
             </button>
           </div>
+          <div className="planner-actions planner-actions--turn planner-actions--turn-secondary">
+            <button className="planner-button" onClick={handleUndoAi} disabled={!canUndoAi}>
+              Undo AI
+            </button>
+            <button className="planner-button" onClick={handleUndoAll} disabled={!canUndoAll}>
+              Undo all
+            </button>
+            <button className="planner-button" onClick={handleRedoAll} disabled={!canRedoAll}>
+              Redo all
+            </button>
+            <button
+              className="planner-button"
+              onClick={() => runRedo({ animateFromCurrentState: true })}
+              disabled={!canRedo}
+            >
+              Ani Redo
+            </button>
+          </div>
           {validationMessage && <p className="planner-error">{validationMessage}</p>}
           <div className="planner-animations">
             <p className="planner-animations-title">Animations</p>
@@ -3716,13 +3907,6 @@ function PlayArea() {
                 +
               </button>
               <span className="planner-animations-speed">{animationSpeed.toFixed(2)}x</span>
-              <button
-                className="planner-button planner-animations-redo-button"
-                onClick={() => runRedo({ animateFromCurrentState: true })}
-                disabled={!canRedo}
-              >
-                Anim Redo
-              </button>
             </div>
           </div>
         </aside>
@@ -4175,4 +4359,3 @@ function PlayArea() {
 }
 
 export default PlayArea;
-
