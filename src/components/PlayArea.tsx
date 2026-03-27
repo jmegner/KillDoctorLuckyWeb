@@ -276,6 +276,12 @@ const defaultAnalysisMaxTimeIndex = 1;
 const defaultMinAnalysisLevel = 2;
 const defaultMaxAnalysisLevel = 15;
 const touchDoubleTapGraceMs = 999;
+const currentDeviceUsesForgivingTouchDoubleTap = () => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+};
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 const animationPrefsStorageKey = 'kdl.settings.v1';
 const aiPrefsStorageKey = 'kdl.ai.v1';
@@ -1420,6 +1426,7 @@ function PlayArea() {
   const currentNormalTurnCount = gameState
     ? (parseNormalTurnCountFromSnapshotJson(gameState.exportStateJson()) ?? 1)
     : 1;
+  const showForgivingTouchDoubleTapHelp = currentDeviceUsesForgivingTouchDoubleTap();
   const highestRememberedUndoneTurnCount = redoStateStack.reduce((highest, snapshot) => {
     const snapshotNormalTurnCount = parseNormalTurnCountFromSnapshotJson(snapshot);
     return snapshotNormalTurnCount === null ? highest : Math.max(highest, snapshotNormalTurnCount);
@@ -1707,7 +1714,7 @@ function PlayArea() {
     if (nativeEvent.sourceCapabilities?.firesTouchEvents) {
       return true;
     }
-    if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) {
+    if (currentDeviceUsesForgivingTouchDoubleTap()) {
       return true;
     }
     return false;
@@ -3439,6 +3446,9 @@ function PlayArea() {
     ) : infoPopup === 'turnPlanner' ? (
       <>
         <h4>Movement / Turn Planning</h4>
+        {showForgivingTouchDoubleTapHelp ? (
+          <p>(Your device is detected as a touch device with deliberately laxer {touchDoubleTapGraceMs} ms double tap.)</p>
+        ) : null}
         <p>
           There are a few ways to choose movements for your piece and the strangers. You can click the "Submit" button
           to submit your plan, but there are other ways via middle clicks and double clicks to submit your plan. Since

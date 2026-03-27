@@ -1,8 +1,19 @@
+import { readFileSync } from 'node:fs';
 import { expect, test, devices, type Locator, type Page } from '@playwright/test';
 
 const iPhone13 = devices['iPhone 13'];
 const gameStateStorageKey = 'kdl.gameState.v1';
 const redoStateStackStorageKey = 'kdl.redoStack.v1';
+const playAreaSource = readFileSync(new URL('../src/components/PlayArea.tsx', import.meta.url), 'utf8');
+const touchDoubleTapGraceMsMatch = playAreaSource.match(/const touchDoubleTapGraceMs = (\d+);/);
+
+if (!touchDoubleTapGraceMsMatch) {
+  throw new Error('Could not find touchDoubleTapGraceMs in src/components/PlayArea.tsx.');
+}
+
+const touchDoubleTapGraceMs = Number(touchDoubleTapGraceMsMatch[1]);
+const withinGraceDelayMs = Math.max(60, touchDoubleTapGraceMs - 300);
+const outsideGraceDelayMs = touchDoubleTapGraceMs + 200;
 
 test.use({
   viewport: iPhone13.viewport,
@@ -170,7 +181,7 @@ test.describe('mobile forgiving double-tap', () => {
 
     const room = page.locator('.room-layer rect[aria-label="dining hall"]');
 
-    const beforeTurnCount = await tapRoomTwiceAndCaptureBeforeTurnCount(page, room, 350);
+    const beforeTurnCount = await tapRoomTwiceAndCaptureBeforeTurnCount(page, room, withinGraceDelayMs);
 
     await expect.poll(() => readNormalTurnCount(page)).toBe(beforeTurnCount + 1);
   });
@@ -182,7 +193,7 @@ test.describe('mobile forgiving double-tap', () => {
 
     const room = page.locator('.room-layer rect[aria-label="dining hall"]');
 
-    const beforeTurnCount = await tapRoomTwiceAndCaptureBeforeTurnCount(page, room, 850);
+    const beforeTurnCount = await tapRoomTwiceAndCaptureBeforeTurnCount(page, room, outsideGraceDelayMs);
 
     await expect.poll(() => readNormalTurnCount(page), { timeout: 1200 }).toBe(beforeTurnCount);
   });
@@ -215,7 +226,7 @@ test.describe('mobile forgiving double-tap', () => {
     await dispatchTouchRoomClick(room);
     await expect(selectedLine).not.toContainText('None');
 
-    await page.waitForTimeout(350);
+    await page.waitForTimeout(withinGraceDelayMs);
     await dispatchTouchRoomClick(room);
 
     await expect.poll(() => readNormalTurnCount(page)).toBe(beforeTurnCount + 1);
@@ -232,7 +243,7 @@ test.describe('mobile forgiving double-tap', () => {
     await dispatchTouchRoomClick(room);
     await expect(selectedLine).not.toContainText('None');
 
-    await page.waitForTimeout(850);
+    await page.waitForTimeout(outsideGraceDelayMs);
     await dispatchTouchRoomClick(room);
     await page.waitForTimeout(150);
 
