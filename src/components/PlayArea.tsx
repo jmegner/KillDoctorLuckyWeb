@@ -275,7 +275,7 @@ const analysisMaxTimeOptions = [
 const defaultAnalysisMaxTimeIndex = 1;
 const defaultMinAnalysisLevel = 2;
 const defaultMaxAnalysisLevel = 15;
-const touchDoubleTapGraceMs = 650;
+const touchDoubleTapGraceMs = 999;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 const animationPrefsStorageKey = 'kdl.settings.v1';
 const aiPrefsStorageKey = 'kdl.ai.v1';
