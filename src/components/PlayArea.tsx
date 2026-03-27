@@ -44,6 +44,11 @@ type PreviewDisplay = {
 
 type InfoPopupKind = 'rules' | 'turnPlanner' | 'ai' | 'playerInfoBox';
 
+type PendingAutoSelectedRoomPiece = {
+  roomId: number;
+  pieceId: PieceId;
+};
+
 type PlayerStatsRow = {
   pieceId: Exclude<PieceId, 'doctor'>;
   doctorDistance: number;
@@ -1406,6 +1411,7 @@ function PlayArea() {
     sourceTurnCounter: number;
   } | null>(null);
   const pendingEmptyRoomTouchTapRef = useRef<PendingEmptyRoomTouchTap | null>(null);
+  const pendingAutoSelectedRoomPieceRef = useRef<PendingAutoSelectedRoomPiece | null>(null);
   const animationSpeed = animationSpeeds[animationSpeedIndex];
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
   const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
@@ -1673,6 +1679,18 @@ function PlayArea() {
     pendingEmptyRoomTouchTapRef.current = null;
   };
 
+  const clearPendingAutoSelectedRoomPiece = () => {
+    pendingAutoSelectedRoomPieceRef.current = null;
+  };
+
+  const roomClickMatchesPendingAutoSelection = (roomId: number, pieceId: PieceId | null) => {
+    if (!pieceId) {
+      return false;
+    }
+    const pendingAutoSelection = pendingAutoSelectedRoomPieceRef.current;
+    return pendingAutoSelection?.roomId === roomId && pendingAutoSelection.pieceId === pieceId;
+  };
+
   const isTouchLikeRoomClick = (event?: MouseEvent<SVGRectElement>) => {
     const nativeEvent = event?.nativeEvent as
       | (globalThis.MouseEvent & {
@@ -1733,6 +1751,7 @@ function PlayArea() {
   };
 
   const submitCurrentPlayerMoveToRoom = (roomId: number) => {
+    clearPendingAutoSelectedRoomPiece();
     if (!currentPlayerPieceId) {
       setValidationMessage('No current player available.');
       return;
@@ -1759,6 +1778,7 @@ function PlayArea() {
   };
 
   const handleSelectedPieceDestination = (roomId: number) => {
+    clearPendingAutoSelectedRoomPiece();
     if (!selectedPieceId) {
       return false;
     }
@@ -1781,6 +1801,7 @@ function PlayArea() {
 
   const handlePieceClick = (pieceId: PieceId) => {
     clearPendingEmptyRoomTouchTap();
+    clearPendingAutoSelectedRoomPiece();
     if (hasWinner) {
       return;
     }
@@ -1806,22 +1827,28 @@ function PlayArea() {
 
   const handleRoomClick = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
     if (hasWinner) {
+      clearPendingAutoSelectedRoomPiece();
       return;
     }
     if (tryConsumeForgivingTouchDoubleTap(roomId, event)) {
+      clearPendingAutoSelectedRoomPiece();
       return;
     }
-    if (event?.detail && event.detail > 1 && !selectedPieceId && !isTouchLikeRoomClick(event)) {
-      return;
+    if (event?.detail && event.detail > 1 && !isTouchLikeRoomClick(event)) {
+      if (!selectedPieceId || roomClickMatchesPendingAutoSelection(roomId, selectedPieceId)) {
+        return;
+      }
     }
     if (!selectedPieceId) {
       const preferredPiece = getPreferredSelectablePieceInRoom(roomId);
       if (preferredPiece) {
         rememberForgivingTouchTap(roomId, event);
+        pendingAutoSelectedRoomPieceRef.current = { roomId, pieceId: preferredPiece };
         setSelectedPieceId(preferredPiece);
         setValidationMessage(null);
         return;
       }
+      clearPendingAutoSelectedRoomPiece();
       if (isTouchLikeRoomClick(event)) {
         rememberForgivingTouchTap(roomId, event);
         return;
@@ -2921,11 +2948,16 @@ function PlayArea() {
 
   const handleRoomDoubleClick = (roomId: number) => {
     clearPendingEmptyRoomTouchTap();
+    const matchesPendingAutoSelection = roomClickMatchesPendingAutoSelection(roomId, selectedPieceId);
+    clearPendingAutoSelectedRoomPiece();
     if (hasWinner) {
       return;
     }
-    if (selectedPieceId) {
+    if (selectedPieceId && !matchesPendingAutoSelection) {
       return;
+    }
+    if (selectedPieceId) {
+      setSelectedPieceId(null);
     }
     submitCurrentPlayerMoveToRoom(roomId);
   };
