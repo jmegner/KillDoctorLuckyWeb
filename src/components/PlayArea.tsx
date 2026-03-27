@@ -3404,7 +3404,7 @@ function PlayArea() {
           <li>Undo all: undoes every turn, getting you back to start of game.</li>
           <li>Redo: redoes the most recent undone turn.</li>
           <li>Redo all: redoes every currently undone turn.</li>
-          <li>Ani Redo: redoes the most recent undone turn and always plays its animation.</li>
+          <li>Anim Redo: redoes the most recent undone turn and always plays its animation.</li>
         </ul>
       </>
     ) : infoPopup === 'ai' ? (
