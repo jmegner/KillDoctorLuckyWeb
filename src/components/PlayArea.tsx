@@ -249,6 +249,7 @@ const boardRooms: BoardRoom[] = boardLayout.Rooms.map((room) => ({
 const boardRoomById = new Map<number, BoardRoom>(boardRooms.map((room) => [room.id, room] as const));
 
 const pieceOrder: PieceId[] = ['doctor', 'player1', 'player2', 'stranger1', 'stranger2'];
+const normalPlayerPieceIds: NormalPlayerPieceId[] = ['player1', 'player2'];
 const playerStatsRowOrder: Array<Exclude<PieceId, 'doctor'>> = ['stranger2', 'player1', 'stranger1', 'player2'];
 const animationSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
 const defaultSpeedIndex = 8;
@@ -283,6 +284,8 @@ const currentDeviceUsesForgivingTouchDoubleTap = () => {
   return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 };
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
+const isSetupNormalPlayerPieceId = (value: string): value is NormalPlayerPieceId =>
+  normalPlayerPieceIds.includes(value as NormalPlayerPieceId);
 const animationPrefsStorageKey = 'kdl.settings.v1';
 const aiPrefsStorageKey = 'kdl.ai.v1';
 const aiResultsCacheStorageKey = 'kdl.aiResultsCache.v1';
@@ -292,10 +295,22 @@ const redoStateStackStorageKey = 'kdl.redoStack.v1';
 const assumedLocalStorageLimitBytes = 5 * 1024 * 1024;
 const localStorageUsageThresholdRatio = 0.85;
 const boardOverlayFontSizePx = 27;
+const defaultSetupRoomId = boardRooms[0]?.id ?? 1;
 const fallbackSetupPrefs = {
   moveCards: 2,
   weaponCards: 2,
   failureCards: 4,
+  doctorRoomId: defaultSetupRoomId,
+  player1RoomId: defaultSetupRoomId,
+  stranger1RoomId: defaultSetupRoomId,
+  player2RoomId: defaultSetupRoomId,
+  stranger2RoomId: defaultSetupRoomId,
+  player1Strength: 1,
+  stranger1Strength: 1,
+  player2Strength: 1,
+  stranger2Strength: 1,
+  turnId: 1,
+  currentPlayerPieceId: 'player1' as NormalPlayerPieceId,
 };
 
 type AnimationPrefs = {
@@ -317,12 +332,34 @@ type SetupPrefs = {
   moveCards: number;
   weaponCards: number;
   failureCards: number;
+  doctorRoomId: number;
+  player1RoomId: number;
+  stranger1RoomId: number;
+  player2RoomId: number;
+  stranger2RoomId: number;
+  player1Strength: number;
+  stranger1Strength: number;
+  player2Strength: number;
+  stranger2Strength: number;
+  turnId: number;
+  currentPlayerPieceId: NormalPlayerPieceId;
 };
 
 type SetupPrefsDraft = {
   moveCards: string;
   weaponCards: string;
   failureCards: string;
+  doctorRoomId: string;
+  player1RoomId: string;
+  stranger1RoomId: string;
+  player2RoomId: string;
+  stranger2RoomId: string;
+  player1Strength: string;
+  stranger1Strength: string;
+  player2Strength: string;
+  stranger2Strength: string;
+  turnId: string;
+  currentPlayerPieceId: NormalPlayerPieceId;
 };
 
 type PendingEmptyRoomTouchTap = {
@@ -370,28 +407,68 @@ const parseMaxAnalysisLevelDraft = (draft: string) => {
   }
   return Math.trunc(parsed);
 };
+const isValidBoardRoomId = (value: number) => Number.isInteger(value) && boardRoomById.has(value);
+const isFiniteNonNegativeInteger = (value: number) => Number.isFinite(value) && value >= 0 && Number.isInteger(value);
+const formatSetupCardDraft = (value: number) => (Number.isInteger(value) ? value.toString() : value.toFixed(2));
 const toSetupPrefsDraft = (prefs: SetupPrefs): SetupPrefsDraft => ({
-  moveCards: prefs.moveCards.toString(),
-  weaponCards: prefs.weaponCards.toString(),
-  failureCards: prefs.failureCards.toString(),
+  moveCards: formatSetupCardDraft(prefs.moveCards),
+  weaponCards: formatSetupCardDraft(prefs.weaponCards),
+  failureCards: formatSetupCardDraft(prefs.failureCards),
+  doctorRoomId: prefs.doctorRoomId.toString(),
+  player1RoomId: prefs.player1RoomId.toString(),
+  stranger1RoomId: prefs.stranger1RoomId.toString(),
+  player2RoomId: prefs.player2RoomId.toString(),
+  stranger2RoomId: prefs.stranger2RoomId.toString(),
+  player1Strength: prefs.player1Strength.toString(),
+  stranger1Strength: prefs.stranger1Strength.toString(),
+  player2Strength: prefs.player2Strength.toString(),
+  stranger2Strength: prefs.stranger2Strength.toString(),
+  turnId: prefs.turnId.toString(),
+  currentPlayerPieceId: prefs.currentPlayerPieceId,
 });
 const parseSetupPrefsDraft = (draft: SetupPrefsDraft): SetupPrefs | null => {
   const parsed = {
     moveCards: Number(draft.moveCards),
     weaponCards: Number(draft.weaponCards),
     failureCards: Number(draft.failureCards),
+    doctorRoomId: Number(draft.doctorRoomId),
+    player1RoomId: Number(draft.player1RoomId),
+    stranger1RoomId: Number(draft.stranger1RoomId),
+    player2RoomId: Number(draft.player2RoomId),
+    stranger2RoomId: Number(draft.stranger2RoomId),
+    player1Strength: Number(draft.player1Strength),
+    stranger1Strength: Number(draft.stranger1Strength),
+    player2Strength: Number(draft.player2Strength),
+    stranger2Strength: Number(draft.stranger2Strength),
+    turnId: Number(draft.turnId),
+    currentPlayerPieceId: draft.currentPlayerPieceId,
   };
   return isFiniteNonNegative(parsed.moveCards) &&
     isFiniteNonNegative(parsed.weaponCards) &&
-    isFiniteNonNegative(parsed.failureCards)
+    isFiniteNonNegative(parsed.failureCards) &&
+    isValidBoardRoomId(parsed.doctorRoomId) &&
+    isValidBoardRoomId(parsed.player1RoomId) &&
+    isValidBoardRoomId(parsed.stranger1RoomId) &&
+    isValidBoardRoomId(parsed.player2RoomId) &&
+    isValidBoardRoomId(parsed.stranger2RoomId) &&
+    isFiniteNonNegativeInteger(parsed.player1Strength) &&
+    isFiniteNonNegativeInteger(parsed.stranger1Strength) &&
+    isFiniteNonNegativeInteger(parsed.player2Strength) &&
+    isFiniteNonNegativeInteger(parsed.stranger2Strength) &&
+    isFiniteNonNegativeInteger(parsed.turnId) &&
+    parsed.turnId >= 1 &&
+    isSetupNormalPlayerPieceId(parsed.currentPlayerPieceId)
     ? parsed
     : null;
 };
-const stepNonNegativeIntegerText = (raw: string, direction: StepDirection) => {
+const stepNonNegativeText = (raw: string, direction: StepDirection, step: number) => {
   const parsed = Number(raw);
-  const base = Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0;
-  const next = direction === 'down' ? Math.max(0, base - 1) : base + 1;
-  return next.toString();
+  const base = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+  const next = direction === 'down' ? Math.max(0, base - step) : base + step;
+  if (step >= 1) {
+    return Math.round(next).toString();
+  }
+  return next.toFixed(2);
 };
 const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs): SetupPrefs => {
   const moveCards = isFiniteNonNegative(candidate.moveCards ?? NaN)
@@ -403,12 +480,88 @@ const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs
   const failureCards = isFiniteNonNegative(candidate.failureCards ?? NaN)
     ? (candidate.failureCards as number)
     : fallback.failureCards;
+  const doctorRoomId = isValidBoardRoomId(candidate.doctorRoomId ?? NaN)
+    ? (candidate.doctorRoomId as number)
+    : fallback.doctorRoomId;
+  const player1RoomId = isValidBoardRoomId(candidate.player1RoomId ?? NaN)
+    ? (candidate.player1RoomId as number)
+    : fallback.player1RoomId;
+  const stranger1RoomId = isValidBoardRoomId(candidate.stranger1RoomId ?? NaN)
+    ? (candidate.stranger1RoomId as number)
+    : fallback.stranger1RoomId;
+  const player2RoomId = isValidBoardRoomId(candidate.player2RoomId ?? NaN)
+    ? (candidate.player2RoomId as number)
+    : fallback.player2RoomId;
+  const stranger2RoomId = isValidBoardRoomId(candidate.stranger2RoomId ?? NaN)
+    ? (candidate.stranger2RoomId as number)
+    : fallback.stranger2RoomId;
+  const player1Strength = isFiniteNonNegativeInteger(candidate.player1Strength ?? NaN)
+    ? (candidate.player1Strength as number)
+    : fallback.player1Strength;
+  const stranger1Strength = isFiniteNonNegativeInteger(candidate.stranger1Strength ?? NaN)
+    ? (candidate.stranger1Strength as number)
+    : fallback.stranger1Strength;
+  const player2Strength = isFiniteNonNegativeInteger(candidate.player2Strength ?? NaN)
+    ? (candidate.player2Strength as number)
+    : fallback.player2Strength;
+  const stranger2Strength = isFiniteNonNegativeInteger(candidate.stranger2Strength ?? NaN)
+    ? (candidate.stranger2Strength as number)
+    : fallback.stranger2Strength;
+  const turnId = isFiniteNonNegativeInteger(candidate.turnId ?? NaN) && (candidate.turnId as number) >= 1
+    ? (candidate.turnId as number)
+    : fallback.turnId;
+  const currentPlayerPieceId = isSetupNormalPlayerPieceId(candidate.currentPlayerPieceId ?? '')
+    ? (candidate.currentPlayerPieceId as NormalPlayerPieceId)
+    : fallback.currentPlayerPieceId;
   return {
     moveCards,
     weaponCards,
     failureCards,
+    doctorRoomId,
+    player1RoomId,
+    stranger1RoomId,
+    player2RoomId,
+    stranger2RoomId,
+    player1Strength,
+    stranger1Strength,
+    player2Strength,
+    stranger2Strength,
+    turnId,
+    currentPlayerPieceId,
   };
 };
+const snapCardQuantityToThirtySeconds = (value: number) => Math.round(value * 32) / 32;
+const shouldUseAdvancedSetup = (prefs: SetupPrefs, defaults: SetupPrefs) =>
+  !Number.isInteger(prefs.moveCards) ||
+  !Number.isInteger(prefs.weaponCards) ||
+  !Number.isInteger(prefs.failureCards) ||
+  prefs.doctorRoomId !== defaults.doctorRoomId ||
+  prefs.player1RoomId !== defaults.player1RoomId ||
+  prefs.stranger1RoomId !== defaults.stranger1RoomId ||
+  prefs.player2RoomId !== defaults.player2RoomId ||
+  prefs.stranger2RoomId !== defaults.stranger2RoomId ||
+  prefs.player1Strength !== defaults.player1Strength ||
+  prefs.stranger1Strength !== defaults.stranger1Strength ||
+  prefs.player2Strength !== defaults.player2Strength ||
+  prefs.stranger2Strength !== defaults.stranger2Strength ||
+  prefs.turnId !== defaults.turnId ||
+  prefs.currentPlayerPieceId !== defaults.currentPlayerPieceId;
+const buildSetupPrefsForStart = (prefs: SetupPrefs, defaults: SetupPrefs, useAdvanced: boolean): SetupPrefs => ({
+  moveCards: snapCardQuantityToThirtySeconds(prefs.moveCards),
+  weaponCards: snapCardQuantityToThirtySeconds(prefs.weaponCards),
+  failureCards: snapCardQuantityToThirtySeconds(prefs.failureCards),
+  doctorRoomId: useAdvanced ? prefs.doctorRoomId : defaults.doctorRoomId,
+  player1RoomId: useAdvanced ? prefs.player1RoomId : defaults.player1RoomId,
+  stranger1RoomId: useAdvanced ? prefs.stranger1RoomId : defaults.stranger1RoomId,
+  player2RoomId: useAdvanced ? prefs.player2RoomId : defaults.player2RoomId,
+  stranger2RoomId: useAdvanced ? prefs.stranger2RoomId : defaults.stranger2RoomId,
+  player1Strength: useAdvanced ? prefs.player1Strength : defaults.player1Strength,
+  stranger1Strength: useAdvanced ? prefs.stranger1Strength : defaults.stranger1Strength,
+  player2Strength: useAdvanced ? prefs.player2Strength : defaults.player2Strength,
+  stranger2Strength: useAdvanced ? prefs.stranger2Strength : defaults.stranger2Strength,
+  turnId: useAdvanced ? prefs.turnId : defaults.turnId,
+  currentPlayerPieceId: useAdvanced ? prefs.currentPlayerPieceId : defaults.currentPlayerPieceId,
+});
 const parseSetupPrefsJson = (raw: string, fallback: SetupPrefs): SetupPrefs => {
   try {
     const parsed = JSON.parse(raw) as Partial<SetupPrefs>;
@@ -1341,6 +1494,7 @@ function PlayArea() {
   const currentSetupPrefs = gameState
     ? parseSetupPrefsJson(gameState.currentNormalSetupJson(), defaultSetupPrefs)
     : defaultSetupPrefs;
+  const persistedSetupPrefs = loadSetupPrefs(currentSetupPrefs);
   const [selectedPieceId, setSelectedPieceId] = useState<PieceId | null>(null);
   const [plannedMoves, setPlannedMoves] = useState<Partial<Record<PieceId, number>>>({});
   const [planOrder, setPlanOrder] = useState<PieceId[]>([]);
@@ -1349,7 +1503,10 @@ function PlayArea() {
   const [setupPopupOpen, setSetupPopupOpen] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [setupPrefsDraft, setSetupPrefsDraft] = useState<SetupPrefsDraft>(() =>
-    toSetupPrefsDraft(loadSetupPrefs(currentSetupPrefs)),
+    toSetupPrefsDraft(persistedSetupPrefs),
+  );
+  const [setupAdvanced, setSetupAdvanced] = useState(() =>
+    shouldUseAdvancedSetup(persistedSetupPrefs, defaultSetupPrefs),
   );
   const [redoStateStack, setRedoStateStack] = useState<string[]>(() => (gameState ? loadRedoStateStack() : []));
   const [turnCounter, setTurnCounter] = useState(0);
@@ -2743,7 +2900,10 @@ function PlayArea() {
   };
 
   const handleSetupOpen = () => {
+    const nextPrefs = loadSetupPrefs(currentSetupPrefs);
     setInfoPopup(null);
+    setSetupPrefsDraft(toSetupPrefsDraft(nextPrefs));
+    setSetupAdvanced(shouldUseAdvancedSetup(nextPrefs, defaultSetupPrefs));
     setSetupPopupOpen(true);
     setSetupError(null);
   };
@@ -2768,7 +2928,7 @@ function PlayArea() {
       return;
     }
     setMinAnalysisLevelDraft((prev) => {
-      const next = stepNonNegativeIntegerText(prev, direction);
+      const next = stepNonNegativeText(prev, direction, 1);
       saveCurrentAiPrefs({
         minAnalysisLevel: Number(next),
         maxAnalysisLevel: parseMaxAnalysisLevelDraft(maxAnalysisLevelDraft) ?? defaultMaxAnalysisLevel,
@@ -2796,7 +2956,7 @@ function PlayArea() {
       return;
     }
     setMaxAnalysisLevelDraft((prev) => {
-      const next = stepNonNegativeIntegerText(prev, direction);
+      const next = stepNonNegativeText(prev, direction, 1);
       saveCurrentAiPrefs({
         minAnalysisLevel: parseMinAnalysisLevelDraft(minAnalysisLevelDraft) ?? defaultMinAnalysisLevel,
         maxAnalysisLevel: Number(next),
@@ -2860,12 +3020,28 @@ function PlayArea() {
     updateAiShowOnBoardPrefs(aiShowOnBoardP1Ref.current, checked);
   };
 
-  const handleSetupStep = (field: keyof SetupPrefsDraft, direction: StepDirection) => {
-    handleSetupDraftChange(field, stepNonNegativeIntegerText(setupPrefsDraft[field], direction));
+  const handleSetupAdvancedChange = (checked: boolean) => {
+    setSetupAdvanced(checked);
+    setSetupError(null);
+  };
+
+  const handleSetupCurrentPlayerChange = (pieceId: NormalPlayerPieceId) => {
+    const nextDraft = { ...setupPrefsDraft, currentPlayerPieceId: pieceId };
+    setSetupPrefsDraft(nextDraft);
+    setSetupError(null);
+    const nextPrefs = parseSetupPrefsDraft(nextDraft);
+    if (nextPrefs) {
+      saveSetupPrefs(nextPrefs);
+    }
+  };
+
+  const handleSetupStep = (field: 'moveCards' | 'weaponCards' | 'failureCards', direction: StepDirection) => {
+    handleSetupDraftChange(field, stepNonNegativeText(setupPrefsDraft[field], direction, setupAdvanced ? 0.01 : 1));
   };
 
   const handleRestoreSetupDefaults = () => {
     setSetupPrefsDraft(toSetupPrefsDraft(defaultSetupPrefs));
+    setSetupAdvanced(false);
     saveSetupPrefs(defaultSetupPrefs);
     setSetupError(null);
   };
@@ -2876,14 +3052,26 @@ function PlayArea() {
     }
     const parsedSetup = parseSetupPrefsDraft(setupPrefsDraft);
     if (!parsedSetup) {
-      setSetupError('Setup values must be numbers >= 0.');
+      setSetupError('Setup values must be valid numbers and rooms.');
       return;
     }
+    const setupToStart = buildSetupPrefsForStart(parsedSetup, defaultSetupPrefs, setupAdvanced);
 
     const startError = gameState.startNewGameWithSetup(
-      parsedSetup.moveCards,
-      parsedSetup.weaponCards,
-      parsedSetup.failureCards,
+      setupToStart.moveCards,
+      setupToStart.weaponCards,
+      setupToStart.failureCards,
+      setupToStart.doctorRoomId,
+      setupToStart.player1RoomId,
+      setupToStart.stranger1RoomId,
+      setupToStart.player2RoomId,
+      setupToStart.stranger2RoomId,
+      setupToStart.player1Strength,
+      setupToStart.stranger1Strength,
+      setupToStart.player2Strength,
+      setupToStart.stranger2Strength,
+      setupToStart.turnId,
+      setupToStart.currentPlayerPieceId,
     );
     if (startError) {
       setSetupError(startError);
@@ -2902,7 +3090,9 @@ function PlayArea() {
     setSetupPopupOpen(false);
     setSetupError(null);
     resetAiOutputs();
-    saveSetupPrefs(parsedSetup);
+    saveSetupPrefs(setupToStart);
+    setSetupPrefsDraft(toSetupPrefsDraft(setupToStart));
+    setSetupAdvanced(shouldUseAdvancedSetup(setupToStart, defaultSetupPrefs));
     setRedoStateStack([]);
     saveRedoStateStack([]);
     saveGameStateSnapshot(gameState);
@@ -4341,6 +4531,14 @@ function PlayArea() {
           <div className="info-popup setup-popup" onClick={(event) => event.stopPropagation()}>
             <h3>Setup</h3>
             <div className="setup-popup-form">
+              <label className="setup-popup-toggle">
+                <input
+                  type="checkbox"
+                  checked={setupAdvanced}
+                  onChange={(event) => handleSetupAdvancedChange(event.target.checked)}
+                />
+                <span>Advanced</span>
+              </label>
               <label className="setup-popup-row">
                 <span>Move Cards (Normal)</span>
                 <div className="number-stepper">
@@ -4349,7 +4547,7 @@ function PlayArea() {
                     aria-label="Move cards"
                     type="number"
                     min="0"
-                    step="1"
+                    step={setupAdvanced ? '0.01' : '1'}
                     value={setupPrefsDraft.moveCards}
                     onChange={(event) => handleSetupDraftChange('moveCards', event.target.value)}
                   />
@@ -4379,7 +4577,7 @@ function PlayArea() {
                     aria-label="Weapon cards"
                     type="number"
                     min="0"
-                    step="1"
+                    step={setupAdvanced ? '0.01' : '1'}
                     value={setupPrefsDraft.weaponCards}
                     onChange={(event) => handleSetupDraftChange('weaponCards', event.target.value)}
                   />
@@ -4409,7 +4607,7 @@ function PlayArea() {
                     aria-label="Failure cards"
                     type="number"
                     min="0"
-                    step="1"
+                    step={setupAdvanced ? '0.01' : '1'}
                     value={setupPrefsDraft.failureCards}
                     onChange={(event) => handleSetupDraftChange('failureCards', event.target.value)}
                   />
@@ -4431,6 +4629,158 @@ function PlayArea() {
                   </button>
                 </div>
               </label>
+              {setupAdvanced && (
+                <>
+                  <p className="setup-popup-note">Card amounts entered in hundredths snap to the nearest 1/32 on start.</p>
+                  <label className="setup-popup-row">
+                    <span>Dr Room</span>
+                    <select
+                      aria-label="Doctor room"
+                      value={setupPrefsDraft.doctorRoomId}
+                      onChange={(event) => handleSetupDraftChange('doctorRoomId', event.target.value)}
+                    >
+                      {boardRooms.map((room) => (
+                        <option key={`setup-doctor-${room.id}`} value={room.id.toString()}>
+                          {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="setup-popup-row">
+                    <span>P1 Room</span>
+                    <select
+                      aria-label="P1 room"
+                      value={setupPrefsDraft.player1RoomId}
+                      onChange={(event) => handleSetupDraftChange('player1RoomId', event.target.value)}
+                    >
+                      {boardRooms.map((room) => (
+                        <option key={`setup-p1-${room.id}`} value={room.id.toString()}>
+                          {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="setup-popup-row">
+                    <span>p2 Room</span>
+                    <select
+                      aria-label="p2 room"
+                      value={setupPrefsDraft.stranger1RoomId}
+                      onChange={(event) => handleSetupDraftChange('stranger1RoomId', event.target.value)}
+                    >
+                      {boardRooms.map((room) => (
+                        <option key={`setup-p2-${room.id}`} value={room.id.toString()}>
+                          {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="setup-popup-row">
+                    <span>P3 Room</span>
+                    <select
+                      aria-label="P3 room"
+                      value={setupPrefsDraft.player2RoomId}
+                      onChange={(event) => handleSetupDraftChange('player2RoomId', event.target.value)}
+                    >
+                      {boardRooms.map((room) => (
+                        <option key={`setup-p3-${room.id}`} value={room.id.toString()}>
+                          {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="setup-popup-row">
+                    <span>p4 Room</span>
+                    <select
+                      aria-label="p4 room"
+                      value={setupPrefsDraft.stranger2RoomId}
+                      onChange={(event) => handleSetupDraftChange('stranger2RoomId', event.target.value)}
+                    >
+                      {boardRooms.map((room) => (
+                        <option key={`setup-p4-${room.id}`} value={room.id.toString()}>
+                          {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="setup-popup-row">
+                    <span>P1 Strength</span>
+                    <input
+                      aria-label="P1 strength"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={setupPrefsDraft.player1Strength}
+                      onChange={(event) => handleSetupDraftChange('player1Strength', event.target.value)}
+                    />
+                  </label>
+                  <label className="setup-popup-row">
+                    <span>p2 Strength</span>
+                    <input
+                      aria-label="p2 strength"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={setupPrefsDraft.stranger1Strength}
+                      onChange={(event) => handleSetupDraftChange('stranger1Strength', event.target.value)}
+                    />
+                  </label>
+                  <label className="setup-popup-row">
+                    <span>P3 Strength</span>
+                    <input
+                      aria-label="P3 strength"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={setupPrefsDraft.player2Strength}
+                      onChange={(event) => handleSetupDraftChange('player2Strength', event.target.value)}
+                    />
+                  </label>
+                  <label className="setup-popup-row">
+                    <span>p4 Strength</span>
+                    <input
+                      aria-label="p4 strength"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={setupPrefsDraft.stranger2Strength}
+                      onChange={(event) => handleSetupDraftChange('stranger2Strength', event.target.value)}
+                    />
+                  </label>
+                  <label className="setup-popup-row">
+                    <span>Turn Id</span>
+                    <input
+                      aria-label="Turn id"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={setupPrefsDraft.turnId}
+                      onChange={(event) => handleSetupDraftChange('turnId', event.target.value)}
+                    />
+                  </label>
+                  <p className="setup-popup-note">Doctor activation checks this internal turn id against the 4-player turn count.</p>
+                  <fieldset className="setup-popup-fieldset">
+                    <legend>Current Player</legend>
+                    <label className="setup-popup-radio">
+                      <input
+                        type="radio"
+                        name="setup-current-player"
+                        checked={setupPrefsDraft.currentPlayerPieceId === 'player1'}
+                        onChange={() => handleSetupCurrentPlayerChange('player1')}
+                      />
+                      <span>P1</span>
+                    </label>
+                    <label className="setup-popup-radio">
+                      <input
+                        type="radio"
+                        name="setup-current-player"
+                        checked={setupPrefsDraft.currentPlayerPieceId === 'player2'}
+                        onChange={() => handleSetupCurrentPlayerChange('player2')}
+                      />
+                      <span>P3</span>
+                    </label>
+                  </fieldset>
+                </>
+              )}
             </div>
             {setupError && <p className="setup-popup-error">{setupError}</p>}
             <div className="setup-popup-actions">
