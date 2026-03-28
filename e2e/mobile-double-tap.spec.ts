@@ -23,17 +23,43 @@ test.use({
   hasTouch: true,
 });
 
-const dispatchTouchRoomClick = async (room: Locator, detail: number = 1) => {
-  await room.evaluate((element, clickDetail) => {
-    const event = new PointerEvent('click', {
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-      detail: clickDetail,
-      pointerType: 'touch',
-    });
-    element.dispatchEvent(event);
-  }, detail);
+const dispatchTouchRoomTap = async (
+  room: Locator,
+  options?: {
+    detail?: number;
+    clickDelayMs?: number;
+  },
+) => {
+  await room.evaluate(
+    async (element, tapOptions) => {
+      const detail = tapOptions?.detail ?? 1;
+      const clickDelayMs = tapOptions?.clickDelayMs ?? 0;
+      const pointerBase = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId: 1,
+        isPrimary: true,
+      };
+
+      element.dispatchEvent(new PointerEvent('pointerdown', pointerBase));
+      element.dispatchEvent(new PointerEvent('pointerup', pointerBase));
+      if (clickDelayMs > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, clickDelayMs));
+      }
+      element.dispatchEvent(
+        new PointerEvent('click', {
+          ...pointerBase,
+          detail,
+        }),
+      );
+    },
+    {
+      detail: options?.detail ?? 1,
+      clickDelayMs: options?.clickDelayMs ?? 0,
+    },
+  );
 };
 
 const readNormalTurnCount = async (page: Page) =>
@@ -75,10 +101,10 @@ const seedStateWithDefaultSnapshot = async (page: Page) => {
 
 const tapRoomTwiceAndCaptureBeforeTurnCount = async (page: Page, room: Locator, interTapDelayMs: number) => {
   const beforeTurnCount = await readNormalTurnCount(page);
-  await dispatchTouchRoomClick(room);
+  await dispatchTouchRoomTap(room);
   await expect.poll(() => readNormalTurnCount(page), { timeout: 400 }).toBe(beforeTurnCount);
   await page.waitForTimeout(interTapDelayMs);
-  await dispatchTouchRoomClick(room);
+  await dispatchTouchRoomTap(room);
   return beforeTurnCount;
 };
 
@@ -207,9 +233,9 @@ test.describe('mobile forgiving double-tap', () => {
 
     await expect(undoButton).toBeDisabled();
 
-    await dispatchTouchRoomClick(firstRoom);
+    await dispatchTouchRoomTap(firstRoom);
     await page.waitForTimeout(300);
-    await dispatchTouchRoomClick(secondRoom);
+    await dispatchTouchRoomTap(secondRoom);
     await page.waitForTimeout(150);
 
     await expect(undoButton).toBeDisabled();
@@ -223,11 +249,11 @@ test.describe('mobile forgiving double-tap', () => {
     const selectedLine = page.locator('.planner-line').filter({ hasText: 'Selected' }).first();
     const beforeTurnCount = await readNormalTurnCount(page);
 
-    await dispatchTouchRoomClick(room);
+    await dispatchTouchRoomTap(room);
     await expect(selectedLine).not.toContainText('None');
 
     await page.waitForTimeout(withinGraceDelayMs);
-    await dispatchTouchRoomClick(room);
+    await dispatchTouchRoomTap(room);
 
     await expect.poll(() => readNormalTurnCount(page)).toBe(beforeTurnCount + 1);
   });
@@ -240,13 +266,32 @@ test.describe('mobile forgiving double-tap', () => {
     const selectedLine = page.locator('.planner-line').filter({ hasText: 'Selected' }).first();
     const beforeTurnCount = await readNormalTurnCount(page);
 
-    await dispatchTouchRoomClick(room);
+    await dispatchTouchRoomTap(room);
     await expect(selectedLine).not.toContainText('None');
 
     await page.waitForTimeout(outsideGraceDelayMs);
-    await dispatchTouchRoomClick(room);
+    await dispatchTouchRoomTap(room);
     await page.waitForTimeout(150);
 
     await expect.poll(() => readNormalTurnCount(page)).toBe(beforeTurnCount);
+  });
+
+  test('uses tap timing instead of click delivery timing for forgiving double-tap', async ({ page }) => {
+    await page.goto('/');
+    const seededTurnCount = await seedStateWithDefaultSnapshot(page);
+    expect(seededTurnCount).toBe(0);
+
+    const room = page.locator('.room-layer rect[aria-label="dining hall"]');
+    const beforeTurnCount = await readNormalTurnCount(page);
+    const delayedSecondClickMs = 400;
+    const withinGraceTapGapMs = Math.max(60, touchDoubleTapGraceMs - 200);
+
+    await dispatchTouchRoomTap(room);
+    await expect.poll(() => readNormalTurnCount(page), { timeout: 400 }).toBe(beforeTurnCount);
+
+    await page.waitForTimeout(withinGraceTapGapMs);
+    await dispatchTouchRoomTap(room, { clickDelayMs: delayedSecondClickMs });
+
+    await expect.poll(() => readNormalTurnCount(page)).toBe(beforeTurnCount + 1);
   });
 });
