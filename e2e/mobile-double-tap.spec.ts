@@ -4,6 +4,13 @@ import { expect, test, devices, type Locator, type Page } from '@playwright/test
 const iPhone13 = devices['iPhone 13'];
 const gameStateStorageKey = 'kdl.gameState.v1';
 const redoStateStackStorageKey = 'kdl.redoStack.v1';
+const pieceLabelById = {
+  doctor: 'Dr',
+  player1: 'P1',
+  player2: 'P3',
+  stranger1: 'p2',
+  stranger2: 'p4',
+} as const;
 const playAreaSource = readFileSync(new URL('../src/components/PlayArea.tsx', import.meta.url), 'utf8');
 const touchDoubleTapGraceMsMatch = playAreaSource.match(/const touchDoubleTapGraceMs = (\d+);/);
 
@@ -34,6 +41,7 @@ const dispatchTouchRoomTap = async (
     async (element, tapOptions) => {
       const detail = tapOptions?.detail ?? 1;
       const clickDelayMs = tapOptions?.clickDelayMs ?? 0;
+      const emitDoubleClickAfterClick = tapOptions?.emitDoubleClickAfterClick ?? false;
       const pointerBase = {
         bubbles: true,
         cancelable: true,
@@ -54,10 +62,21 @@ const dispatchTouchRoomTap = async (
           detail,
         }),
       );
+      if (emitDoubleClickAfterClick) {
+        element.dispatchEvent(
+          new MouseEvent('dblclick', {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            detail: Math.max(2, detail),
+          }),
+        );
+      }
     },
     {
       detail: options?.detail ?? 1,
       clickDelayMs: options?.clickDelayMs ?? 0,
+      emitDoubleClickAfterClick: options?.emitDoubleClickAfterClick ?? false,
     },
   );
 };
@@ -187,6 +206,98 @@ const seedStateWithStrangerAtDistinctRoom = async (page: Page) => {
   return seedResult;
 };
 
+const seedDefaultStateForCurrentPlayerSelection = async (page: Page) => {
+  const seededScenario = await page.evaluate(
+    async ({ gameStateStorageKeyArg, redoStateStackStorageKeyArg }) => {
+      const wasm = await import('/src/KdlRust/pkg/kill_doctor_lucky_rust.js');
+      await wasm.default();
+      const seededState = wasm.newDefaultGameState();
+
+      try {
+        const pieceId = seededState.currentPlayerPieceId();
+        const pieceIndexById = new Map<string, number>([
+          ['doctor', 0],
+          ['player1', 1],
+          ['player2', 2],
+          ['stranger1', 3],
+          ['stranger2', 4],
+        ]);
+        const pieceIndex = pieceIndexById.get(pieceId);
+        if (pieceIndex === undefined) {
+          throw new Error(`Unexpected current player piece id: ${pieceId}`);
+        }
+
+        const positions = Array.from(seededState.piecePositions(), (value) => Number(value));
+        const currentRoomId = positions[pieceIndex];
+
+        const boardRooms = JSON.parse(seededState.boardRoomsJson()) as Array<{
+          id?: number;
+          Id?: number;
+          name?: string;
+          Name?: string;
+        }>;
+        const roomNameById = new Map<number, string>();
+        for (const room of boardRooms) {
+          const roomId = typeof room.id === 'number' ? room.id : room.Id;
+          const roomName = typeof room.name === 'string' ? room.name : room.Name;
+          if (typeof roomId === 'number' && typeof roomName === 'string' && roomName.length > 0) {
+            roomNameById.set(Math.trunc(roomId), roomName);
+          }
+        }
+
+        const candidateRoomIds = Array.from(roomNameById.keys()).sort((a, b) => a - b);
+        let destinationRoomId: number | null = null;
+        for (const roomId of candidateRoomIds) {
+          if (roomId === currentRoomId) {
+            continue;
+          }
+          const validation = seededState.validateTurnPlan(JSON.stringify([{ pieceId, roomId }]));
+          if (!validation) {
+            destinationRoomId = roomId;
+            break;
+          }
+        }
+        if (destinationRoomId === null) {
+          throw new Error(`Could not find valid destination room for ${pieceId}.`);
+        }
+
+        const currentRoomName = roomNameById.get(currentRoomId);
+        const destinationRoomName = roomNameById.get(destinationRoomId);
+        if (!currentRoomName || !destinationRoomName) {
+          throw new Error(
+            `Could not resolve room names for current=${currentRoomId} destination=${destinationRoomId}.`,
+          );
+        }
+
+        const snapshot = seededState.exportStateJson();
+        window.localStorage.setItem(gameStateStorageKeyArg, snapshot);
+        window.localStorage.removeItem(redoStateStackStorageKeyArg);
+
+        return {
+          pieceId,
+          currentRoomName,
+          destinationRoomId,
+          destinationRoomName,
+        };
+      } finally {
+        seededState.free();
+      }
+    },
+    {
+      gameStateStorageKeyArg: gameStateStorageKey,
+      redoStateStackStorageKeyArg: redoStateStackStorageKey,
+    },
+  );
+
+  await page.reload();
+  return seededScenario as {
+    pieceId: keyof typeof pieceLabelById;
+    currentRoomName: string;
+    destinationRoomId: number;
+    destinationRoomName: string;
+  };
+};
+
 test.describe('mobile forgiving double-tap', () => {
   test('submits turn on a fast touch double tap', async ({ page }) => {
     await page.goto('/');
@@ -293,5 +404,29 @@ test.describe('mobile forgiving double-tap', () => {
     await dispatchTouchRoomTap(room, { clickDelayMs: delayedSecondClickMs });
 
     await expect.poll(() => readNormalTurnCount(page)).toBe(beforeTurnCount + 1);
+  });
+
+  test('touch tap to select a room-piece and touch tap to a destination does not get promoted by a following dblclick', async ({
+    page,
+  }) => {
+    await page.goto('/');
+
+    const seed = await seedDefaultStateForCurrentPlayerSelection(page);
+    const pieceLabel = pieceLabelById[seed.pieceId];
+    const currentRoom = page.locator(`.room-layer rect[aria-label="${seed.currentRoomName}"]`).first();
+    const destinationRoom = page.locator(`.room-layer rect[aria-label="${seed.destinationRoomName}"]`).first();
+    const selectedLine = page.locator('.planner-line').filter({ hasText: 'Selected' }).first();
+    const plannedLine = page.locator('.planner-line').filter({ hasText: 'Planned' }).first();
+    const beforeTurnCount = await readNormalTurnCount(page);
+
+    await dispatchTouchRoomTap(currentRoom);
+    await expect(selectedLine).toContainText(pieceLabel);
+
+    await dispatchTouchRoomTap(destinationRoom, { detail: 2, emitDoubleClickAfterClick: true });
+    await page.waitForTimeout(150);
+
+    await expect(selectedLine).toContainText('None');
+    await expect(plannedLine).toContainText(`${pieceLabel}@R${seed.destinationRoomId}`);
+    await expect.poll(() => readNormalTurnCount(page)).toBe(beforeTurnCount);
   });
 });

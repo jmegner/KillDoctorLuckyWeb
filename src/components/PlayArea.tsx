@@ -374,6 +374,12 @@ type PendingRoomTouchTapStart = {
   turnCounterAtTap: number;
 };
 
+type PendingIgnoredRoomDoubleClick = {
+  roomId: number;
+  expiresAtMs: number;
+  turnCounterAtTap: number;
+};
+
 type StepDirection = 'down' | 'up';
 
 const parseNormalTurnCountFromSnapshotJson = (snapshotJson: string): number | null => {
@@ -1581,6 +1587,7 @@ function PlayArea() {
   } | null>(null);
   const pendingEmptyRoomTouchTapRef = useRef<PendingEmptyRoomTouchTap | null>(null);
   const pendingRoomTouchTapStartRef = useRef<PendingRoomTouchTapStart | null>(null);
+  const pendingIgnoredRoomDoubleClickRef = useRef<PendingIgnoredRoomDoubleClick | null>(null);
   const pendingAutoSelectedRoomPieceRef = useRef<PendingAutoSelectedRoomPiece | null>(null);
   const animationSpeed = animationSpeeds[animationSpeedIndex];
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
@@ -1870,6 +1877,35 @@ function PlayArea() {
     return Date.now();
   };
 
+  const rememberIgnoredRoomDoubleClick = (roomId: number) => {
+    pendingIgnoredRoomDoubleClickRef.current = {
+      roomId,
+      expiresAtMs: Date.now() + touchDoubleTapGraceMs + 500,
+      turnCounterAtTap: turnCounterRef.current,
+    };
+  };
+
+  const shouldIgnoreRoomDoubleClick = (roomId: number) => {
+    const pendingIgnoredRoomDoubleClick = pendingIgnoredRoomDoubleClickRef.current;
+    if (
+      pendingIgnoredRoomDoubleClick &&
+      pendingIgnoredRoomDoubleClick.roomId === roomId &&
+      pendingIgnoredRoomDoubleClick.turnCounterAtTap === turnCounterRef.current &&
+      Date.now() <= pendingIgnoredRoomDoubleClick.expiresAtMs
+    ) {
+      pendingIgnoredRoomDoubleClickRef.current = null;
+      return true;
+    }
+    if (
+      pendingIgnoredRoomDoubleClick &&
+      (pendingIgnoredRoomDoubleClick.turnCounterAtTap !== turnCounterRef.current ||
+        Date.now() > pendingIgnoredRoomDoubleClick.expiresAtMs)
+    ) {
+      pendingIgnoredRoomDoubleClickRef.current = null;
+    }
+    return false;
+  };
+
   const clearPendingAutoSelectedRoomPiece = () => {
     pendingAutoSelectedRoomPieceRef.current = null;
   };
@@ -2031,6 +2067,9 @@ function PlayArea() {
     if (hasWinner) {
       clearPendingAutoSelectedRoomPiece();
       return;
+    }
+    if (isTouchLikeRoomClick(event)) {
+      rememberIgnoredRoomDoubleClick(roomId);
     }
     if (tryConsumeForgivingTouchDoubleTap(roomId, event)) {
       clearPendingAutoSelectedRoomPiece();
@@ -3185,6 +3224,9 @@ function PlayArea() {
     clearPendingEmptyRoomTouchTap();
     const matchesPendingAutoSelection = roomClickMatchesPendingAutoSelection(roomId, selectedPieceId);
     clearPendingAutoSelectedRoomPiece();
+    if (shouldIgnoreRoomDoubleClick(roomId)) {
+      return;
+    }
     if (hasWinner) {
       return;
     }
