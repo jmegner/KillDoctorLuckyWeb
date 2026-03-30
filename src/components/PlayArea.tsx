@@ -1,4 +1,4 @@
-import { useRef, useState, type MouseEvent, type PointerEvent, type TouchEvent } from 'react';
+import { useRef, useState, type MouseEvent } from 'react';
 import wasmBindgenInit, { newDefaultGameState, type GameStateHandle } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
 import boardData from '../data/boards/BoardAltDown.json';
 
@@ -363,12 +363,6 @@ type SetupPrefsDraft = {
 };
 
 type PendingEmptyRoomTouchTap = {
-  roomId: number;
-  startedAtMs: number;
-  turnCounterAtTap: number;
-};
-
-type PendingRoomTouchTapStart = {
   roomId: number;
   startedAtMs: number;
   turnCounterAtTap: number;
@@ -1580,7 +1574,6 @@ function PlayArea() {
     sourceTurnCounter: number;
   } | null>(null);
   const pendingEmptyRoomTouchTapRef = useRef<PendingEmptyRoomTouchTap | null>(null);
-  const pendingRoomTouchTapStartRef = useRef<PendingRoomTouchTapStart | null>(null);
   const pendingAutoSelectedRoomPieceRef = useRef<PendingAutoSelectedRoomPiece | null>(null);
   const animationSpeed = animationSpeeds[animationSpeedIndex];
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
@@ -1850,26 +1843,6 @@ function PlayArea() {
     pendingEmptyRoomTouchTapRef.current = null;
   };
 
-  const rememberTouchLikeRoomTapStart = (roomId: number) => {
-    pendingRoomTouchTapStartRef.current = {
-      roomId,
-      startedAtMs: Date.now(),
-      turnCounterAtTap: turnCounterRef.current,
-    };
-  };
-
-  const getTouchLikeRoomTapStartedAtMs = (roomId: number) => {
-    const pendingTouchTapStart = pendingRoomTouchTapStartRef.current;
-    if (
-      pendingTouchTapStart &&
-      pendingTouchTapStart.roomId === roomId &&
-      pendingTouchTapStart.turnCounterAtTap === turnCounterRef.current
-    ) {
-      return pendingTouchTapStart.startedAtMs;
-    }
-    return Date.now();
-  };
-
   const clearPendingAutoSelectedRoomPiece = () => {
     pendingAutoSelectedRoomPieceRef.current = null;
   };
@@ -1904,16 +1877,6 @@ function PlayArea() {
     return false;
   };
 
-  const handleRoomPointerDown = (roomId: number, event: PointerEvent<SVGRectElement>) => {
-    if (event.pointerType === 'touch') {
-      rememberTouchLikeRoomTapStart(roomId);
-    }
-  };
-
-  const handleRoomTouchStart = (roomId: number, _event: TouchEvent<SVGRectElement>) => {
-    rememberTouchLikeRoomTapStart(roomId);
-  };
-
   const rememberForgivingTouchTap = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
     if (!isTouchLikeRoomClick(event)) {
       clearPendingEmptyRoomTouchTap();
@@ -1921,7 +1884,7 @@ function PlayArea() {
     }
     pendingEmptyRoomTouchTapRef.current = {
       roomId,
-      startedAtMs: getTouchLikeRoomTapStartedAtMs(roomId),
+      startedAtMs: Date.now(),
       turnCounterAtTap: turnCounterRef.current,
     };
   };
@@ -1934,12 +1897,11 @@ function PlayArea() {
     }
 
     const pendingTouchTap = pendingEmptyRoomTouchTapRef.current;
-    const currentTouchTapStartedAtMs = getTouchLikeRoomTapStartedAtMs(roomId);
     if (
       pendingTouchTap &&
       pendingTouchTap.roomId === roomId &&
       pendingTouchTap.turnCounterAtTap === turnCounterRef.current &&
-      currentTouchTapStartedAtMs - pendingTouchTap.startedAtMs <= touchDoubleTapGraceMs
+      Date.now() - pendingTouchTap.startedAtMs <= touchDoubleTapGraceMs
     ) {
       clearPendingEmptyRoomTouchTap();
       if (selectedPieceId) {
@@ -3870,8 +3832,6 @@ function PlayArea() {
                       height={y2 - y1}
                       className={roomClassName}
                       onClick={(event) => handleRoomClick(room.id, event)}
-                      onPointerDown={(event) => handleRoomPointerDown(room.id, event)}
-                      onTouchStart={(event) => handleRoomTouchStart(room.id, event)}
                       onMouseDown={(event) => handleRoomMouseDown(event, room.id)}
                       onDoubleClick={() => handleRoomDoubleClick(room.id)}
                       aria-label={room.name ?? `Room ${room.id}`}
