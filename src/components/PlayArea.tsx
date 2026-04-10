@@ -1410,6 +1410,13 @@ const formatWholeSeconds = (elapsedMs: number) => {
   return `${Math.floor(elapsedMs / 1000)}s`;
 };
 
+const formatRoundedSeconds = (elapsedMs: number) => {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
+    return '0s';
+  }
+  return `${Math.round(elapsedMs / 1000)}s`;
+};
+
 const isTerminalHeuristicScore = (score: number) => Number.isFinite(score) && Math.abs(score) > 1e12;
 const terminalHeuristicOutcomeLabel = (score: number) =>
   isTerminalHeuristicScore(score) ? (score > 0 ? 'win' : 'loss') : null;
@@ -3239,13 +3246,14 @@ function PlayArea() {
     if (!suggestedTurnTextForBoard) {
       return null;
     }
+    const suggestionElapsedText = formatRoundedSeconds(aiSuggestion.levelElapsedMs);
     const terminalOutcomeLabel = terminalHeuristicOutcomeLabel(aiSuggestion.bestTurn.heuristicScore);
     const statusText = analysisIsRunning
       ? runningTimeText
       : terminalOutcomeLabel
         ? `(done, ${terminalOutcomeLabel})`
         : '(done)';
-    return `L${aiSuggestion.analysisLevel}: ${suggestedTurnTextForBoard} ${statusText}`;
+    return `L${aiSuggestion.analysisLevel}(${suggestionElapsedText}): ${suggestedTurnTextForBoard} ${statusText}`;
   })();
 
   if (!initialAutoAnalysisQueuedRef.current && gameState && !hasWinner) {

@@ -348,7 +348,7 @@ test.describe('AI results cache', () => {
         },
         previewRaw: '',
         elapsedMs: 987,
-        levelElapsedMs: 321,
+        levelElapsedMs: 12499,
         lastUsedAtMs: 1700000000000,
       },
     });
@@ -357,7 +357,7 @@ test.describe('AI results cache', () => {
     const aiPanel = page.locator('.ai-panel');
     await expect.poll(() => readAiLineValue(page, 'Suggested'), { timeout: 5000 }).toBe('P1@R13');
     await expect.poll(() => readAiLineValue(page, 'Status'), { timeout: 5000 }).toBe('LOSS found from cache at L7.');
-    await expect.poll(() => readBoardOverlayText(page), { timeout: 5000 }).toBe('L7: P1@13 (done, loss)');
+    await expect.poll(() => readBoardOverlayText(page), { timeout: 5000 }).toBe('L7(12s): P1@13 (done, loss)');
     await expect
       .poll(async () => {
         const cacheEntry = await readCacheEntryForState(page, seededStateJson);
