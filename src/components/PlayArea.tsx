@@ -2118,6 +2118,11 @@ function PlayArea() {
       setValidationMessage(applyError);
       return;
     }
+    const nextStateSnapshot = gameState.exportStateJson();
+    const nextRedoStateStack =
+      redoStateStack.length > 0 && redoStateStack[redoStateStack.length - 1] === nextStateSnapshot
+        ? redoStateStack.slice(0, -1)
+        : [];
     setPlannedMoves({});
     setPlanOrder([]);
     setSelectedPieceId(null);
@@ -2127,8 +2132,8 @@ function PlayArea() {
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
     resetAiOutputs();
-    setRedoStateStack([]);
-    saveRedoStateStack([]);
+    setRedoStateStack(nextRedoStateStack);
+    saveRedoStateStack(nextRedoStateStack);
     saveGameStateSnapshot(gameState);
     const nextTurnCounter = advanceTurnCounter();
     startAnimationFromState(initialRoomsForAnimation, { indicators: initialPieceIndicatorsForAnimation });
@@ -2732,6 +2737,7 @@ function PlayArea() {
     undoCount: number,
     options?: {
       preserveAiControl?: boolean;
+      clearAllAiControl?: boolean;
     },
   ) => {
     if (!gameState) {
@@ -2751,7 +2757,11 @@ function PlayArea() {
     if (appliedUndoCount === 0) {
       return false;
     }
-    if (!options?.preserveAiControl) {
+    if (options?.clearAllAiControl) {
+      if (aiControlP1Ref.current || aiControlP3Ref.current) {
+        updateAiControlPrefs(false, false);
+      }
+    } else if (!options?.preserveAiControl) {
       const undonePlayerPieceIdRaw = gameState.currentPlayerPieceId();
       const undonePlayerPieceId = isPieceId(undonePlayerPieceIdRaw) ? undonePlayerPieceIdRaw : null;
       const nextAiControlP1 = undonePlayerPieceId === 'player1' ? false : aiControlP1Ref.current;
@@ -2842,7 +2852,7 @@ function PlayArea() {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
-    if (!applyUndoSteps(completedNormalTurnCount)) {
+    if (!applyUndoSteps(completedNormalTurnCount, { clearAllAiControl: true })) {
       setValidationMessage('No previous turn to undo.');
     }
   };

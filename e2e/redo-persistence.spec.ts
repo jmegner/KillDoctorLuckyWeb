@@ -20,6 +20,32 @@ const readNormalTurnCount = async (page: Page) =>
     return turns ? turns.length + 1 : -1;
   }, gameStateStorageKey);
 
+const readRedoStackLength = async (page: Page) =>
+  page.evaluate((storageKey) => {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      return 0;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.length : 0;
+  }, redoStateStackStorageKey);
+
+const dispatchRoomDoubleClick = async (room: import('@playwright/test').Locator) => {
+  await room.evaluate((element) => {
+    const buildMouseEvent = (type: 'click' | 'dblclick', detail: number) =>
+      new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        detail,
+      });
+
+    element.dispatchEvent(buildMouseEvent('click', 1));
+    element.dispatchEvent(buildMouseEvent('click', 2));
+    element.dispatchEvent(buildMouseEvent('dblclick', 2));
+  });
+};
+
 const seedStateWithTurns = async (
   page: Page,
   options: { turnCount: number; controlP1: boolean; controlP3: boolean },
@@ -91,6 +117,96 @@ const seedStateWithTurns = async (
     },
   );
 };
+
+const seedManualRedoScenario = async (page: Page): Promise<{ redoRoomName: string }> =>
+  page.evaluate(
+    async ({ gameStateStorageKeyArg, redoStateStackStorageKeyArg }) => {
+      const wasm = await import('/src/KdlRust/pkg/kill_doctor_lucky_rust.js');
+      await wasm.default();
+      const seededState = wasm.newDefaultGameState();
+      try {
+        const pieceIndexById: Record<string, number> = {
+          doctor: 0,
+          player1: 1,
+          player2: 2,
+          stranger1: 3,
+          stranger2: 4,
+        };
+        const boardRooms = JSON.parse(seededState.boardRoomsJson()) as Array<{
+          id?: number;
+          Id?: number;
+          name?: string;
+          Name?: string;
+        }>;
+        const roomNameById = new Map<number, string>();
+        for (const room of boardRooms) {
+          const roomIdRaw = typeof room.id === 'number' ? room.id : room.Id;
+          const roomNameRaw = typeof room.name === 'string' ? room.name : room.Name;
+          if (typeof roomIdRaw === 'number' && typeof roomNameRaw === 'string' && roomNameRaw.length > 0) {
+            roomNameById.set(Math.trunc(roomIdRaw), roomNameRaw);
+          }
+        }
+        const roomIds = Array.from(roomNameById.keys()).sort((a, b) => a - b);
+        const appliedTurns: Array<{ roomId: number; roomName: string; snapshot: string }> = [];
+
+        for (let turnIndex = 0; turnIndex < 3; turnIndex += 1) {
+          const currentPlayerPieceId = seededState.currentPlayerPieceId();
+          const currentPlayerIndex = pieceIndexById[currentPlayerPieceId];
+          if (currentPlayerIndex === undefined) {
+            throw new Error(`Unexpected current player piece id: ${currentPlayerPieceId}`);
+          }
+          const positions = Array.from(seededState.piecePositions(), (value) => Number(value));
+          const currentRoomId = positions[currentPlayerIndex];
+          let didApplyTurn = false;
+
+          for (const roomId of roomIds) {
+            if (roomId === currentRoomId) {
+              continue;
+            }
+            const roomName = roomNameById.get(roomId);
+            if (!roomName) {
+              continue;
+            }
+            const plan = [{ pieceId: currentPlayerPieceId, roomId }];
+            const validationError = seededState.validateTurnPlan(JSON.stringify(plan));
+            if (validationError) {
+              continue;
+            }
+            const applyError = seededState.applyTurnPlan(JSON.stringify(plan));
+            if (applyError) {
+              continue;
+            }
+            appliedTurns.push({
+              roomId,
+              roomName,
+              snapshot: seededState.exportStateJson(),
+            });
+            didApplyTurn = true;
+            break;
+          }
+
+          if (!didApplyTurn) {
+            throw new Error(`Failed to seed valid single-piece turn ${turnIndex + 1}.`);
+          }
+        }
+
+        window.localStorage.setItem(gameStateStorageKeyArg, appliedTurns[0].snapshot);
+        window.localStorage.setItem(
+          redoStateStackStorageKeyArg,
+          JSON.stringify([appliedTurns[2].snapshot, appliedTurns[1].snapshot]),
+        );
+        return {
+          redoRoomName: appliedTurns[1].roomName,
+        };
+      } finally {
+        seededState.free();
+      }
+    },
+    {
+      gameStateStorageKeyArg: gameStateStorageKey,
+      redoStateStackStorageKeyArg: redoStateStackStorageKey,
+    },
+  );
 
 test('redo remains available after refresh and does not disturb unrelated localStorage keys', async ({ page }) => {
   await page.goto('/');
@@ -339,4 +455,55 @@ test('Undo all and Redo all traverse the full available history', async ({ page 
   await expect(turnPlannerTitle).toContainText('Turn 4: P3');
   await expect(redoButton).toBeDisabled();
   await expect.poll(() => readNormalTurnCount(page)).toBe(4);
+});
+
+test('Undo all clears both AI control checkboxes', async ({ page }) => {
+  await page.goto('/');
+
+  await seedStateWithTurns(page, { turnCount: 2, controlP1: true, controlP3: true });
+  await page.reload();
+
+  const undoAllButton = page.getByRole('button', { name: 'Undo all' });
+  const controlRow = page.locator('.planner-line').filter({ hasText: 'Control' }).first();
+  const p1ControlCheckbox = controlRow.getByRole('checkbox', { name: 'P1' });
+  const p3ControlCheckbox = controlRow.getByRole('checkbox', { name: 'P3' });
+
+  await expect(p1ControlCheckbox).toBeChecked();
+  await expect(p3ControlCheckbox).toBeChecked();
+
+  await undoAllButton.click();
+
+  await expect(p1ControlCheckbox).not.toBeChecked();
+  await expect(p3ControlCheckbox).not.toBeChecked();
+});
+
+test('manually replaying the top redo turn preserves deeper redo history', async ({ page }) => {
+  await page.goto('/');
+
+  const seed = await seedManualRedoScenario(page);
+  await page.reload();
+
+  const redoButton = page.getByRole('button', { name: 'Redo', exact: true });
+  const turnPlannerTitle = page.locator('.planner-panel .planner-title').first();
+  const redoRoom = page.locator(`.room-layer rect[aria-label="${seed.redoRoomName}"]`).first();
+
+  await expect(turnPlannerTitle).toContainText('Turn 2/4');
+  await expect(redoButton).toBeEnabled();
+  await expect.poll(() => readRedoStackLength(page)).toBe(2);
+
+  await dispatchRoomDoubleClick(redoRoom);
+
+  await expect.poll(() => readNormalTurnCount(page)).toBe(3);
+  await expect(turnPlannerTitle).toContainText('Turn 3/4');
+  await expect(redoButton).toBeEnabled();
+  await expect.poll(() => readRedoStackLength(page)).toBe(1);
+
+  await redoButton.click();
+
+  await expect.poll(() => readNormalTurnCount(page)).toBe(4);
+  await expect(redoButton).toBeDisabled();
+  await expect.poll(() => readRedoStackLength(page)).toBe(0);
+  await expect(turnPlannerTitle).toContainText('Turn 4: P3');
+  await expect(turnPlannerTitle).not.toContainText('/');
+  await expect(page.locator('.planner-line').filter({ hasText: 'Planned' }).first()).toContainText('No moves planned.');
 });
