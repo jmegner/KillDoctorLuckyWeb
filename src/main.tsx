@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import '@/index.css';
 import App from '@/App.tsx';
 import wasmBindgenInit from '@/KdlRust/pkg/kill_doctor_lucky_rust';
+import '@/workers/treeSearchWorkerCore';
 
 wasmBindgenInit().then((/*wasm*/) => {
   createRoot(document.getElementById('root')!).render(

@@ -1,31 +1,12 @@
 import wasmBindgenInit, { initSync, newDefaultGameState } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
+import { analyzeTreeSearchRequest, type AnalyzeRequest, type WorkerResponse } from './treeSearchWorkerCore';
 
 type InitRequest = {
   type: 'init';
   wasmModule: WebAssembly.Module;
 };
 
-type AnalyzeRequest = {
-  type: 'analyze';
-  runId: number;
-  stateJson: string;
-  analysisLevel: number;
-};
-
 type WorkerRequest = InitRequest | AnalyzeRequest;
-
-type WorkerResponse =
-  | {
-      type: 'analysisResult';
-      runId: number;
-      analysisRaw: string;
-      previewRaw: string;
-    }
-  | {
-      type: 'analysisError';
-      runId: number;
-      message: string;
-    };
 
 let wasmReadyPromise: Promise<void> | null = null;
 let wasmModule: WebAssembly.Module | null = null;
@@ -65,40 +46,7 @@ workerScope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   }
   try {
     await ensureWasmReady();
-    const gameState = newDefaultGameState();
-    const importError = gameState.importStateJson(message.stateJson);
-    if (importError) {
-      const response: WorkerResponse = {
-        type: 'analysisError',
-        runId: message.runId,
-        message: importError,
-      };
-      workerScope.postMessage(response);
-      return;
-    }
-
-    const analysisLevel = Math.max(0, Math.trunc(message.analysisLevel));
-    const analysisRaw = gameState.findBestTurn(analysisLevel);
-    let previewRaw = '';
-    try {
-      const parsed = JSON.parse(analysisRaw) as {
-        isValid?: boolean;
-        suggestedTurn?: unknown;
-      };
-      if (parsed.isValid && Array.isArray(parsed.suggestedTurn)) {
-        previewRaw = gameState.previewTurnPlan(JSON.stringify(parsed.suggestedTurn));
-      }
-    } catch {
-      previewRaw = '';
-    }
-
-    const response: WorkerResponse = {
-      type: 'analysisResult',
-      runId: message.runId,
-      analysisRaw,
-      previewRaw,
-    };
-    workerScope.postMessage(response);
+    workerScope.postMessage(analyzeTreeSearchRequest(message, newDefaultGameState));
   } catch (error) {
     const messageText = error instanceof Error ? error.message : 'Tree search worker failed.';
     const response: WorkerResponse = {
