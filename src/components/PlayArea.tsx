@@ -3160,8 +3160,12 @@ function PlayArea() {
     submitPlan(nextMoves, nextOrder);
   };
 
-  const handleRoomDoubleClick = (roomId: number) => {
+  const handleRoomDoubleClick = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
     clearPendingEmptyRoomTouchTap();
+    if (isTouchLikeRoomClick(event)) {
+      clearPendingAutoSelectedRoomPiece();
+      return;
+    }
     const matchesPendingAutoSelection = roomClickMatchesPendingAutoSelection(roomId, selectedPieceId);
     clearPendingAutoSelectedRoomPiece();
     if (hasWinner) {
@@ -3851,7 +3855,7 @@ function PlayArea() {
                       className={roomClassName}
                       onClick={(event) => handleRoomClick(room.id, event)}
                       onMouseDown={(event) => handleRoomMouseDown(event, room.id)}
-                      onDoubleClick={() => handleRoomDoubleClick(room.id)}
+                      onDoubleClick={(event) => handleRoomDoubleClick(room.id, event)}
                       aria-label={room.name ?? `Room ${room.id}`}
                     />
                   );
