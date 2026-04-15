@@ -1,4 +1,4 @@
-import { useRef, useState, type MouseEvent } from 'react';
+import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import wasmBindgenInit, { newDefaultGameState, type GameStateHandle } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
 import boardData from '../data/boards/BoardAltDown.json';
 
@@ -47,6 +47,13 @@ type InfoPopupKind = 'rules' | 'turnPlanner' | 'ai' | 'playerInfoBox';
 type PendingAutoSelectedRoomPiece = {
   roomId: number;
   pieceId: PieceId;
+};
+
+type PendingRoomLongPress = {
+  pointerId: number;
+  roomId: number;
+  ready: boolean;
+  removeWindowListeners: () => void;
 };
 
 type PlayerStatsRow = {
@@ -105,6 +112,9 @@ const getPlayerStatsRows = (gameState: GameStateHandle | null) => {
     equivalentClovers: gameState.pieceEquivalentClovers(pieceId),
   }));
 };
+
+const roomLongPressThresholdMs = 1000;
+const suppressedRoomClickDurationMs = 750;
 
 type BestTurnResponse = {
   isValid: boolean;
@@ -1568,6 +1578,9 @@ function PlayArea() {
     sourceTurnCounter: number;
   } | null>(null);
   const pendingAutoSelectedRoomPieceRef = useRef<PendingAutoSelectedRoomPiece | null>(null);
+  const pendingRoomLongPressRef = useRef<PendingRoomLongPress | null>(null);
+  const roomLongPressTimerRef = useRef<number | null>(null);
+  const suppressedRoomClickRef = useRef<{ roomId: number; expiresAtMs: number } | null>(null);
   const animationSpeed = animationSpeeds[animationSpeedIndex];
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
   const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
@@ -1835,6 +1848,62 @@ function PlayArea() {
     pendingAutoSelectedRoomPieceRef.current = null;
   };
 
+  const clearRoomLongPressTimer = () => {
+    const timerId = roomLongPressTimerRef.current;
+    if (timerId !== null) {
+      window.clearTimeout(timerId);
+      roomLongPressTimerRef.current = null;
+    }
+  };
+
+  const clearPendingRoomLongPress = () => {
+    clearRoomLongPressTimer();
+    const pendingRoomLongPress = pendingRoomLongPressRef.current;
+    if (pendingRoomLongPress) {
+      pendingRoomLongPress.removeWindowListeners();
+      pendingRoomLongPressRef.current = null;
+    }
+  };
+
+  const suppressNextRoomClick = (roomId: number) => {
+    suppressedRoomClickRef.current = {
+      roomId,
+      expiresAtMs: Date.now() + suppressedRoomClickDurationMs,
+    };
+  };
+
+  const shouldSuppressRoomClick = (roomId: number) => {
+    const suppressedClick = suppressedRoomClickRef.current;
+    if (!suppressedClick) {
+      return false;
+    }
+    if (Date.now() > suppressedClick.expiresAtMs) {
+      suppressedRoomClickRef.current = null;
+      return false;
+    }
+    if (suppressedClick.roomId !== roomId) {
+      return false;
+    }
+    suppressedRoomClickRef.current = null;
+    return true;
+  };
+
+  const getRoomIdAtPoint = (clientX: number, clientY: number) => {
+    const roomElement = document
+      .elementsFromPoint(clientX, clientY)
+      .map((element) => element.closest('[data-room-id]'))
+      .find((element): element is Element => element !== null);
+    if (!roomElement) {
+      return null;
+    }
+    const roomIdText = roomElement.getAttribute('data-room-id');
+    if (!roomIdText) {
+      return null;
+    }
+    const roomId = Number(roomIdText);
+    return Number.isFinite(roomId) ? roomId : null;
+  };
+
   const roomClickMatchesPendingAutoSelection = (roomId: number, pieceId: PieceId | null) => {
     if (!pieceId) {
       return false;
@@ -1893,6 +1962,7 @@ function PlayArea() {
   };
 
   const handlePieceClick = (pieceId: PieceId) => {
+    clearPendingRoomLongPress();
     clearPendingAutoSelectedRoomPiece();
     if (hasWinner) {
       return;
@@ -1917,7 +1987,60 @@ function PlayArea() {
     setValidationMessage(null);
   };
 
+  const handleRoomPointerDown = (event: PointerEvent<SVGRectElement>, roomId: number) => {
+    if (event.pointerType !== 'touch') {
+      return;
+    }
+    clearPendingRoomLongPress();
+    const handleWindowPointerUp = (pointerEvent: globalThis.PointerEvent) => {
+      const pendingRoomLongPress = pendingRoomLongPressRef.current;
+      if (!pendingRoomLongPress || pointerEvent.pointerId !== pendingRoomLongPress.pointerId) {
+        return;
+      }
+      const releasedRoomId = getRoomIdAtPoint(pointerEvent.clientX, pointerEvent.clientY);
+      if (pendingRoomLongPress.ready && releasedRoomId !== null) {
+        suppressNextRoomClick(releasedRoomId);
+      }
+      const shouldTriggerLongPress =
+        pendingRoomLongPress.ready && releasedRoomId !== null && releasedRoomId === pendingRoomLongPress.roomId;
+      clearPendingRoomLongPress();
+      if (!shouldTriggerLongPress) {
+        return;
+      }
+      handleRoomDoubleClick(roomId);
+    };
+    const handleWindowPointerCancel = (pointerEvent: globalThis.PointerEvent) => {
+      const pendingRoomLongPress = pendingRoomLongPressRef.current;
+      if (!pendingRoomLongPress || pointerEvent.pointerId !== pendingRoomLongPress.pointerId) {
+        return;
+      }
+      clearPendingRoomLongPress();
+    };
+    window.addEventListener('pointerup', handleWindowPointerUp);
+    window.addEventListener('pointercancel', handleWindowPointerCancel);
+    pendingRoomLongPressRef.current = {
+      pointerId: event.pointerId,
+      roomId,
+      ready: false,
+      removeWindowListeners: () => {
+        window.removeEventListener('pointerup', handleWindowPointerUp);
+        window.removeEventListener('pointercancel', handleWindowPointerCancel);
+      },
+    };
+    roomLongPressTimerRef.current = window.setTimeout(() => {
+      const pendingRoomLongPress = pendingRoomLongPressRef.current;
+      if (!pendingRoomLongPress || pendingRoomLongPress.pointerId !== event.pointerId) {
+        return;
+      }
+      pendingRoomLongPress.ready = true;
+    }, roomLongPressThresholdMs);
+  };
+
   const handleRoomClick = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
+    clearPendingRoomLongPress();
+    if (shouldSuppressRoomClick(roomId)) {
+      return;
+    }
     if (hasWinner) {
       clearPendingAutoSelectedRoomPiece();
       return;
@@ -3070,6 +3193,7 @@ function PlayArea() {
   };
 
   const handleRoomDoubleClick = (roomId: number) => {
+    clearPendingRoomLongPress();
     const matchesPendingAutoSelection = roomClickMatchesPendingAutoSelection(roomId, selectedPieceId);
     clearPendingAutoSelectedRoomPiece();
     if (hasWinner) {
@@ -3591,6 +3715,7 @@ function PlayArea() {
             your normal player piece and submitting the plan, which can include previously planned moves.
             Double-clicking a room while a piece is selected is interpreted as 2 single clicks.
           </li>
+          <li>On touch devices, long-tapping a room for 1000ms does that same double-click action if you release on that room.</li>
           <li>Reminder: you can not move or select the Dr or the normal opponent piece.</li>
         </ul>
         <h4>Piece Indicators</h4>
@@ -3752,9 +3877,11 @@ function PlayArea() {
                       y={y1}
                       width={x2 - x1}
                       height={y2 - y1}
+                      data-room-id={room.id}
                       className={roomClassName}
                       onClick={(event) => handleRoomClick(room.id, event)}
                       onMouseDown={(event) => handleRoomMouseDown(event, room.id)}
+                      onPointerDown={(event) => handleRoomPointerDown(event, room.id)}
                       onDoubleClick={() => handleRoomDoubleClick(room.id)}
                       aria-label={room.name ?? `Room ${room.id}`}
                     />
