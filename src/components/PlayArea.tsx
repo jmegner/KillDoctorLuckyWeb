@@ -276,13 +276,6 @@ const analysisMaxTimeOptions = [
 const defaultAnalysisMaxTimeIndex = 1;
 const defaultMinAnalysisLevel = 2;
 const defaultMaxAnalysisLevel = 15;
-const touchDoubleTapGraceMs = 999;
-const currentDeviceUsesForgivingTouchDoubleTap = () => {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return false;
-  }
-  return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-};
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 const isSetupNormalPlayerPieceId = (value: string): value is NormalPlayerPieceId =>
   normalPlayerPieceIds.includes(value as NormalPlayerPieceId);
@@ -360,12 +353,6 @@ type SetupPrefsDraft = {
   stranger2Strength: string;
   turnId: string;
   currentPlayerPieceId: NormalPlayerPieceId;
-};
-
-type PendingEmptyRoomTouchTap = {
-  roomId: number;
-  startedAtMs: number;
-  turnCounterAtTap: number;
 };
 
 type StepDirection = 'down' | 'up';
@@ -1580,7 +1567,6 @@ function PlayArea() {
     order: PieceId[];
     sourceTurnCounter: number;
   } | null>(null);
-  const pendingEmptyRoomTouchTapRef = useRef<PendingEmptyRoomTouchTap | null>(null);
   const pendingAutoSelectedRoomPieceRef = useRef<PendingAutoSelectedRoomPiece | null>(null);
   const animationSpeed = animationSpeeds[animationSpeedIndex];
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
@@ -1590,7 +1576,6 @@ function PlayArea() {
   const currentNormalTurnCount = gameState
     ? (parseNormalTurnCountFromSnapshotJson(gameState.exportStateJson()) ?? 1)
     : 1;
-  const showForgivingTouchDoubleTapHelp = currentDeviceUsesForgivingTouchDoubleTap();
   const highestRememberedUndoneTurnCount = redoStateStack.reduce((highest, snapshot) => {
     const snapshotNormalTurnCount = parseNormalTurnCountFromSnapshotJson(snapshot);
     return snapshotNormalTurnCount === null ? highest : Math.max(highest, snapshotNormalTurnCount);
@@ -1846,10 +1831,6 @@ function PlayArea() {
     return null;
   };
 
-  const clearPendingEmptyRoomTouchTap = () => {
-    pendingEmptyRoomTouchTapRef.current = null;
-  };
-
   const clearPendingAutoSelectedRoomPiece = () => {
     pendingAutoSelectedRoomPieceRef.current = null;
   };
@@ -1860,65 +1841,6 @@ function PlayArea() {
     }
     const pendingAutoSelection = pendingAutoSelectedRoomPieceRef.current;
     return pendingAutoSelection?.roomId === roomId && pendingAutoSelection.pieceId === pieceId;
-  };
-
-  const isTouchLikeRoomClick = (event?: MouseEvent<SVGRectElement>) => {
-    const nativeEvent = event?.nativeEvent as
-      | (globalThis.MouseEvent & {
-          pointerType?: string;
-          sourceCapabilities?: { firesTouchEvents?: boolean };
-        })
-      | undefined;
-    if (!nativeEvent) {
-      return false;
-    }
-    if (nativeEvent.pointerType === 'touch') {
-      return true;
-    }
-    if (nativeEvent.sourceCapabilities?.firesTouchEvents) {
-      return true;
-    }
-    if (currentDeviceUsesForgivingTouchDoubleTap()) {
-      return true;
-    }
-    return false;
-  };
-
-  const rememberForgivingTouchTap = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
-    if (!isTouchLikeRoomClick(event)) {
-      clearPendingEmptyRoomTouchTap();
-      return;
-    }
-    pendingEmptyRoomTouchTapRef.current = {
-      roomId,
-      startedAtMs: Date.now(),
-      turnCounterAtTap: turnCounterRef.current,
-    };
-  };
-
-  // Intentionally timer-free: no delayed callbacks means fewer places that must remember to cancel state.
-  const tryConsumeForgivingTouchDoubleTap = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
-    if (!isTouchLikeRoomClick(event)) {
-      clearPendingEmptyRoomTouchTap();
-      return false;
-    }
-
-    const pendingTouchTap = pendingEmptyRoomTouchTapRef.current;
-    if (
-      pendingTouchTap &&
-      pendingTouchTap.roomId === roomId &&
-      pendingTouchTap.turnCounterAtTap === turnCounterRef.current &&
-      Date.now() - pendingTouchTap.startedAtMs <= touchDoubleTapGraceMs
-    ) {
-      clearPendingEmptyRoomTouchTap();
-      if (selectedPieceId) {
-        setSelectedPieceId(null);
-      }
-      submitCurrentPlayerMoveToRoom(roomId);
-      return true;
-    }
-
-    return false;
   };
 
   const submitCurrentPlayerMoveToRoom = (roomId: number) => {
@@ -1971,7 +1893,6 @@ function PlayArea() {
   };
 
   const handlePieceClick = (pieceId: PieceId) => {
-    clearPendingEmptyRoomTouchTap();
     clearPendingAutoSelectedRoomPiece();
     if (hasWinner) {
       return;
@@ -2001,11 +1922,7 @@ function PlayArea() {
       clearPendingAutoSelectedRoomPiece();
       return;
     }
-    if (tryConsumeForgivingTouchDoubleTap(roomId, event)) {
-      clearPendingAutoSelectedRoomPiece();
-      return;
-    }
-    if (event?.detail && event.detail > 1 && !isTouchLikeRoomClick(event)) {
+    if (event?.detail && event.detail > 1) {
       if (!selectedPieceId || roomClickMatchesPendingAutoSelection(roomId, selectedPieceId)) {
         return;
       }
@@ -2013,22 +1930,15 @@ function PlayArea() {
     if (!selectedPieceId) {
       const preferredPiece = getPreferredSelectablePieceInRoom(roomId);
       if (preferredPiece) {
-        rememberForgivingTouchTap(roomId, event);
         pendingAutoSelectedRoomPieceRef.current = { roomId, pieceId: preferredPiece };
         setSelectedPieceId(preferredPiece);
         setValidationMessage(null);
         return;
       }
       clearPendingAutoSelectedRoomPiece();
-      if (isTouchLikeRoomClick(event)) {
-        rememberForgivingTouchTap(roomId, event);
-        return;
-      }
-      clearPendingEmptyRoomTouchTap();
       setValidationMessage('Select a piece, then choose a destination room.');
       return;
     }
-    clearPendingEmptyRoomTouchTap();
     handleSelectedPieceDestination(roomId);
   };
 
@@ -3132,7 +3042,6 @@ function PlayArea() {
   };
 
   const handleRoomMouseDown = (event: MouseEvent<SVGRectElement>, roomId: number) => {
-    clearPendingEmptyRoomTouchTap();
     if (hasWinner) {
       return;
     }
@@ -3160,12 +3069,7 @@ function PlayArea() {
     submitPlan(nextMoves, nextOrder);
   };
 
-  const handleRoomDoubleClick = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
-    clearPendingEmptyRoomTouchTap();
-    if (isTouchLikeRoomClick(event)) {
-      clearPendingAutoSelectedRoomPiece();
-      return;
-    }
+  const handleRoomDoubleClick = (roomId: number) => {
     const matchesPendingAutoSelection = roomClickMatchesPendingAutoSelection(roomId, selectedPieceId);
     clearPendingAutoSelectedRoomPiece();
     if (hasWinner) {
@@ -3590,7 +3494,6 @@ function PlayArea() {
   }
 
   const handleBoardMouseDown = (event: MouseEvent<SVGSVGElement>) => {
-    clearPendingEmptyRoomTouchTap();
     if (hasWinner) {
       return;
     }
@@ -3658,9 +3561,6 @@ function PlayArea() {
     ) : infoPopup === 'turnPlanner' ? (
       <>
         <h4>Movement / Turn Planning</h4>
-        {showForgivingTouchDoubleTapHelp ? (
-          <p>(Your device is detected as a touch device with deliberately laxer {touchDoubleTapGraceMs} ms double tap.)</p>
-        ) : null}
         <p>
           There are a few ways to choose movements for your piece and the strangers. You can click the "Submit" button
           to submit your plan, but there are other ways via middle clicks and double clicks to submit your plan. Since
@@ -3855,7 +3755,7 @@ function PlayArea() {
                       className={roomClassName}
                       onClick={(event) => handleRoomClick(room.id, event)}
                       onMouseDown={(event) => handleRoomMouseDown(event, room.id)}
-                      onDoubleClick={(event) => handleRoomDoubleClick(room.id, event)}
+                      onDoubleClick={() => handleRoomDoubleClick(room.id)}
                       aria-label={room.name ?? `Room ${room.id}`}
                     />
                   );
