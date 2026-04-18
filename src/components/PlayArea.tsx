@@ -3631,6 +3631,10 @@ function PlayArea() {
     handleSubmit();
   };
 
+  const handleBoardContextMenu = (event: MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+  };
+
   const currentPlayerColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].color : 'var(--line)';
   const currentPlayerTextColor = currentPlayerPieceId ? pieceConfig[currentPlayerPieceId].textColor : 'var(--ink)';
   const boardOutlineColor = animatedPieces ? '#8c8c8c' : currentPlayerColor;
@@ -3854,7 +3858,7 @@ function PlayArea() {
           </button>
         </div>
         <div className="board-shell" style={{ borderColor: boardOutlineColor }}>
-          <div className="board">
+          <div className="board" onContextMenu={handleBoardContextMenu}>
             <svg
               viewBox={`0 0 ${boardWidth} ${boardHeight}`}
               role="img"

@@ -39,6 +39,17 @@ const dispatchRoomClick = async (room: import('@playwright/test').Locator) => {
   });
 };
 
+const roomSuppressesContextMenu = async (room: import('@playwright/test').Locator) =>
+  room.evaluate((element) => {
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    });
+    element.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+
 const dispatchRoomDoubleClick = async (room: import('@playwright/test').Locator) => {
   await room.evaluate((element) => {
     const buildMouseEvent = (type: 'click' | 'dblclick', detail: number) =>
@@ -346,6 +357,13 @@ test('double-clicking a stranger room preserves the stranger plan while submitti
   await expect(plannedLine).toContainText('No moves planned.');
   await expect.poll(() => readStoredPieceRoom(page, seed.currentPlayerPieceId)).toBe(seed.strangerRoomId);
   await expect.poll(() => readStoredPieceRoom(page, seed.strangerPieceId)).toBe(seed.strangerDestinationRoomId);
+});
+
+test('board rooms suppress the browser context menu', async ({ page }) => {
+  await page.goto('/');
+
+  const room = page.locator('.room-layer rect').first();
+  await expect.poll(() => roomSuppressesContextMenu(room)).toBe(true);
 });
 
 test('long-pressing a stranger room preserves the stranger plan while submitting the current player move', async ({
