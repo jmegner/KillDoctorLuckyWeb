@@ -303,6 +303,9 @@ const fallbackSetupPrefs = {
   moveCards: 2,
   weaponCards: 2,
   failureCards: 4,
+  player2MoveCards: 2,
+  player2WeaponCards: 2,
+  player2FailureCards: 4,
   doctorRoomId: defaultSetupRoomId,
   player1RoomId: defaultSetupRoomId,
   stranger1RoomId: defaultSetupRoomId,
@@ -335,6 +338,9 @@ type SetupPrefs = {
   moveCards: number;
   weaponCards: number;
   failureCards: number;
+  player2MoveCards: number;
+  player2WeaponCards: number;
+  player2FailureCards: number;
   doctorRoomId: number;
   player1RoomId: number;
   stranger1RoomId: number;
@@ -352,6 +358,9 @@ type SetupPrefsDraft = {
   moveCards: string;
   weaponCards: string;
   failureCards: string;
+  player2MoveCards: string;
+  player2WeaponCards: string;
+  player2FailureCards: string;
   doctorRoomId: string;
   player1RoomId: string;
   stranger1RoomId: string;
@@ -366,6 +375,36 @@ type SetupPrefsDraft = {
 };
 
 type StepDirection = 'down' | 'up';
+
+const treeSearchWorkerUrl = new URL('../workers/treeSearchWorker.ts', import.meta.url);
+const createTreeSearchWorker = () => {
+  if (typeof Worker === 'undefined') {
+    return null;
+  }
+  try {
+    return new Worker(treeSearchWorkerUrl, { type: 'module' });
+  } catch {
+    return null;
+  }
+};
+let idleAnalysisWorker: Worker | null = createTreeSearchWorker();
+const takeIdleAnalysisWorker = () => {
+  if (idleAnalysisWorker) {
+    const worker = idleAnalysisWorker;
+    idleAnalysisWorker = null;
+    return worker;
+  }
+  return createTreeSearchWorker();
+};
+const replaceIdleAnalysisWorker = () => {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return;
+  }
+  if (idleAnalysisWorker) {
+    return;
+  }
+  idleAnalysisWorker = createTreeSearchWorker();
+};
 
 const parseNormalTurnCountFromSnapshotJson = (snapshotJson: string): number | null => {
   try {
@@ -390,6 +429,8 @@ const parseNormalTurnCountFromSnapshotJson = (snapshotJson: string): number | nu
 const clampAnimationSpeedIndex = (value: number) => Math.min(animationSpeeds.length - 1, Math.max(0, value));
 const clampAnalysisMaxTimeIndex = (value: number) => Math.min(analysisMaxTimeOptions.length - 1, Math.max(0, value));
 const isFiniteNonNegative = (value: number) => Number.isFinite(value) && value >= 0;
+const formatSetupCardDraft = (value: number) =>
+  (Number.isInteger(value) ? value.toString() : value.toFixed(2)).replace(/(?:\.0+|(\.\d*?[1-9])0+)$/, '$1');
 const parseMinAnalysisLevelDraft = (draft: string) => {
   const parsed = Number(draft);
   if (!Number.isFinite(parsed) || parsed < 0) {
@@ -406,11 +447,13 @@ const parseMaxAnalysisLevelDraft = (draft: string) => {
 };
 const isValidBoardRoomId = (value: number) => Number.isInteger(value) && boardRoomById.has(value);
 const isFiniteNonNegativeInteger = (value: number) => Number.isFinite(value) && value >= 0 && Number.isInteger(value);
-const formatSetupCardDraft = (value: number) => (Number.isInteger(value) ? value.toString() : value.toFixed(2));
 const toSetupPrefsDraft = (prefs: SetupPrefs): SetupPrefsDraft => ({
   moveCards: formatSetupCardDraft(prefs.moveCards),
   weaponCards: formatSetupCardDraft(prefs.weaponCards),
   failureCards: formatSetupCardDraft(prefs.failureCards),
+  player2MoveCards: formatSetupCardDraft(prefs.player2MoveCards),
+  player2WeaponCards: formatSetupCardDraft(prefs.player2WeaponCards),
+  player2FailureCards: formatSetupCardDraft(prefs.player2FailureCards),
   doctorRoomId: prefs.doctorRoomId.toString(),
   player1RoomId: prefs.player1RoomId.toString(),
   stranger1RoomId: prefs.stranger1RoomId.toString(),
@@ -428,6 +471,9 @@ const parseSetupPrefsDraft = (draft: SetupPrefsDraft): SetupPrefs | null => {
     moveCards: Number(draft.moveCards),
     weaponCards: Number(draft.weaponCards),
     failureCards: Number(draft.failureCards),
+    player2MoveCards: Number(draft.player2MoveCards),
+    player2WeaponCards: Number(draft.player2WeaponCards),
+    player2FailureCards: Number(draft.player2FailureCards),
     doctorRoomId: Number(draft.doctorRoomId),
     player1RoomId: Number(draft.player1RoomId),
     stranger1RoomId: Number(draft.stranger1RoomId),
@@ -443,6 +489,9 @@ const parseSetupPrefsDraft = (draft: SetupPrefsDraft): SetupPrefs | null => {
   return isFiniteNonNegative(parsed.moveCards) &&
     isFiniteNonNegative(parsed.weaponCards) &&
     isFiniteNonNegative(parsed.failureCards) &&
+    isFiniteNonNegative(parsed.player2MoveCards) &&
+    isFiniteNonNegative(parsed.player2WeaponCards) &&
+    isFiniteNonNegative(parsed.player2FailureCards) &&
     isValidBoardRoomId(parsed.doctorRoomId) &&
     isValidBoardRoomId(parsed.player1RoomId) &&
     isValidBoardRoomId(parsed.stranger1RoomId) &&
@@ -461,11 +510,15 @@ const parseSetupPrefsDraft = (draft: SetupPrefsDraft): SetupPrefs | null => {
 const stepNonNegativeText = (raw: string, direction: StepDirection, step: number) => {
   const parsed = Number(raw);
   const base = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
-  const next = direction === 'down' ? Math.max(0, base - step) : base + step;
   if (step >= 1) {
-    return Math.round(next).toString();
+    if (Number.isInteger(base)) {
+      const next = direction === 'down' ? Math.max(0, base - step) : base + step;
+      return Math.trunc(next).toString();
+    }
+    return (direction === 'down' ? Math.floor(base) : Math.ceil(base)).toString();
   }
-  return next.toFixed(2);
+  const next = direction === 'down' ? Math.max(0, base - step) : base + step;
+  return formatSetupCardDraft(next);
 };
 const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs): SetupPrefs => {
   const moveCards = isFiniteNonNegative(candidate.moveCards ?? NaN)
@@ -477,6 +530,15 @@ const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs
   const failureCards = isFiniteNonNegative(candidate.failureCards ?? NaN)
     ? (candidate.failureCards as number)
     : fallback.failureCards;
+  const player2MoveCards = isFiniteNonNegative(candidate.player2MoveCards ?? NaN)
+    ? (candidate.player2MoveCards as number)
+    : moveCards;
+  const player2WeaponCards = isFiniteNonNegative(candidate.player2WeaponCards ?? NaN)
+    ? (candidate.player2WeaponCards as number)
+    : weaponCards;
+  const player2FailureCards = isFiniteNonNegative(candidate.player2FailureCards ?? NaN)
+    ? (candidate.player2FailureCards as number)
+    : failureCards;
   const doctorRoomId = isValidBoardRoomId(candidate.doctorRoomId ?? NaN)
     ? (candidate.doctorRoomId as number)
     : fallback.doctorRoomId;
@@ -514,6 +576,9 @@ const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs
     moveCards,
     weaponCards,
     failureCards,
+    player2MoveCards,
+    player2WeaponCards,
+    player2FailureCards,
     doctorRoomId,
     player1RoomId,
     stranger1RoomId,
@@ -529,9 +594,9 @@ const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs
 };
 const snapCardQuantityToThirtySeconds = (value: number) => Math.round(value * 32) / 32;
 const shouldUseAdvancedSetup = (prefs: SetupPrefs, defaults: SetupPrefs) =>
-  !Number.isInteger(prefs.moveCards) ||
-  !Number.isInteger(prefs.weaponCards) ||
-  !Number.isInteger(prefs.failureCards) ||
+  prefs.player2MoveCards !== prefs.moveCards ||
+  prefs.player2WeaponCards !== prefs.weaponCards ||
+  prefs.player2FailureCards !== prefs.failureCards ||
   prefs.doctorRoomId !== defaults.doctorRoomId ||
   prefs.player1RoomId !== defaults.player1RoomId ||
   prefs.stranger1RoomId !== defaults.stranger1RoomId ||
@@ -547,6 +612,15 @@ const buildSetupPrefsForStart = (prefs: SetupPrefs, defaults: SetupPrefs, useAdv
   moveCards: snapCardQuantityToThirtySeconds(prefs.moveCards),
   weaponCards: snapCardQuantityToThirtySeconds(prefs.weaponCards),
   failureCards: snapCardQuantityToThirtySeconds(prefs.failureCards),
+  player2MoveCards: useAdvanced
+    ? snapCardQuantityToThirtySeconds(prefs.player2MoveCards)
+    : snapCardQuantityToThirtySeconds(prefs.moveCards),
+  player2WeaponCards: useAdvanced
+    ? snapCardQuantityToThirtySeconds(prefs.player2WeaponCards)
+    : snapCardQuantityToThirtySeconds(prefs.weaponCards),
+  player2FailureCards: useAdvanced
+    ? snapCardQuantityToThirtySeconds(prefs.player2FailureCards)
+    : snapCardQuantityToThirtySeconds(prefs.failureCards),
   doctorRoomId: useAdvanced ? prefs.doctorRoomId : defaults.doctorRoomId,
   player1RoomId: useAdvanced ? prefs.player1RoomId : defaults.player1RoomId,
   stranger1RoomId: useAdvanced ? prefs.stranger1RoomId : defaults.stranger1RoomId,
@@ -2079,13 +2153,19 @@ function PlayArea() {
     analysisTimingRef.current = null;
   };
 
-  const stopAnalysisWorker = () => {
+  const stopAnalysisWorker = (options?: { replace?: boolean }) => {
     if (!analysisWorkerRef.current) {
+      if (options?.replace) {
+        replaceIdleAnalysisWorker();
+      }
       return;
     }
     analysisWorkerRef.current.terminate();
     analysisWorkerRef.current = null;
     analysisWorkerInitializedRef.current = false;
+    if (options?.replace) {
+      replaceIdleAnalysisWorker();
+    }
   };
 
   const stopAnalysisRun = (
@@ -2384,9 +2464,8 @@ function PlayArea() {
 
     let worker = analysisWorkerRef.current;
     if (!worker) {
-      try {
-        worker = new Worker(new URL('../workers/treeSearchWorker.ts', import.meta.url), { type: 'module' });
-      } catch {
+      worker = takeIdleAnalysisWorker();
+      if (!worker) {
         debugAnalysisStopReason(initialAnalysisLevel, 'analysis worker failed to start');
         stopAnalysisRun('Failed to start analysis worker.');
         return;
@@ -2659,7 +2738,8 @@ function PlayArea() {
     }
     const levelAtCancel = analysisRunningLevelRef.current;
     analysisRunIdRef.current += 1;
-    stopAnalysisRun(`cancelled during L${levelAtCancel ?? '?'}`);
+    stopAnalysisRun(`cancelled during L${levelAtCancel ?? '?'}`, { terminateWorker: false });
+    stopAnalysisWorker({ replace: true });
   };
 
   const handleThink = () => {
@@ -3085,8 +3165,17 @@ function PlayArea() {
     }
   };
 
-  const handleSetupStep = (field: 'moveCards' | 'weaponCards' | 'failureCards', direction: StepDirection) => {
-    handleSetupDraftChange(field, stepNonNegativeText(setupPrefsDraft[field], direction, setupAdvanced ? 0.01 : 1));
+  const handleSetupStep = (
+    field:
+      | 'moveCards'
+      | 'weaponCards'
+      | 'failureCards'
+      | 'player2MoveCards'
+      | 'player2WeaponCards'
+      | 'player2FailureCards',
+    direction: StepDirection,
+  ) => {
+    handleSetupDraftChange(field, stepNonNegativeText(setupPrefsDraft[field], direction, 1));
   };
 
   const handleRestoreSetupDefaults = () => {
@@ -3111,6 +3200,9 @@ function PlayArea() {
       setupToStart.moveCards,
       setupToStart.weaponCards,
       setupToStart.failureCards,
+      setupToStart.player2MoveCards,
+      setupToStart.player2WeaponCards,
+      setupToStart.player2FailureCards,
       setupToStart.doctorRoomId,
       setupToStart.player1RoomId,
       setupToStart.stranger1RoomId,
@@ -4593,11 +4685,11 @@ function PlayArea() {
                 <span>Advanced</span>
               </label>
               <label className="setup-popup-row">
-                <span>Move Cards (Normal)</span>
+                <span>{setupAdvanced ? 'Move Cards (P1)' : 'Move Cards (Normal)'}</span>
                 <div className="number-stepper">
                   <input
                     className="number-stepper-input"
-                    aria-label="Move cards"
+                    aria-label={setupAdvanced ? 'P1 move cards' : 'Normal move cards'}
                     type="number"
                     min="0"
                     step={setupAdvanced ? '0.01' : '1'}
@@ -4623,11 +4715,11 @@ function PlayArea() {
                 </div>
               </label>
               <label className="setup-popup-row">
-                <span>Weapon Cards (Normal)</span>
+                <span>{setupAdvanced ? 'Weapon Cards (P1)' : 'Weapon Cards (Normal)'}</span>
                 <div className="number-stepper">
                   <input
                     className="number-stepper-input"
-                    aria-label="Weapon cards"
+                    aria-label={setupAdvanced ? 'P1 weapon cards' : 'Normal weapon cards'}
                     type="number"
                     min="0"
                     step={setupAdvanced ? '0.01' : '1'}
@@ -4653,11 +4745,11 @@ function PlayArea() {
                 </div>
               </label>
               <label className="setup-popup-row">
-                <span>Failure Cards (Normal)</span>
+                <span>{setupAdvanced ? 'Failure Cards (P1)' : 'Failure Cards (Normal)'}</span>
                 <div className="number-stepper">
                   <input
                     className="number-stepper-input"
-                    aria-label="Failure cards"
+                    aria-label={setupAdvanced ? 'P1 failure cards' : 'Normal failure cards'}
                     type="number"
                     min="0"
                     step={setupAdvanced ? '0.01' : '1'}
@@ -4684,6 +4776,96 @@ function PlayArea() {
               </label>
               {setupAdvanced && (
                 <>
+                  <label className="setup-popup-row">
+                    <span>Move Cards (P3)</span>
+                    <div className="number-stepper">
+                      <input
+                        className="number-stepper-input"
+                        aria-label="P3 move cards"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={setupPrefsDraft.player2MoveCards}
+                        onChange={(event) => handleSetupDraftChange('player2MoveCards', event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupStep('player2MoveCards', 'down')}
+                        aria-label="Decrease P3 move cards"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupStep('player2MoveCards', 'up')}
+                        aria-label="Increase P3 move cards"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </label>
+                  <label className="setup-popup-row">
+                    <span>Weapon Cards (P3)</span>
+                    <div className="number-stepper">
+                      <input
+                        className="number-stepper-input"
+                        aria-label="P3 weapon cards"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={setupPrefsDraft.player2WeaponCards}
+                        onChange={(event) => handleSetupDraftChange('player2WeaponCards', event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupStep('player2WeaponCards', 'down')}
+                        aria-label="Decrease P3 weapon cards"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupStep('player2WeaponCards', 'up')}
+                        aria-label="Increase P3 weapon cards"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </label>
+                  <label className="setup-popup-row">
+                    <span>Failure Cards (P3)</span>
+                    <div className="number-stepper">
+                      <input
+                        className="number-stepper-input"
+                        aria-label="P3 failure cards"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={setupPrefsDraft.player2FailureCards}
+                        onChange={(event) => handleSetupDraftChange('player2FailureCards', event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupStep('player2FailureCards', 'down')}
+                        aria-label="Decrease P3 failure cards"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupStep('player2FailureCards', 'up')}
+                        aria-label="Increase P3 failure cards"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </label>
                   <p className="setup-popup-note">Card amounts entered in hundredths snap to the nearest 1/32 on start.</p>
                   <label className="setup-popup-row">
                     <span>Dr Room</span>

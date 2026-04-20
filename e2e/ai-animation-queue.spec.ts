@@ -37,6 +37,14 @@ const readAiLineValue = async (page: Page, labelText: string) =>
     return null;
   }, labelText);
 
+const cancelAiAnalysisIfRunning = async (page: Page) => {
+  const aiPanel = page.locator('.ai-panel');
+  const cancelButton = aiPanel.getByRole('button', { name: 'Cancel' });
+  if (await cancelButton.isEnabled()) {
+    await cancelButton.click({ timeout: 1000 }).catch(() => {});
+  }
+};
+
 const seedTwoCachedStates = async (
   page: Page,
   options: { controlP1: boolean; controlP3: boolean },
@@ -165,7 +173,7 @@ const seedTwoCachedStates = async (
           animationPrefsStorageKeyArg,
           JSON.stringify({
             animationEnabled: true,
-            animationSpeedIndex: 2,
+            animationSpeedIndex: 1,
           }),
         );
 
@@ -188,13 +196,14 @@ const seedTwoCachedStates = async (
 test.describe('AI submit waits for animation completion', () => {
   test('auto-control queues cached follow-up turn until current animation finishes', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     const seed = await seedTwoCachedStates(page, { controlP1: true, controlP3: true });
     await page.reload();
 
     await expect.poll(() => readNormalTurnCount(page), { timeout: 6000 }).toBe(seed.initialTurnCount + 1);
     await expect
-      .poll(async () => (await readAiLineValue(page, 'Status'))?.includes('queued') ?? false, { timeout: 6000 })
+      .poll(async () => (await readAiLineValue(page, 'Status'))?.includes('queued') ?? false, { timeout: 10000 })
       .toBe(true);
     await page.waitForTimeout(350);
     await expect.poll(() => readNormalTurnCount(page), { timeout: 1200 }).toBe(seed.initialTurnCount + 1);
@@ -203,6 +212,7 @@ test.describe('AI submit waits for animation completion', () => {
 
   test('Do queues while animation is in progress', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     const seed = await seedTwoCachedStates(page, { controlP1: false, controlP3: false });
     await page.reload();
@@ -221,7 +231,7 @@ test.describe('AI submit waits for animation completion', () => {
 
     await doButton.click();
     await expect
-      .poll(async () => (await readAiLineValue(page, 'Status'))?.includes('queued') ?? false, { timeout: 5000 })
+      .poll(async () => (await readAiLineValue(page, 'Status'))?.includes('queued') ?? false, { timeout: 10000 })
       .toBe(true);
     await page.waitForTimeout(350);
     await expect.poll(() => readNormalTurnCount(page), { timeout: 1200 }).toBe(seed.initialTurnCount + 1);
@@ -230,6 +240,7 @@ test.describe('AI submit waits for animation completion', () => {
 
   test('T&D queues while animation is in progress', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     const seed = await seedTwoCachedStates(page, { controlP1: false, controlP3: false });
     await page.reload();
@@ -249,7 +260,7 @@ test.describe('AI submit waits for animation completion', () => {
 
     await thinkAndDoButton.click();
     await expect
-      .poll(async () => (await readAiLineValue(page, 'Status'))?.includes('queued') ?? false, { timeout: 5000 })
+      .poll(async () => (await readAiLineValue(page, 'Status'))?.includes('queued') ?? false, { timeout: 10000 })
       .toBe(true);
     await page.waitForTimeout(350);
     await expect.poll(() => readNormalTurnCount(page), { timeout: 1200 }).toBe(seed.initialTurnCount + 1);

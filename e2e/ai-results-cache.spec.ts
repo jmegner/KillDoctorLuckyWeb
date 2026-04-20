@@ -170,6 +170,7 @@ const cancelAiAnalysisIfRunning = async (page: Page) => {
 test.describe('AI results cache', () => {
   test('stores analysis results for a never-before-seen game state', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     const seededStateJson = await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 2,
@@ -199,6 +200,7 @@ test.describe('AI results cache', () => {
 
   test('uses cached analysis level and suggestion at analysis start for previously analyzed state', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     const staleLastUsedAtMs = 1700000000000;
     const seededStateJson = await seedDefaultStateAndAiSetup(page, {
@@ -236,6 +238,7 @@ test.describe('AI results cache', () => {
 
   test('Clear Cache removes persisted/in-memory cache so next analysis starts from min depth', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 0,
@@ -274,6 +277,7 @@ test.describe('AI results cache', () => {
 
   test('Max Turn Depth defaults to 15 and +/- buttons adjust it', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     await page.evaluate((key) => {
       window.localStorage.removeItem(key);
@@ -295,6 +299,7 @@ test.describe('AI results cache', () => {
 
   test('stops immediately when cached result already meets max turn depth', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 0,
@@ -329,6 +334,7 @@ test.describe('AI results cache', () => {
 
   test('stops immediately when cached result already found a loss and shows done, loss on board', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     const seededStateJson = await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 0,
@@ -369,6 +375,7 @@ test.describe('AI results cache', () => {
 
   test('stops when it completes max turn depth during analysis', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     const seededStateJson = await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 2,
@@ -390,6 +397,7 @@ test.describe('AI results cache', () => {
 
   test('ignores max turn depth when min turn depth is greater', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 13,
@@ -419,6 +427,7 @@ test.describe('AI results cache', () => {
 
   test('fresh analysis worker can start while offline after the page is already loaded', async ({ page }) => {
     await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
 
     await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 1,

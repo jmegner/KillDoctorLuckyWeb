@@ -178,6 +178,12 @@ struct NormalSetup {
     weapon_cards: f64,
     #[serde(default = "default_failure_cards")]
     failure_cards: f64,
+    #[serde(default = "default_unset_card_quantity")]
+    player2_move_cards: f64,
+    #[serde(default = "default_unset_card_quantity")]
+    player2_weapon_cards: f64,
+    #[serde(default = "default_unset_card_quantity")]
+    player2_failure_cards: f64,
     #[serde(default)]
     doctor_room_id: usize,
     #[serde(default)]
@@ -238,11 +244,18 @@ fn default_turn_id() -> i32 {
     1
 }
 
+fn default_unset_card_quantity() -> f64 {
+    -1.0
+}
+
 fn default_normal_setup() -> NormalSetup {
     NormalSetup {
         move_cards: default_move_cards(),
         weapon_cards: default_weapon_cards(),
         failure_cards: default_failure_cards(),
+        player2_move_cards: default_move_cards(),
+        player2_weapon_cards: default_weapon_cards(),
+        player2_failure_cards: default_failure_cards(),
         doctor_room_id: 0,
         player1_room_id: 0,
         stranger1_room_id: 0,
@@ -278,6 +291,15 @@ fn normalize_normal_setup(
     if normalized.stranger2_room_id == 0 {
         normalized.stranger2_room_id = common.board.player_start_room_id.0;
     }
+    if normalized.player2_move_cards < 0.0 {
+        normalized.player2_move_cards = normalized.move_cards;
+    }
+    if normalized.player2_weapon_cards < 0.0 {
+        normalized.player2_weapon_cards = normalized.weapon_cards;
+    }
+    if normalized.player2_failure_cards < 0.0 {
+        normalized.player2_failure_cards = normalized.failure_cards;
+    }
 
     normalized
 }
@@ -290,6 +312,9 @@ fn validate_normal_setup(
         ("moveCards", setup.move_cards),
         ("weaponCards", setup.weapon_cards),
         ("failureCards", setup.failure_cards),
+        ("player2MoveCards", setup.player2_move_cards),
+        ("player2WeaponCards", setup.player2_weapon_cards),
+        ("player2FailureCards", setup.player2_failure_cards),
     ];
     for (label, value) in checks {
         if !value.is_finite() {
@@ -369,16 +394,14 @@ fn apply_normal_setup_to_state(
         .to_player_id()
         .unwrap_or(core::rule_helper::SIDE_A_NORMAL_PLAYER_ID);
 
-    for player_id in state.common.player_ids() {
-        if state.common.get_player_type(player_id) != core::player::PlayerType::Normal {
-            continue;
-        }
-
-        let idx = player_id.0;
-        state.player_move_cards[idx] = normal_setup.move_cards;
-        state.player_weapons[idx] = normal_setup.weapon_cards;
-        state.player_failures[idx] = normal_setup.failure_cards;
-    }
+    let side_a_idx = core::rule_helper::SIDE_A_NORMAL_PLAYER_ID.0;
+    state.player_move_cards[side_a_idx] = normal_setup.move_cards;
+    state.player_weapons[side_a_idx] = normal_setup.weapon_cards;
+    state.player_failures[side_a_idx] = normal_setup.failure_cards;
+    let side_b_idx = core::rule_helper::SIDE_B_NORMAL_PLAYER_ID.0;
+    state.player_move_cards[side_b_idx] = normal_setup.player2_move_cards;
+    state.player_weapons[side_b_idx] = normal_setup.player2_weapon_cards;
+    state.player_failures[side_b_idx] = normal_setup.player2_failure_cards;
 }
 
 fn new_state_with_normal_setup(
@@ -400,6 +423,9 @@ fn snapped_normal_setup(setup: &NormalSetup) -> NormalSetup {
         move_cards: snap_card_quantity_to_thirty_seconds(setup.move_cards),
         weapon_cards: snap_card_quantity_to_thirty_seconds(setup.weapon_cards),
         failure_cards: snap_card_quantity_to_thirty_seconds(setup.failure_cards),
+        player2_move_cards: snap_card_quantity_to_thirty_seconds(setup.player2_move_cards),
+        player2_weapon_cards: snap_card_quantity_to_thirty_seconds(setup.player2_weapon_cards),
+        player2_failure_cards: snap_card_quantity_to_thirty_seconds(setup.player2_failure_cards),
         doctor_room_id: setup.doctor_room_id,
         player1_room_id: setup.player1_room_id,
         stranger1_room_id: setup.stranger1_room_id,
@@ -456,7 +482,8 @@ fn piece_attack_strength_for_state(
     player_id: core::player::PlayerId,
 ) -> i32 {
     let idx = player_id.0;
-    let weapon_bonus = if state.common.get_player_type(player_id) == core::player::PlayerType::Normal
+    let weapon_bonus = if state.common.get_player_type(player_id)
+        == core::player::PlayerType::Normal
         && state.player_weapons[idx] >= 1.0
     {
         2
@@ -953,7 +980,7 @@ impl GameStateHandle {
     pub fn default_normal_setup_json(&self) -> String {
         let setup = normalize_normal_setup(&default_normal_setup(), &self.state.common);
         serde_json::to_string(&setup).unwrap_or_else(|_| {
-            "{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
+            "{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
         })
     }
 
@@ -961,7 +988,7 @@ impl GameStateHandle {
     pub fn current_normal_setup_json(&self) -> String {
         let setup = normalize_normal_setup(&self.normal_setup, &self.state.common);
         serde_json::to_string(&setup).unwrap_or_else(|_| {
-            "{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
+            "{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
         })
     }
 
@@ -971,6 +998,9 @@ impl GameStateHandle {
         move_cards: f64,
         weapon_cards: f64,
         failure_cards: f64,
+        player2_move_cards: f64,
+        player2_weapon_cards: f64,
+        player2_failure_cards: f64,
         doctor_room_id: usize,
         player1_room_id: usize,
         stranger1_room_id: usize,
@@ -991,6 +1021,9 @@ impl GameStateHandle {
             move_cards,
             weapon_cards,
             failure_cards,
+            player2_move_cards,
+            player2_weapon_cards,
+            player2_failure_cards,
             doctor_room_id,
             player1_room_id,
             stranger1_room_id,
@@ -1024,7 +1057,7 @@ impl GameStateHandle {
         };
 
         serde_json::to_string(&snapshot).unwrap_or_else(|_| {
-            "{\"version\":1,\"boardName\":\"\",\"normalSetup\":{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"},\"normalTurns\":[]}".to_string()
+            "{\"version\":1,\"boardName\":\"\",\"normalSetup\":{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"},\"normalTurns\":[]}".to_string()
         })
     }
 
@@ -1128,17 +1161,38 @@ mod tests {
         let common = sample_common();
         let normalized = normalize_normal_setup(&default_normal_setup(), &common);
 
-        assert_eq!(normalized.doctor_room_id, common.board.doctor_start_room_id.0);
-        assert_eq!(normalized.player1_room_id, common.board.player_start_room_id.0);
-        assert_eq!(normalized.stranger1_room_id, common.board.player_start_room_id.0);
-        assert_eq!(normalized.player2_room_id, common.board.player_start_room_id.0);
-        assert_eq!(normalized.stranger2_room_id, common.board.player_start_room_id.0);
-        assert_eq!(normalized.player1_strength, core::rule_helper::PLAYER_STARTING_STRENGTH);
+        assert_eq!(
+            normalized.doctor_room_id,
+            common.board.doctor_start_room_id.0
+        );
+        assert_eq!(
+            normalized.player1_room_id,
+            common.board.player_start_room_id.0
+        );
+        assert_eq!(
+            normalized.stranger1_room_id,
+            common.board.player_start_room_id.0
+        );
+        assert_eq!(
+            normalized.player2_room_id,
+            common.board.player_start_room_id.0
+        );
+        assert_eq!(
+            normalized.stranger2_room_id,
+            common.board.player_start_room_id.0
+        );
+        assert_eq!(
+            normalized.player1_strength,
+            core::rule_helper::PLAYER_STARTING_STRENGTH
+        );
         assert_eq!(
             normalized.stranger1_strength,
             core::rule_helper::PLAYER_STARTING_STRENGTH
         );
-        assert_eq!(normalized.player2_strength, core::rule_helper::PLAYER_STARTING_STRENGTH);
+        assert_eq!(
+            normalized.player2_strength,
+            core::rule_helper::PLAYER_STARTING_STRENGTH
+        );
         assert_eq!(
             normalized.stranger2_strength,
             core::rule_helper::PLAYER_STARTING_STRENGTH
@@ -1154,6 +1208,9 @@ mod tests {
             move_cards: 0.5,
             weapon_cards: 1.5,
             failure_cards: 2.5,
+            player2_move_cards: 3.5,
+            player2_weapon_cards: 4.5,
+            player2_failure_cards: 5.5,
             doctor_room_id: 1,
             player1_room_id: 2,
             stranger1_room_id: 1,
@@ -1170,18 +1227,62 @@ mod tests {
         let state = new_state_with_normal_setup(common, &setup);
 
         assert_eq!(state.doctor_room_id.0, 1);
-        assert_eq!(state.player_room_ids[core::rule_helper::SIDE_A_NORMAL_PLAYER_ID.0].0, 2);
-        assert_eq!(state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_FIRST.0].0, 1);
-        assert_eq!(state.player_room_ids[core::rule_helper::SIDE_B_NORMAL_PLAYER_ID.0].0, 1);
-        assert_eq!(state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_SECOND.0].0, 2);
-        assert_eq!(state.current_player_id, core::rule_helper::SIDE_B_NORMAL_PLAYER_ID);
-        assert_eq!(state.player_move_cards[core::rule_helper::SIDE_A_NORMAL_PLAYER_ID.0], 0.5);
-        assert_eq!(state.player_strengths[core::rule_helper::SIDE_A_NORMAL_PLAYER_ID.0], 3);
-        assert_eq!(state.player_strengths[core::rule_helper::STRANGER_PLAYER_ID_FIRST.0], 4);
-        assert_eq!(state.player_weapons[core::rule_helper::SIDE_B_NORMAL_PLAYER_ID.0], 1.5);
-        assert_eq!(state.player_strengths[core::rule_helper::SIDE_B_NORMAL_PLAYER_ID.0], 5);
-        assert_eq!(state.player_strengths[core::rule_helper::STRANGER_PLAYER_ID_SECOND.0], 6);
-        assert_eq!(state.player_failures[core::rule_helper::SIDE_A_NORMAL_PLAYER_ID.0], 2.5);
+        assert_eq!(
+            state.player_room_ids[core::rule_helper::SIDE_A_NORMAL_PLAYER_ID.0].0,
+            2
+        );
+        assert_eq!(
+            state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_FIRST.0].0,
+            1
+        );
+        assert_eq!(
+            state.player_room_ids[core::rule_helper::SIDE_B_NORMAL_PLAYER_ID.0].0,
+            1
+        );
+        assert_eq!(
+            state.player_room_ids[core::rule_helper::STRANGER_PLAYER_ID_SECOND.0].0,
+            2
+        );
+        assert_eq!(
+            state.current_player_id,
+            core::rule_helper::SIDE_B_NORMAL_PLAYER_ID
+        );
+        assert_eq!(
+            state.player_move_cards[core::rule_helper::SIDE_A_NORMAL_PLAYER_ID.0],
+            0.5
+        );
+        assert_eq!(
+            state.player_strengths[core::rule_helper::SIDE_A_NORMAL_PLAYER_ID.0],
+            3
+        );
+        assert_eq!(
+            state.player_strengths[core::rule_helper::STRANGER_PLAYER_ID_FIRST.0],
+            4
+        );
+        assert_eq!(
+            state.player_weapons[core::rule_helper::SIDE_B_NORMAL_PLAYER_ID.0],
+            4.5
+        );
+        assert_eq!(
+            state.player_strengths[core::rule_helper::SIDE_B_NORMAL_PLAYER_ID.0],
+            5
+        );
+        assert_eq!(
+            state.player_strengths[core::rule_helper::STRANGER_PLAYER_ID_SECOND.0],
+            6
+        );
+        assert_eq!(
+            state.player_failures[core::rule_helper::SIDE_A_NORMAL_PLAYER_ID.0],
+            2.5
+        );
+        assert_eq!(
+            state.player_move_cards[core::rule_helper::SIDE_B_NORMAL_PLAYER_ID.0],
+            3.5
+        );
+        assert_eq!(
+            state.player_failures[core::rule_helper::SIDE_B_NORMAL_PLAYER_ID.0],
+            5.5
+        );
         assert_eq!(state.turn_id, 7);
     }
 
