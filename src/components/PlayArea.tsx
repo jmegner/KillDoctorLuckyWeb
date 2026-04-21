@@ -1,5 +1,6 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import wasmBindgenInit, { newDefaultGameState, type GameStateHandle } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
+import TreeSearchWorker from '@/workers/treeSearchWorker?worker';
 import boardData from '../data/boards/BoardAltDown.json';
 
 type PieceId = 'doctor' | 'player1' | 'player2' | 'stranger1' | 'stranger2';
@@ -376,13 +377,12 @@ type SetupPrefsDraft = {
 
 type StepDirection = 'down' | 'up';
 
-const treeSearchWorkerUrl = new URL('../workers/treeSearchWorker.ts', import.meta.url);
 const createTreeSearchWorker = () => {
   if (typeof Worker === 'undefined') {
     return null;
   }
   try {
-    return new Worker(treeSearchWorkerUrl, { type: 'module' });
+    return new TreeSearchWorker();
   } catch {
     return null;
   }
