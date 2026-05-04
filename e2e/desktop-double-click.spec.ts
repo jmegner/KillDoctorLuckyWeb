@@ -66,65 +66,53 @@ const dispatchRoomDoubleClick = async (room: import('@playwright/test').Locator)
   });
 };
 
-const dispatchRoomLongPress = async (
-  page: Page,
-  startRoom: import('@playwright/test').Locator,
+const dispatchTouchTap = async (
+  room: import('@playwright/test').Locator,
   options?: {
-    endRoom?: import('@playwright/test').Locator;
-    holdMs?: number;
-    dispatchFollowUpClick?: boolean;
+    includeDoubleClickEvent?: boolean;
   },
 ) => {
-  const startHandle = await startRoom.elementHandle();
-  const endHandle = await (options?.endRoom ?? startRoom).elementHandle();
-  if (!startHandle || !endHandle) {
-    throw new Error('Room handle missing for long-press dispatch.');
-  }
-  await page.evaluate(
-    async ({ startElement, endElement, holdMs, dispatchFollowUpClick }) => {
-      const centerOf = (element: Element) => {
-        const rect = element.getBoundingClientRect();
-        return {
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 2,
-        };
-      };
-      const pointerId = 77;
-      const start = centerOf(startElement);
-      const end = centerOf(endElement);
-      const buildPointerEvent = (type: 'pointerdown' | 'pointerup') =>
-        new PointerEvent(type, {
+  await room.evaluate((element, includeDoubleClickEvent) => {
+    const rect = element.getBoundingClientRect();
+    const point = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    };
+    const pointerId = Math.trunc(Math.random() * 10000) + 1;
+    const buildPointerEvent = (type: 'pointerdown' | 'pointerup') =>
+      new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerId,
+        pointerType: 'touch',
+        isPrimary: true,
+        clientX: point.x,
+        clientY: point.y,
+      });
+
+    element.dispatchEvent(buildPointerEvent('pointerdown'));
+    element.dispatchEvent(buildPointerEvent('pointerup'));
+    element.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        detail: 1,
+      }),
+    );
+
+    if (includeDoubleClickEvent) {
+      element.dispatchEvent(
+        new MouseEvent('dblclick', {
           bubbles: true,
           cancelable: true,
           composed: true,
-          pointerId,
-          pointerType: 'touch',
-          isPrimary: true,
-          clientX: type === 'pointerdown' ? start.x : end.x,
-          clientY: type === 'pointerdown' ? start.y : end.y,
-        });
-
-      startElement.dispatchEvent(buildPointerEvent('pointerdown'));
-      await new Promise((resolve) => window.setTimeout(resolve, holdMs));
-      window.dispatchEvent(buildPointerEvent('pointerup'));
-      if (dispatchFollowUpClick) {
-        endElement.dispatchEvent(
-          new MouseEvent('click', {
-            bubbles: true,
-            cancelable: true,
-            composed: true,
-            detail: 1,
-          }),
-        );
-      }
-    },
-    {
-      startElement: startHandle,
-      endElement: endHandle,
-      holdMs: options?.holdMs ?? 1100,
-      dispatchFollowUpClick: options?.dispatchFollowUpClick ?? true,
-    },
-  );
+          detail: 2,
+        }),
+      );
+    }
+  }, options?.includeDoubleClickEvent ?? false);
 };
 
 const readStoredPieceRoom = async (page: Page, pieceId: PieceId) =>
@@ -359,6 +347,21 @@ test('double-clicking a stranger room preserves the stranger plan while submitti
   await expect.poll(() => readStoredPieceRoom(page, seed.strangerPieceId)).toBe(seed.strangerDestinationRoomId);
 });
 
+test('two quick touch taps on the same room submit the current player move to that room', async ({ page }) => {
+  await page.goto('/');
+
+  const seed = await seedStateWithDesktopDoubleClickScenario(page);
+  const plannedLine = plannerLine(page, 'Planned');
+  const strangerRoom = page.locator(`.room-layer rect[aria-label="${seed.strangerRoomName}"]`).first();
+
+  await dispatchTouchTap(strangerRoom);
+  await dispatchTouchTap(strangerRoom);
+
+  await expect(plannedLine).toContainText('No moves planned.');
+  await expect.poll(() => readStoredPieceRoom(page, seed.currentPlayerPieceId)).toBe(seed.strangerRoomId);
+  await expect.poll(() => readStoredPieceRoom(page, seed.strangerPieceId)).toBe(seed.strangerRoomId);
+});
+
 test('board rooms suppress the browser context menu', async ({ page }) => {
   await page.goto('/');
 
@@ -366,48 +369,19 @@ test('board rooms suppress the browser context menu', async ({ page }) => {
   await expect.poll(() => roomSuppressesContextMenu(room)).toBe(true);
 });
 
-test('long-pressing a stranger room preserves the stranger plan while submitting the current player move', async ({
-  page,
-}) => {
+test('two quick touch taps in different rooms are not interpreted as a double-click submit', async ({ page }) => {
   await page.goto('/');
 
   const seed = await seedStateWithDesktopDoubleClickScenario(page);
-  const strangerPieceLabel = pieceLabelById[seed.strangerPieceId];
   const plannedLine = plannerLine(page, 'Planned');
-  const strangerPiece = page.locator(`.piece-layer [aria-label="${strangerPieceLabel} piece"]`).first();
+  const strangerPieceLabel = pieceLabelById[seed.strangerPieceId];
+  const strangerRoom = page.locator(`.room-layer rect[aria-label="${seed.strangerRoomName}"]`).first();
   const strangerDestinationRoom = page
     .locator(`.room-layer rect[aria-label="${seed.strangerDestinationRoomName}"]`)
     .first();
-  const strangerRoom = page.locator(`.room-layer rect[aria-label="${seed.strangerRoomName}"]`).first();
 
-  await strangerPiece.click();
-  await dispatchRoomClick(strangerDestinationRoom);
-  await expect(plannedLine).toContainText(`${strangerPieceLabel}@R${seed.strangerDestinationRoomId}`);
-
-  await dispatchRoomLongPress(page, strangerRoom);
-
-  await expect(plannedLine).toContainText('No moves planned.');
-  await expect.poll(() => readStoredPieceRoom(page, seed.currentPlayerPieceId)).toBe(seed.strangerRoomId);
-  await expect.poll(() => readStoredPieceRoom(page, seed.strangerPieceId)).toBe(seed.strangerDestinationRoomId);
-});
-
-test('long-pressing one room and releasing on another room does not change the turn plan', async ({ page }) => {
-  await page.goto('/');
-
-  const seed = await seedStateWithDesktopDoubleClickScenario(page);
-  const strangerPieceLabel = pieceLabelById[seed.strangerPieceId];
-  const plannedLine = plannerLine(page, 'Planned');
-  const strangerPiece = page.locator(`.piece-layer [aria-label="${strangerPieceLabel} piece"]`).first();
-  const strangerDestinationRoom = page
-    .locator(`.room-layer rect[aria-label="${seed.strangerDestinationRoomName}"]`)
-    .first();
-  const strangerRoom = page.locator(`.room-layer rect[aria-label="${seed.strangerRoomName}"]`).first();
-
-  await strangerPiece.click();
-  await dispatchRoomClick(strangerDestinationRoom);
-  await expect(plannedLine).toContainText(`${strangerPieceLabel}@R${seed.strangerDestinationRoomId}`);
-
-  await dispatchRoomLongPress(page, strangerRoom, { endRoom: strangerDestinationRoom });
+  await dispatchTouchTap(strangerRoom);
+  await dispatchTouchTap(strangerDestinationRoom, { includeDoubleClickEvent: true });
 
   await expect(plannedLine).toContainText(`${strangerPieceLabel}@R${seed.strangerDestinationRoomId}`);
   await expect.poll(() => readStoredPieceRoom(page, seed.currentPlayerPieceId)).toBe(seed.currentPlayerRoomId);

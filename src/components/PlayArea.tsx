@@ -50,13 +50,6 @@ type PendingAutoSelectedRoomPiece = {
   pieceId: PieceId;
 };
 
-type PendingRoomLongPress = {
-  pointerId: number;
-  roomId: number;
-  ready: boolean;
-  removeWindowListeners: () => void;
-};
-
 type PlayerStatsRow = {
   pieceId: Exclude<PieceId, 'doctor'>;
   doctorDistance: number;
@@ -114,8 +107,7 @@ const getPlayerStatsRows = (gameState: GameStateHandle | null) => {
   }));
 };
 
-const roomLongPressThresholdMs = 1000;
-const suppressedRoomClickDurationMs = 750;
+const touchRoomDoubleTapThresholdMs = 500;
 
 type BestTurnResponse = {
   isValid: boolean;
@@ -1652,9 +1644,12 @@ function PlayArea() {
     sourceTurnCounter: number;
   } | null>(null);
   const pendingAutoSelectedRoomPieceRef = useRef<PendingAutoSelectedRoomPiece | null>(null);
-  const pendingRoomLongPressRef = useRef<PendingRoomLongPress | null>(null);
-  const roomLongPressTimerRef = useRef<number | null>(null);
-  const suppressedRoomClickRef = useRef<{ roomId: number; expiresAtMs: number } | null>(null);
+  const lastTouchRoomTapRef = useRef<{
+    roomId: number;
+    tappedAtMs: number;
+    startedWithNoSelection: boolean;
+  } | null>(null);
+  const lastRoomPointerTypeRef = useRef<string | null>(null);
   const animationSpeed = animationSpeeds[animationSpeedIndex];
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
   const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
@@ -1922,60 +1917,24 @@ function PlayArea() {
     pendingAutoSelectedRoomPieceRef.current = null;
   };
 
-  const clearRoomLongPressTimer = () => {
-    const timerId = roomLongPressTimerRef.current;
-    if (timerId !== null) {
-      window.clearTimeout(timerId);
-      roomLongPressTimerRef.current = null;
+  const recordOrConsumeTouchRoomDoubleTap = (roomId: number, startedWithNoSelection: boolean) => {
+    const tappedAtMs = Date.now();
+    const previousTouchTap = lastTouchRoomTapRef.current;
+    const isDoubleTap =
+      previousTouchTap !== null &&
+      previousTouchTap.startedWithNoSelection &&
+      previousTouchTap.roomId === roomId &&
+      tappedAtMs - previousTouchTap.tappedAtMs <= touchRoomDoubleTapThresholdMs;
+    if (isDoubleTap) {
+      lastTouchRoomTapRef.current = null;
+      return true;
     }
-  };
-
-  const clearPendingRoomLongPress = () => {
-    clearRoomLongPressTimer();
-    const pendingRoomLongPress = pendingRoomLongPressRef.current;
-    if (pendingRoomLongPress) {
-      pendingRoomLongPress.removeWindowListeners();
-      pendingRoomLongPressRef.current = null;
-    }
-  };
-
-  const suppressNextRoomClick = (roomId: number) => {
-    suppressedRoomClickRef.current = {
+    lastTouchRoomTapRef.current = {
       roomId,
-      expiresAtMs: Date.now() + suppressedRoomClickDurationMs,
+      tappedAtMs,
+      startedWithNoSelection,
     };
-  };
-
-  const shouldSuppressRoomClick = (roomId: number) => {
-    const suppressedClick = suppressedRoomClickRef.current;
-    if (!suppressedClick) {
-      return false;
-    }
-    if (Date.now() > suppressedClick.expiresAtMs) {
-      suppressedRoomClickRef.current = null;
-      return false;
-    }
-    if (suppressedClick.roomId !== roomId) {
-      return false;
-    }
-    suppressedRoomClickRef.current = null;
-    return true;
-  };
-
-  const getRoomIdAtPoint = (clientX: number, clientY: number) => {
-    const roomElement = document
-      .elementsFromPoint(clientX, clientY)
-      .map((element) => element.closest('[data-room-id]'))
-      .find((element): element is Element => element !== null);
-    if (!roomElement) {
-      return null;
-    }
-    const roomIdText = roomElement.getAttribute('data-room-id');
-    if (!roomIdText) {
-      return null;
-    }
-    const roomId = Number(roomIdText);
-    return Number.isFinite(roomId) ? roomId : null;
+    return false;
   };
 
   const roomClickMatchesPendingAutoSelection = (roomId: number, pieceId: PieceId | null) => {
@@ -2036,7 +1995,7 @@ function PlayArea() {
   };
 
   const handlePieceClick = (pieceId: PieceId) => {
-    clearPendingRoomLongPress();
+    lastTouchRoomTapRef.current = null;
     clearPendingAutoSelectedRoomPiece();
     if (hasWinner) {
       return;
@@ -2061,68 +2020,27 @@ function PlayArea() {
     setValidationMessage(null);
   };
 
-  const handleRoomPointerDown = (event: PointerEvent<SVGRectElement>, roomId: number) => {
+  const handleRoomPointerDown = (event: PointerEvent<SVGRectElement>) => {
+    // Keep the latest pointer type so touch taps can use a narrow same-room double-tap path
+    // while touch-originated browser dblclick events are still ignored. Android Chrome can
+    // synthesize dblclick after quick taps, including across different rooms.
+    lastRoomPointerTypeRef.current = event.pointerType;
     if (event.pointerType !== 'touch') {
-      return;
+      lastTouchRoomTapRef.current = null;
     }
-    clearPendingRoomLongPress();
-    const handleWindowPointerUp = (pointerEvent: globalThis.PointerEvent) => {
-      const pendingRoomLongPress = pendingRoomLongPressRef.current;
-      if (!pendingRoomLongPress || pointerEvent.pointerId !== pendingRoomLongPress.pointerId) {
-        return;
-      }
-      const releasedRoomId = getRoomIdAtPoint(pointerEvent.clientX, pointerEvent.clientY);
-      if (pendingRoomLongPress.ready && releasedRoomId !== null) {
-        suppressNextRoomClick(releasedRoomId);
-      }
-      const shouldTriggerLongPress =
-        pendingRoomLongPress.ready && releasedRoomId !== null && releasedRoomId === pendingRoomLongPress.roomId;
-      clearPendingRoomLongPress();
-      if (!shouldTriggerLongPress) {
-        return;
-      }
-      handleRoomDoubleClick(roomId);
-    };
-    const handleWindowPointerCancel = (pointerEvent: globalThis.PointerEvent) => {
-      const pendingRoomLongPress = pendingRoomLongPressRef.current;
-      if (!pendingRoomLongPress || pointerEvent.pointerId !== pendingRoomLongPress.pointerId) {
-        return;
-      }
-      clearPendingRoomLongPress();
-    };
-    window.addEventListener('pointerup', handleWindowPointerUp);
-    window.addEventListener('pointercancel', handleWindowPointerCancel);
-    pendingRoomLongPressRef.current = {
-      pointerId: event.pointerId,
-      roomId,
-      ready: false,
-      removeWindowListeners: () => {
-        window.removeEventListener('pointerup', handleWindowPointerUp);
-        window.removeEventListener('pointercancel', handleWindowPointerCancel);
-      },
-    };
-    roomLongPressTimerRef.current = window.setTimeout(() => {
-      const pendingRoomLongPress = pendingRoomLongPressRef.current;
-      if (!pendingRoomLongPress || pendingRoomLongPress.pointerId !== event.pointerId) {
-        return;
-      }
-      pendingRoomLongPress.ready = true;
-    }, roomLongPressThresholdMs);
   };
 
-  const handleRoomClick = (roomId: number, event?: MouseEvent<SVGRectElement>) => {
-    clearPendingRoomLongPress();
-    if (shouldSuppressRoomClick(roomId)) {
+  const handleRoomClick = (roomId: number) => {
+    if (
+      lastRoomPointerTypeRef.current === 'touch' &&
+      recordOrConsumeTouchRoomDoubleTap(roomId, selectedPieceId === null)
+    ) {
+      handleRoomDoubleClick(roomId, { allowTouchShortcut: true });
       return;
     }
     if (hasWinner) {
       clearPendingAutoSelectedRoomPiece();
       return;
-    }
-    if (event?.detail && event.detail > 1) {
-      if (!selectedPieceId || roomClickMatchesPendingAutoSelection(roomId, selectedPieceId)) {
-        return;
-      }
     }
     if (!selectedPieceId) {
       const preferredPiece = getPreferredSelectablePieceInRoom(roomId);
@@ -3284,8 +3202,13 @@ function PlayArea() {
     submitPlan(nextMoves, nextOrder);
   };
 
-  const handleRoomDoubleClick = (roomId: number) => {
-    clearPendingRoomLongPress();
+  const handleRoomDoubleClick = (roomId: number, options?: { allowTouchShortcut?: boolean }) => {
+    // Browser dblclick is trusted for desktop mouse input. Touch gets its own same-room
+    // double-tap path in handleRoomClick, so any browser-reported touch dblclick is ignored
+    // unless we intentionally routed here from that custom touch path.
+    if (lastRoomPointerTypeRef.current === 'touch' && !options?.allowTouchShortcut) {
+      return;
+    }
     const matchesPendingAutoSelection = roomClickMatchesPendingAutoSelection(roomId, selectedPieceId);
     clearPendingAutoSelectedRoomPiece();
     if (hasWinner) {
@@ -3811,7 +3734,6 @@ function PlayArea() {
             your normal player piece and submitting the plan, which can include previously planned moves.
             Double-clicking a room while a piece is selected is interpreted as 2 single clicks.
           </li>
-          <li>On touch devices, long-tapping a room for 1000ms does that same double-click action if you release on that room.</li>
           <li>Reminder: you can not move or select the Dr or the normal opponent piece.</li>
         </ul>
         <h4>Piece Indicators</h4>
@@ -3975,9 +3897,9 @@ function PlayArea() {
                       height={y2 - y1}
                       data-room-id={room.id}
                       className={roomClassName}
-                      onClick={(event) => handleRoomClick(room.id, event)}
+                      onClick={() => handleRoomClick(room.id)}
                       onMouseDown={(event) => handleRoomMouseDown(event, room.id)}
-                      onPointerDown={(event) => handleRoomPointerDown(event, room.id)}
+                      onPointerDown={handleRoomPointerDown}
                       onDoubleClick={() => handleRoomDoubleClick(room.id)}
                       aria-label={room.name ?? `Room ${room.id}`}
                     />
