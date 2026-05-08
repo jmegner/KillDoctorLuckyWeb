@@ -96,7 +96,7 @@ const seedStateWithTurns = async (
           JSON.stringify({
             minAnalysisLevel: 0,
             maxAnalysisLevel: 5,
-            analysisMaxTimeIndex: 0,
+            analysisMaxTimeIndex: 1,
             controlP1: controlP1Arg,
             controlP3: controlP3Arg,
             showOnBoardP1: false,
@@ -307,7 +307,7 @@ test('undo clears AI control for the undone player before analysis can auto-subm
       aiPrefsStorageKeyArg,
       JSON.stringify({
         minAnalysisLevel: 0,
-        analysisMaxTimeIndex: 0,
+        analysisMaxTimeIndex: 1,
         controlP1: true,
         controlP3: false,
       }),

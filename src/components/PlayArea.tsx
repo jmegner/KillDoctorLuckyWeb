@@ -257,26 +257,27 @@ const playerStatsRowOrder: Array<Exclude<PieceId, 'doctor'>> = ['stranger2', 'pl
 const animationSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
 const defaultSpeedIndex = 8;
 const analysisMaxTimeOptions = [
-  { label: '50ms', ms: 50 },
+  { label: 'No AI', ms: null },
+  { label: '100ms', ms: 100 },
   { label: '500ms', ms: 500 },
+  { label: '1s', ms: 1000 },
   { label: '2s', ms: 2000 },
-  { label: '6s', ms: 6000 },
+  { label: '5s', ms: 5000 },
   { label: '10s', ms: 10000 },
   { label: '15s', ms: 15000 },
   { label: '30s', ms: 30000 },
   { label: '45s', ms: 45000 },
   { label: '1min', ms: 60000 },
-  { label: '1.5min', ms: 90000 },
   { label: '2min', ms: 120000 },
-  { label: '3min', ms: 180000 },
-  { label: '4min', ms: 240000 },
   { label: '5min', ms: 300000 },
   { label: '8min', ms: 480000 },
   { label: '12min', ms: 720000 },
   { label: '30min', ms: 1.8e6 },
-  { label: '60min', ms: 3.6e6 },
+  { label: '1hr', ms: 3.6e6 },
 ] as const;
-const defaultAnalysisMaxTimeIndex = 1;
+const mullMaxTimeMs = 99999 * 1000;
+const aiAnalysisDisabledStatusMessage = 'AI analysis disabled.';
+const defaultAnalysisMaxTimeIndex = 2;
 const defaultMinAnalysisLevel = 2;
 const defaultMaxAnalysisLevel = 15;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
@@ -420,6 +421,8 @@ const parseNormalTurnCountFromSnapshotJson = (snapshotJson: string): number | nu
 
 const clampAnimationSpeedIndex = (value: number) => Math.min(animationSpeeds.length - 1, Math.max(0, value));
 const clampAnalysisMaxTimeIndex = (value: number) => Math.min(analysisMaxTimeOptions.length - 1, Math.max(0, value));
+const getAnalysisMaxTimeMs = (index: number) =>
+  (analysisMaxTimeOptions[clampAnalysisMaxTimeIndex(index)] ?? analysisMaxTimeOptions[defaultAnalysisMaxTimeIndex]).ms;
 const isFiniteNonNegative = (value: number) => Number.isFinite(value) && value >= 0;
 const formatSetupCardDraft = (value: number) =>
   (Number.isInteger(value) ? value.toString() : value.toFixed(2)).replace(/(?:\.0+|(\.\d*?[1-9])0+)$/, '$1');
@@ -1604,6 +1607,9 @@ function PlayArea() {
   analysisRunningLevelRef.current = analysisRunningLevel;
   const [analysisElapsedMs, setAnalysisElapsedMs] = useState(0);
   const [analysisCurrentLevelElapsedMs, setAnalysisCurrentLevelElapsedMs] = useState(0);
+  const [analysisRunMaxTimeMs, setAnalysisRunMaxTimeMs] = useState<number>(
+    () => getAnalysisMaxTimeMs(loadAiPrefs().analysisMaxTimeIndex) ?? 0,
+  );
   const [analysisStatusMessage, setAnalysisStatusMessage] = useState<string | null>(null);
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null);
   const aiResultsCacheRef = useRef<AiResultsCacheStore>(loadAiResultsCacheStore());
@@ -2112,6 +2118,11 @@ function PlayArea() {
     setAnalysisStatusMessage(null);
   };
 
+  const stopAiAnalysisBecauseDisabled = () => {
+    resetAiOutputs();
+    setAnalysisStatusMessage(aiAnalysisDisabledStatusMessage);
+  };
+
   const submitPlan = (
     moves: Partial<Record<PieceId, number>>,
     order: PieceId[],
@@ -2196,7 +2207,11 @@ function PlayArea() {
     return nextTurnCounter;
   };
 
-  const startBestTurnAnalysis = (autoSubmit: boolean, sourceTurnCounterOverride?: number) => {
+  const startBestTurnAnalysis = (
+    autoSubmit: boolean,
+    sourceTurnCounterOverride?: number,
+    runOptions?: { minAnalysisLevel: number; maxAnalysisLevel: number; maxTimeMs: number },
+  ) => {
     if (!gameState) {
       setAnalysisStatusMessage('Analysis unavailable.');
       return;
@@ -2205,13 +2220,19 @@ function PlayArea() {
       setAnalysisStatusMessage('Game already has a winner.');
       return;
     }
+    const selectedMaxTimeMs = getAnalysisMaxTimeMs(analysisMaxTimeIndex);
+    if (selectedMaxTimeMs === null) {
+      stopAiAnalysisBecauseDisabled();
+      return;
+    }
 
-    const parsedMinLevel = Number(minAnalysisLevelDraft);
+    const hasRunOverrides = runOptions !== undefined;
+    const parsedMinLevel = hasRunOverrides ? runOptions.minAnalysisLevel : Number(minAnalysisLevelDraft);
     if (!Number.isFinite(parsedMinLevel) || parsedMinLevel < 0) {
       setAnalysisStatusMessage('Min turn depth must be a number >= 0.');
       return;
     }
-    const parsedMaxLevel = Number(maxAnalysisLevelDraft);
+    const parsedMaxLevel = hasRunOverrides ? runOptions.maxAnalysisLevel : Number(maxAnalysisLevelDraft);
     if (!Number.isFinite(parsedMaxLevel) || parsedMaxLevel < 0) {
       setAnalysisStatusMessage('Max turn depth must be a number >= 0.');
       return;
@@ -2220,15 +2241,19 @@ function PlayArea() {
     const minAnalysisLevel = Math.trunc(parsedMinLevel);
     const maxAnalysisLevel = Math.trunc(parsedMaxLevel);
     const effectiveMaxAnalysisLevel = minAnalysisLevel <= maxAnalysisLevel ? maxAnalysisLevel : null;
-    setMinAnalysisLevelDraft(minAnalysisLevel.toString());
-    setMaxAnalysisLevelDraft(maxAnalysisLevel.toString());
-    saveCurrentAiPrefs({
-      minAnalysisLevel,
-      maxAnalysisLevel,
-      analysisMaxTimeIndex,
-    });
-    const maxTimeOption = analysisMaxTimeOptions[analysisMaxTimeIndex] ?? analysisMaxTimeOptions[0];
-    const maxTimeMs = maxTimeOption.ms;
+    const maxTimeMs = hasRunOverrides
+      ? Math.max(0, Math.trunc(runOptions.maxTimeMs))
+      : selectedMaxTimeMs;
+    setAnalysisRunMaxTimeMs(maxTimeMs);
+    if (!hasRunOverrides) {
+      setMinAnalysisLevelDraft(minAnalysisLevel.toString());
+      setMaxAnalysisLevelDraft(maxAnalysisLevel.toString());
+      saveCurrentAiPrefs({
+        minAnalysisLevel,
+        maxAnalysisLevel,
+        analysisMaxTimeIndex,
+      });
+    }
     analysisRunIdRef.current += 1;
     const runId = analysisRunIdRef.current;
     const sourceTurnCounter = sourceTurnCounterOverride ?? turnCounterRef.current;
@@ -2664,8 +2689,12 @@ function PlayArea() {
     startBestTurnAnalysis(false);
   };
 
-  const handleThinkAndDo = () => {
-    startBestTurnAnalysis(true);
+  const handleMull = () => {
+    startBestTurnAnalysis(false, undefined, {
+      minAnalysisLevel: 1,
+      maxAnalysisLevel: 99,
+      maxTimeMs: mullMaxTimeMs,
+    });
   };
 
   const handleDoSuggestedTurn = () => {
@@ -3031,13 +3060,16 @@ function PlayArea() {
     if (analysisIsRunning) {
       return;
     }
-    setAnalysisMaxTimeIndex((prev) => {
-      const nextIndex = clampAnalysisMaxTimeIndex(direction === 'down' ? prev - 1 : prev + 1);
-      saveCurrentAiPrefs({
-        analysisMaxTimeIndex: nextIndex,
-      });
-      return nextIndex;
+    const nextIndex = clampAnalysisMaxTimeIndex(direction === 'down' ? analysisMaxTimeIndex - 1 : analysisMaxTimeIndex + 1);
+    setAnalysisMaxTimeIndex(nextIndex);
+    saveCurrentAiPrefs({
+      analysisMaxTimeIndex: nextIndex,
     });
+    if (getAnalysisMaxTimeMs(nextIndex) === null) {
+      stopAiAnalysisBecauseDisabled();
+    } else if (analysisStatusMessage === aiAnalysisDisabledStatusMessage) {
+      setAnalysisStatusMessage(null);
+    }
   };
 
   const handleAnalysisMaxTimeChange = (rawIndex: string) => {
@@ -3050,6 +3082,11 @@ function PlayArea() {
     saveCurrentAiPrefs({
       analysisMaxTimeIndex: nextIndex,
     });
+    if (getAnalysisMaxTimeMs(nextIndex) === null) {
+      stopAiAnalysisBecauseDisabled();
+    } else if (analysisStatusMessage === aiAnalysisDisabledStatusMessage) {
+      setAnalysisStatusMessage(null);
+    }
   };
 
   const handleAiControlChange = (player: 'player1' | 'player2', checked: boolean) => {
@@ -3284,12 +3321,14 @@ function PlayArea() {
   const aiStaleMessage = aiSuggestion && !aiSuggestionIsCurrent ? 'Suggestion is stale. Run Think again.' : null;
   const aiShowOnBoardEnabledForCurrentPlayer =
     currentPlayerPieceId === 'player1' ? aiShowOnBoardP1 : currentPlayerPieceId === 'player2' ? aiShowOnBoardP3 : false;
-  const analysisMaxTimeMs = (analysisMaxTimeOptions[analysisMaxTimeIndex] ?? analysisMaxTimeOptions[0]).ms;
+  const analysisMaxTimeMs = getAnalysisMaxTimeMs(analysisMaxTimeIndex);
+  const aiAnalysisDisabled = analysisMaxTimeMs === null;
+  const displayedAnalysisMaxTimeMs = analysisIsRunning ? analysisRunMaxTimeMs : (analysisMaxTimeMs ?? 0);
   const aiSuggestionBoardText = (() => {
     if (hasWinner || !aiShowOnBoardEnabledForCurrentPlayer) {
       return null;
     }
-    const runningTimeText = `(${formatWholeSeconds(analysisElapsedMs)}/${formatWholeSeconds(analysisMaxTimeMs)})`;
+    const runningTimeText = `(${formatWholeSeconds(analysisElapsedMs)}/${formatWholeSeconds(displayedAnalysisMaxTimeMs)})`;
     if (analysisIsRunning && !aiSuggestion) {
       return `L${analysisRunningLevel ?? '?'}: thinking ${runningTimeText}`;
     }
@@ -3769,14 +3808,14 @@ function PlayArea() {
         <ul>
           <li>
             <strong>Think</strong>: runs analysis and updates the suggestion using Min Turn Depth, Max Turn Depth, and
-            Max Time.
+            Max Time, unless Max Time is set to No AI.
           </li>
           <li>
             <strong>Do</strong>: submits the current suggested turn if it is valid and not stale.
           </li>
           <li>
-            <strong>T&amp;D</strong>: runs analysis, then auto-submits the best suggestion found by the time analysis
-            stops.
+            <strong>Mull</strong>: runs analysis like Think, but always uses Min Turn Depth 1, Max Turn Depth 99, and Max
+            Time 99999 seconds instead of respecting the choices below. It is disabled when Max Time is No AI.
           </li>
           <li>
             <strong>Cancel</strong>: stops an in-progress analysis run and keeps the best completed level found so far.
@@ -3808,7 +3847,7 @@ function PlayArea() {
           </li>
           <li>
             <strong>Max Time</strong>: total time budget for one run; analysis will stop when this budget is hit, unless
-            we still haven't completed the minimum turn depth analysis.
+            we still haven't completed the minimum turn depth analysis. Choose No AI to turn off AI analysis.
           </li>
           <li>The +/- buttons next to each field are quick steppers for mobile and desktop.</li>
         </ul>
@@ -4340,7 +4379,7 @@ function PlayArea() {
             <button
               className="planner-button planner-button--primary"
               onClick={handleThink}
-              disabled={hasWinner || analysisIsRunning}
+              disabled={hasWinner || analysisIsRunning || aiAnalysisDisabled}
             >
               Think
             </button>
@@ -4351,8 +4390,8 @@ function PlayArea() {
             >
               Do
             </button>
-            <button className="planner-button" onClick={handleThinkAndDo} disabled={hasWinner || analysisIsRunning}>
-              T&D
+            <button className="planner-button" onClick={handleMull} disabled={hasWinner || analysisIsRunning || aiAnalysisDisabled}>
+              Mull
             </button>
             <button className="planner-button" onClick={handleAnalysisCancel} disabled={!analysisIsRunning}>
               Cancel

@@ -120,7 +120,7 @@ const seedTwoCachedStates = async (
           JSON.stringify({
             minAnalysisLevel: 0,
             maxAnalysisLevel: 5,
-            analysisMaxTimeIndex: 2,
+            analysisMaxTimeIndex: 3,
             controlP1: controlP1Arg,
             controlP3: controlP3Arg,
             showOnBoardP1: false,
@@ -238,7 +238,7 @@ test.describe('AI submit waits for animation completion', () => {
     await expect.poll(() => readNormalTurnCount(page), { timeout: 25000 }).toBe(seed.initialTurnCount + 2);
   });
 
-  test('T&D queues while animation is in progress', async ({ page }) => {
+  test('Mull does not queue submit while animation is in progress', async ({ page }) => {
     await page.goto('/');
     await cancelAiAnalysisIfRunning(page);
 
@@ -247,7 +247,7 @@ test.describe('AI submit waits for animation completion', () => {
 
     const aiPanel = page.locator('.ai-panel');
     const doButton = aiPanel.getByRole('button', { name: 'Do' });
-    const thinkAndDoButton = aiPanel.getByRole('button', { name: 'T&D' });
+    const mullButton = aiPanel.getByRole('button', { name: 'Mull' });
 
     await expect
       .poll(async () => (await readAiLineValue(page, 'Suggested')) !== 'No suggestion yet.', { timeout: 5000 })
@@ -258,12 +258,12 @@ test.describe('AI submit waits for animation completion', () => {
       .poll(async () => (await readAiLineValue(page, 'Suggested')) !== 'No suggestion yet.', { timeout: 5000 })
       .toBe(true);
 
-    await thinkAndDoButton.click();
+    await mullButton.click();
     await expect
       .poll(async () => (await readAiLineValue(page, 'Status'))?.includes('queued') ?? false, { timeout: 10000 })
-      .toBe(true);
+      .toBe(false);
     await page.waitForTimeout(350);
     await expect.poll(() => readNormalTurnCount(page), { timeout: 1200 }).toBe(seed.initialTurnCount + 1);
-    await expect.poll(() => readNormalTurnCount(page), { timeout: 25000 }).toBe(seed.initialTurnCount + 2);
+    await expect.poll(() => readNormalTurnCount(page), { timeout: 25000 }).toBe(seed.initialTurnCount + 1);
   });
 });

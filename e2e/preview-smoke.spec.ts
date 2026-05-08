@@ -14,7 +14,7 @@ const readAiLineValue = async (page: Page, labelText: string) =>
 
 const waitForAnalysisToSettle = async (page: Page) => {
   const aiPanel = page.locator('.ai-panel');
-  await expect(aiPanel.getByRole('button', { name: 'Think' })).toBeEnabled({ timeout: 20_000 });
+  await expect(aiPanel.getByRole('button', { name: 'Think', exact: true })).toBeEnabled({ timeout: 20_000 });
   await expect
     .poll(async () => (await readAiLineValue(page, 'Status')) ?? '', { timeout: 20_000 })
     .not.toMatch(/Analyzing|failed/i);
@@ -45,7 +45,7 @@ test.describe('production preview smoke', () => {
     await cancelAiAnalysisIfRunning(page);
 
     const aiPanel = page.locator('.ai-panel');
-    await aiPanel.getByRole('button', { name: 'Think' }).click();
+    await aiPanel.getByRole('button', { name: 'Think', exact: true }).click();
 
     await waitForAnalysisToSettle(page);
 
@@ -61,7 +61,7 @@ test.describe('production preview smoke', () => {
     await page.context().setOffline(true);
 
     const aiPanel = page.locator('.ai-panel');
-    await aiPanel.getByRole('button', { name: 'Think' }).click();
+    await aiPanel.getByRole('button', { name: 'Think', exact: true }).click();
 
     await waitForAnalysisToSettle(page);
 

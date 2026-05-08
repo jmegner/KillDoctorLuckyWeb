@@ -175,14 +175,14 @@ test.describe('AI results cache', () => {
     const seededStateJson = await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 2,
       maxAnalysisLevel: 25,
-      analysisMaxTimeIndex: 2,
+      analysisMaxTimeIndex: 3,
     });
     await page.reload();
 
     await cancelAiAnalysisIfRunning(page);
 
     const aiPanel = page.locator('.ai-panel');
-    await aiPanel.getByRole('button', { name: 'Think' }).click();
+    await aiPanel.getByRole('button', { name: 'Think', exact: true }).click();
     await expect.poll(() => readAiStatusLevel(page), { timeout: 5000 }).toBeGreaterThanOrEqual(2);
     await expect
       .poll(async () => {
@@ -206,7 +206,7 @@ test.describe('AI results cache', () => {
     const seededStateJson = await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 0,
       maxAnalysisLevel: 25,
-      analysisMaxTimeIndex: 2,
+      analysisMaxTimeIndex: 3,
       cacheEntry: {
         analysisLevel: 12,
         bestTurn: {
@@ -243,7 +243,7 @@ test.describe('AI results cache', () => {
     await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 0,
       maxAnalysisLevel: 25,
-      analysisMaxTimeIndex: 2,
+      analysisMaxTimeIndex: 3,
       cacheEntry: {
         analysisLevel: 12,
         bestTurn: {
@@ -271,7 +271,7 @@ test.describe('AI results cache', () => {
       .poll(() => page.evaluate((key) => window.localStorage.getItem(key), aiResultsCacheStorageKey), { timeout: 3000 })
       .toBeNull();
 
-    await aiPanel.getByRole('button', { name: 'Think' }).click();
+    await aiPanel.getByRole('button', { name: 'Think', exact: true }).click();
     await expect.poll(() => readAiLineValue(page, 'Suggested'), { timeout: 5000 }).toBe('No suggestion yet.');
   });
 
@@ -297,6 +297,47 @@ test.describe('AI results cache', () => {
     await expect.poll(() => readInputValue(page, '#analysis-max-level')).toBe('15');
   });
 
+  test('No AI max time option disables analysis', async ({ page }) => {
+    await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
+
+    await seedDefaultStateAndAiSetup(page, {
+      minAnalysisLevel: 2,
+      maxAnalysisLevel: 15,
+      analysisMaxTimeIndex: 0,
+      showOnBoardP1: true,
+    });
+    await page.reload();
+
+    const aiPanel = page.locator('.ai-panel');
+    await expect(page.locator('#analysis-max-time')).toHaveValue('0');
+    await expect(aiPanel.getByRole('button', { name: 'Think', exact: true })).toBeDisabled();
+    await expect(aiPanel.getByRole('button', { name: 'Mull' })).toBeDisabled();
+    await expect.poll(() => readAiLineValue(page, 'Status'), { timeout: 5000 }).toBe('AI analysis disabled.');
+    await expect.poll(() => readAiLineValue(page, 'Suggested'), { timeout: 5000 }).toBe('No suggestion yet.');
+    await expect.poll(() => readBoardOverlayText(page)).toBeNull();
+  });
+
+  test('Mull board progress uses its fixed time limit', async ({ page }) => {
+    await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
+
+    await seedDefaultStateAndAiSetup(page, {
+      minAnalysisLevel: 2,
+      maxAnalysisLevel: 15,
+      analysisMaxTimeIndex: 4,
+      showOnBoardP1: true,
+    });
+    await page.reload();
+    await cancelAiAnalysisIfRunning(page);
+
+    const aiPanel = page.locator('.ai-panel');
+    await aiPanel.getByRole('button', { name: 'Mull' }).click();
+
+    await expect.poll(() => readBoardOverlayText(page), { timeout: 5000 }).toContain('/99999s)');
+    await aiPanel.getByRole('button', { name: 'Cancel' }).click();
+  });
+
   test('stops immediately when cached result already meets max turn depth', async ({ page }) => {
     await page.goto('/');
     await cancelAiAnalysisIfRunning(page);
@@ -304,7 +345,7 @@ test.describe('AI results cache', () => {
     await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 0,
       maxAnalysisLevel: 5,
-      analysisMaxTimeIndex: 0,
+      analysisMaxTimeIndex: 1,
       cacheEntry: {
         analysisLevel: 7,
         bestTurn: {
@@ -339,7 +380,7 @@ test.describe('AI results cache', () => {
     const seededStateJson = await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 0,
       maxAnalysisLevel: 25,
-      analysisMaxTimeIndex: 2,
+      analysisMaxTimeIndex: 3,
       showOnBoardP1: true,
       cacheEntry: {
         analysisLevel: 7,
@@ -380,7 +421,7 @@ test.describe('AI results cache', () => {
     const seededStateJson = await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 2,
       maxAnalysisLevel: 2,
-      analysisMaxTimeIndex: 6,
+      analysisMaxTimeIndex: 7,
     });
     await page.reload();
 
@@ -402,7 +443,7 @@ test.describe('AI results cache', () => {
     await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 13,
       maxAnalysisLevel: 12,
-      analysisMaxTimeIndex: 0,
+      analysisMaxTimeIndex: 1,
       cacheEntry: {
         analysisLevel: 12,
         bestTurn: {
@@ -432,7 +473,7 @@ test.describe('AI results cache', () => {
     await seedDefaultStateAndAiSetup(page, {
       minAnalysisLevel: 1,
       maxAnalysisLevel: 2,
-      analysisMaxTimeIndex: 2,
+      analysisMaxTimeIndex: 3,
     });
     await page.reload();
 
@@ -440,7 +481,7 @@ test.describe('AI results cache', () => {
     await page.context().setOffline(true);
 
     const aiPanel = page.locator('.ai-panel');
-    await aiPanel.getByRole('button', { name: 'Think' }).click();
+    await aiPanel.getByRole('button', { name: 'Think', exact: true }).click();
 
     await expect.poll(() => readAiStatusLevel(page), { timeout: 15000 }).toBeGreaterThanOrEqual(1);
     await expect.poll(() => readAiLineValue(page, 'Suggested'), { timeout: 15000 }).toBeTruthy();
