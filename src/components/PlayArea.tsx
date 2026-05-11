@@ -2006,22 +2006,28 @@ function PlayArea() {
     if (hasWinner) {
       return;
     }
-    if (selectedPieceId) {
-      const roomId = pieceRoomMap.get(pieceId);
-      if (roomId !== undefined) {
-        handleSelectedPieceDestination(roomId);
-      }
+
+    const pieceRoomId = pieceRoomMap.get(pieceId);
+    if (pieceRoomId === undefined) {
       return;
     }
+
+    if (!isPieceSelectable(pieceId)) {
+      handleRoomClick(pieceRoomId);
+      return;
+    }
+
+    if (selectedPieceId) {
+      handleSelectedPieceDestination(pieceRoomId);
+      return;
+    }
+
     if (selectedPieceId === pieceId) {
       setSelectedPieceId(null);
       setValidationMessage(null);
       return;
     }
-    if (!isPieceSelectable(pieceId)) {
-      setValidationMessage('You can only move your own piece or a stranger.');
-      return;
-    }
+
     setSelectedPieceId(pieceId);
     setValidationMessage(null);
   };
@@ -3978,6 +3984,16 @@ function PlayArea() {
                       onClick: (event: MouseEvent<SVGElement>) => {
                         event.stopPropagation();
                         handlePieceClick(piece.pieceId);
+                      },
+                      onDoubleClick: (event: MouseEvent<SVGElement>) => {
+                        event.stopPropagation();
+                        const roomId = pieceRoomMap.get(piece.pieceId);
+                        if (roomId === undefined) {
+                          return;
+                        }
+                        if (!isPieceSelectable(piece.pieceId)) {
+                          handleRoomDoubleClick(roomId);
+                        }
                       },
                       'aria-label': `${config.label} piece`,
                     };
