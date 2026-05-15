@@ -334,6 +334,7 @@ class RoomHelperApp:
         self.drag_preview_room: Room | None = None
 
         self.rooms = self._load_rooms()
+        self.last_created_room_id = self._highest_positive_room_id()
 
         self.status_var = tk.StringVar()
         self._build_ui()
@@ -803,6 +804,7 @@ class RoomHelperApp:
             return "break"
         if action == "save" and updated_room is not None:
             self.rooms.append(updated_room)
+            self._note_created_room_id(updated_room.id)
             self._save_rooms()
             self._redraw_overlays()
             self._update_status(f"Added room {updated_room.id} @ {updated_room.to_record()['coords']}")
@@ -836,14 +838,35 @@ class RoomHelperApp:
         center_x, center_y = room.center
         return ((center_x - x) ** 2) + ((center_y - y) ** 2)
 
+    def _highest_positive_room_id(self) -> int:
+        highest = 0
+        for room in self.rooms:
+            try:
+                room_id = int(room.id)
+            except ValueError:
+                continue
+            if room_id > highest:
+                highest = room_id
+        return highest
+
+    def _note_created_room_id(self, room_id: str) -> None:
+        try:
+            numeric_id = int(room_id)
+        except ValueError:
+            return
+        if numeric_id > 0:
+            self.last_created_room_id = numeric_id
+
     def _next_room_id(self) -> str:
         used: set[int] = set()
         for room in self.rooms:
             try:
-                used.add(int(room.id))
+                room_id = int(room.id)
             except ValueError:
                 continue
-        candidate = 1
+            if room_id > 0:
+                used.add(room_id)
+        candidate = max(1, self.last_created_room_id + 1)
         while candidate in used:
             candidate += 1
         return str(candidate)
