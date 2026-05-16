@@ -197,9 +197,28 @@ type BoardRoom = {
   visible: number[];
 };
 
+type BoardUiLayout = {
+  BoardWidth: number;
+  BoardHeight: number;
+  BoardOverlayFontSizePx: number;
+  PieceSizeTarget: number;
+  WinnerOverlayFontSizePx: number;
+  RoomDistanceBoxWidth: number;
+  RoomDistanceBoxHeight: number;
+  RoomDistanceBoxTopRatio: number;
+  ActionDisplayBounds?: {
+    MinXAfterRoomId: number;
+    MaxXBeforeRoomId: number;
+    MinYBelowRoomId: number;
+  };
+};
+
 type BoardLayout = {
   ImagePath: string;
+  JsonName: string;
+  Name: string;
   Rooms: BoardRoomRaw[];
+  UiLayout: BoardUiLayout;
 };
 
 type ActionKind = 'loot' | 'attack';
@@ -239,8 +258,17 @@ type SlotLayout = {
 };
 
 const boardLayout = boardData as BoardLayout;
-const boardWidth = 1480;
-const boardHeight = 965;
+const boardJsonName = boardLayout.JsonName;
+const boardDisplayName = boardLayout.Name;
+const boardUiLayout = boardLayout.UiLayout;
+const boardWidth = boardUiLayout.BoardWidth;
+const boardHeight = boardUiLayout.BoardHeight;
+const boardOverlayFontSizePx = boardUiLayout.BoardOverlayFontSizePx;
+const pieceSizeTarget = boardUiLayout.PieceSizeTarget;
+const winnerOverlayFontSizePx = boardUiLayout.WinnerOverlayFontSizePx;
+const roomDistanceBoxWidth = boardUiLayout.RoomDistanceBoxWidth;
+const roomDistanceBoxHeight = boardUiLayout.RoomDistanceBoxHeight;
+const roomDistanceBoxTopRatio = boardUiLayout.RoomDistanceBoxTopRatio;
 const boardImageHref = `${import.meta.env.BASE_URL}${boardLayout.ImagePath.replace(/^\//, '')}`;
 const boardRooms: BoardRoom[] = boardLayout.Rooms.map((room) => ({
   id: Number(room.Id),
@@ -291,9 +319,9 @@ const gameStateStorageKey = 'kdl.gameState.v1';
 const redoStateStackStorageKey = 'kdl.redoStack.v1';
 const assumedLocalStorageLimitBytes = 5 * 1024 * 1024;
 const localStorageUsageThresholdRatio = 0.85;
-const boardOverlayFontSizePx = 27;
 const defaultSetupRoomId = boardRooms[0]?.id ?? 1;
 const fallbackSetupPrefs = {
+  boardName: boardJsonName,
   moveCards: 2,
   weaponCards: 2,
   failureCards: 4,
@@ -329,6 +357,7 @@ type AiPrefs = {
 };
 
 type SetupPrefs = {
+  boardName: string;
   moveCards: number;
   weaponCards: number;
   failureCards: number;
@@ -463,6 +492,7 @@ const toSetupPrefsDraft = (prefs: SetupPrefs): SetupPrefsDraft => ({
 });
 const parseSetupPrefsDraft = (draft: SetupPrefsDraft): SetupPrefs | null => {
   const parsed = {
+    boardName: boardJsonName,
     moveCards: Number(draft.moveCards),
     weaponCards: Number(draft.weaponCards),
     failureCards: Number(draft.failureCards),
@@ -515,7 +545,12 @@ const stepNonNegativeText = (raw: string, direction: StepDirection, step: number
   const next = direction === 'down' ? Math.max(0, base - step) : base + step;
   return formatSetupCardDraft(next);
 };
+const isCurrentBoardName = (value: unknown) =>
+  typeof value !== 'string' || value === '' || value === boardJsonName || value === boardDisplayName;
 const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs): SetupPrefs => {
+  if (!isCurrentBoardName(candidate.boardName)) {
+    return fallback;
+  }
   const moveCards = isFiniteNonNegative(candidate.moveCards ?? NaN)
     ? (candidate.moveCards as number)
     : fallback.moveCards;
@@ -568,6 +603,7 @@ const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs
     ? (candidate.currentPlayerPieceId as NormalPlayerPieceId)
     : fallback.currentPlayerPieceId;
   return {
+    boardName: boardJsonName,
     moveCards,
     weaponCards,
     failureCards,
@@ -604,6 +640,7 @@ const shouldUseAdvancedSetup = (prefs: SetupPrefs, defaults: SetupPrefs) =>
   prefs.turnId !== defaults.turnId ||
   prefs.currentPlayerPieceId !== defaults.currentPlayerPieceId;
 const buildSetupPrefsForStart = (prefs: SetupPrefs, defaults: SetupPrefs, useAdvanced: boolean): SetupPrefs => ({
+  boardName: boardJsonName,
   moveCards: snapCardQuantityToThirtySeconds(prefs.moveCards),
   weaponCards: snapCardQuantityToThirtySeconds(prefs.weaponCards),
   failureCards: snapCardQuantityToThirtySeconds(prefs.failureCards),
@@ -1116,7 +1153,6 @@ const pieceConfig: Record<
   stranger2: { label: 'p4', shape: 'hex', color: '#55cccc', textColor: '#000000', showLabel: true },
 };
 
-const pieceSizeTarget = 80;
 const pieceGap = 3;
 const emptyLayoutCellPenalty = 0.45;
 
@@ -1210,19 +1246,23 @@ const getHexPoints = (x: number, y: number, size: number) => {
 };
 
 const actionDisplayBounds = (() => {
-  const room3 = boardRoomById.get(3);
-  const room11 = boardRoomById.get(11);
-  const room12 = boardRoomById.get(12);
-  if (!room3 || !room11 || !room12) {
+  const config = boardUiLayout.ActionDisplayBounds;
+  if (!config) {
     return null;
   }
-  const room3Rect = getRoomRect(room3.coords);
-  const room11Rect = getRoomRect(room11.coords);
-  const room12Rect = getRoomRect(room12.coords);
+  const minYRoom = boardRoomById.get(config.MinYBelowRoomId);
+  const maxXRoom = boardRoomById.get(config.MaxXBeforeRoomId);
+  const minXRoom = boardRoomById.get(config.MinXAfterRoomId);
+  if (!minYRoom || !maxXRoom || !minXRoom) {
+    return null;
+  }
+  const minYRoomRect = getRoomRect(minYRoom.coords);
+  const maxXRoomRect = getRoomRect(maxXRoom.coords);
+  const minXRoomRect = getRoomRect(minXRoom.coords);
   return {
-    minX: room12Rect.x + room12Rect.width,
-    maxX: room11Rect.x,
-    minY: room3Rect.y + room3Rect.height,
+    minX: minXRoomRect.x + minXRoomRect.width,
+    maxX: maxXRoomRect.x,
+    minY: minYRoomRect.y + minYRoomRect.height,
   };
 })();
 
@@ -1363,7 +1403,7 @@ const buildActionOverlayLayout = (text: string) => {
 };
 
 const buildWinnerOverlayLayout = (text: string) => {
-  const fontSize = 52;
+  const fontSize = winnerOverlayFontSizePx;
   const paddingX = 24;
   const paddingY = 18;
   const estimatedTextWidth = Math.max(180, text.length * fontSize * 0.58);
@@ -4096,10 +4136,10 @@ function PlayArea() {
                       return null;
                     }
                     const rect = getRoomRect(room.coords);
-                    const boxWidth = 30;
-                    const boxHeight = 30;
+                    const boxWidth = roomDistanceBoxWidth;
+                    const boxHeight = roomDistanceBoxHeight;
                     const boxX = rect.x + (rect.width - boxWidth) / 2;
-                    const boxY = rect.y + rect.height * 0.2;
+                    const boxY = rect.y + rect.height * roomDistanceBoxTopRatio;
                     const textX = boxX + boxWidth / 2;
                     const textY = boxY + boxHeight / 2 + 0.5;
                     const isMovePossible = movePossibleByRoom?.get(room.id) ?? true;

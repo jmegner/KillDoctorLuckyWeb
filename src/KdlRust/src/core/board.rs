@@ -45,6 +45,7 @@ impl BoardSpecification {
 #[readonly::make]
 pub struct Board {
     pub name: String,
+    pub json_name: String,
     pub rooms: HashMap<RoomId, Room>,       // key is room id
     pub room_ids: Vec<RoomId>,              // sorted
     pub room_visit_order_index: Vec<usize>, // indexed by room id
@@ -66,6 +67,31 @@ impl Board {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: impl Into<String>,
+        rooms: impl IntoIterator<Item = Room>,
+        player_start_room_id: RoomId,
+        doctor_start_room_id: RoomId,
+        cat_start_room_id: RoomId,
+        dog_start_room_id: RoomId,
+        spec: Option<BoardSpecification>,
+    ) -> Self {
+        let name = name.into();
+        let json_name = format!("Board{name}");
+        Self::new_with_json_name(
+            name,
+            json_name,
+            rooms,
+            player_start_room_id,
+            doctor_start_room_id,
+            cat_start_room_id,
+            dog_start_room_id,
+            spec,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_with_json_name(
+        name: impl Into<String>,
+        json_name: impl Into<String>,
         rooms: impl IntoIterator<Item = Room>,
         player_start_room_id: RoomId,
         doctor_start_room_id: RoomId,
@@ -119,6 +145,7 @@ impl Board {
 
         Board {
             name: name.into(),
+            json_name: json_name.into(),
             rooms,
             room_ids,
             room_visit_order_index,
@@ -168,7 +195,17 @@ impl Board {
                 board_path: board_path.clone(),
                 source: err,
             })?;
-        Self::from_spec(spec, closed_wing_names, board_name_suffix, board_path)
+        let json_name = board_path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .map(|stem| format!("{stem}{board_name_suffix}"));
+        Self::from_spec(
+            spec,
+            closed_wing_names,
+            board_name_suffix,
+            board_path,
+            json_name,
+        )
     }
 
     pub fn from_embedded_json_with_options<S>(
@@ -189,7 +226,13 @@ impl Board {
             board_path: board_path.clone(),
             source: err,
         })?;
-        Self::from_spec(spec, closed_wing_names, board_name_suffix, board_path)
+        Self::from_spec(
+            spec,
+            closed_wing_names,
+            board_name_suffix,
+            board_path,
+            Some(format!("Board{resolved_name}{board_name_suffix}")),
+        )
     }
 
     fn from_spec<S>(
@@ -197,6 +240,7 @@ impl Board {
         closed_wing_names: impl IntoIterator<Item = S>,
         board_name_suffix: &str,
         board_path: PathBuf,
+        json_name: Option<String>,
     ) -> Result<Self, BoardLoadError>
     where
         S: AsRef<str>,
@@ -236,8 +280,11 @@ impl Board {
                     })
             };
 
-        let board = Board::new(
-            format!("{}{}", spec.name, board_name_suffix),
+        let board_name = format!("{}{}", spec.name, board_name_suffix);
+        let board_json_name = json_name.unwrap_or_else(|| format!("Board{board_name}"));
+        let board = Board::new_with_json_name(
+            board_name,
+            board_json_name,
             open_rooms,
             choose_first_open(&spec.player_start_room_ids, "player")?,
             choose_first_open(&spec.doctor_start_room_ids, "doctor")?,
@@ -710,5 +757,25 @@ mod tests {
         assert_eq!(spec.name, "tiny");
         assert_eq!(spec.rooms.len(), 2);
         assert_eq!(spec.rooms[0].id, RoomId(1));
+    }
+
+    #[test]
+    fn embedded_board_json_name_uses_source_board_key() {
+        let board = Board::from_embedded_json("BoardAltDown").unwrap();
+
+        assert_eq!(board.name, "altdown");
+        assert_eq!(board.json_name, "BoardAltDown");
+    }
+
+    #[test]
+    fn embedded_board_json_name_includes_suffix_for_generated_variants() {
+        let board = Board::from_embedded_json_with_options(
+            "BoardAltDown",
+            std::iter::empty::<String>(),
+            "Variant",
+        )
+        .unwrap();
+
+        assert_eq!(board.json_name, "BoardAltDownVariant");
     }
 }

@@ -1,7 +1,23 @@
 {
   "ImagePath": "/BoardMainWestWingClosed.jpg",
+  "JsonName": "BoardMainWestWingClosed",
   "Name": "MainWestWingClosed",
   "Description": "Kill Doctor Lucky Board Main With West Wing Closed",
+  "UiLayout": {
+    "BoardWidth": 1480,
+    "BoardHeight": 965,
+    "BoardOverlayFontSizePx": 27,
+    "PieceSizeTarget": 80,
+    "WinnerOverlayFontSizePx": 52,
+    "RoomDistanceBoxWidth": 30,
+    "RoomDistanceBoxHeight": 30,
+    "RoomDistanceBoxTopRatio": 0.2,
+    "ActionDisplayBounds": {
+      "MinXAfterRoomId": 12,
+      "MaxXBeforeRoomId": 11,
+      "MinYBelowRoomId": 3
+    }
+  },
   "PlayerStartRoomIds": [1],
   "DoctorStartRoomIds": [15],
   "CatStartRoomIds": [2],

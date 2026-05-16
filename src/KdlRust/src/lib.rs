@@ -172,6 +172,8 @@ struct PlayerStats {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NormalSetup {
+    #[serde(default)]
+    board_name: String,
     #[serde(default = "default_move_cards")]
     move_cards: f64,
     #[serde(default = "default_weapon_cards")]
@@ -250,6 +252,7 @@ fn default_unset_card_quantity() -> f64 {
 
 fn default_normal_setup() -> NormalSetup {
     NormalSetup {
+        board_name: String::new(),
         move_cards: default_move_cards(),
         weapon_cards: default_weapon_cards(),
         failure_cards: default_failure_cards(),
@@ -275,6 +278,7 @@ fn normalize_normal_setup(
     common: &core::common_game_state::CommonGameState,
 ) -> NormalSetup {
     let mut normalized = setup.clone();
+    normalized.board_name = common.board.json_name.clone();
 
     if normalized.doctor_room_id == 0 {
         normalized.doctor_room_id = common.board.doctor_start_room_id.0;
@@ -420,6 +424,7 @@ fn snap_card_quantity_to_thirty_seconds(value: f64) -> f64 {
 
 fn snapped_normal_setup(setup: &NormalSetup) -> NormalSetup {
     NormalSetup {
+        board_name: setup.board_name.clone(),
         move_cards: snap_card_quantity_to_thirty_seconds(setup.move_cards),
         weapon_cards: snap_card_quantity_to_thirty_seconds(setup.weapon_cards),
         failure_cards: snap_card_quantity_to_thirty_seconds(setup.failure_cards),
@@ -438,6 +443,27 @@ fn snapped_normal_setup(setup: &NormalSetup) -> NormalSetup {
         turn_id: setup.turn_id,
         current_player_piece_id: setup.current_player_piece_id,
     }
+}
+
+fn is_matching_board_name(
+    saved_board_name: &str,
+    current_board_name: &str,
+    current_board_json_name: &str,
+) -> bool {
+    saved_board_name == current_board_name || saved_board_name == current_board_json_name
+}
+
+fn is_legacy_or_matching_board_name(
+    saved_board_name: &str,
+    current_board_name: &str,
+    current_board_json_name: &str,
+) -> bool {
+    saved_board_name.is_empty()
+        || is_matching_board_name(
+            saved_board_name,
+            current_board_name,
+            current_board_json_name,
+        )
 }
 
 fn normal_piece_id_for_state(state: &core::mutable_game_state::MutableGameState) -> PieceId {
@@ -980,7 +1006,7 @@ impl GameStateHandle {
     pub fn default_normal_setup_json(&self) -> String {
         let setup = normalize_normal_setup(&default_normal_setup(), &self.state.common);
         serde_json::to_string(&setup).unwrap_or_else(|_| {
-            "{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
+            "{\"boardName\":\"BoardAltDown\",\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
         })
     }
 
@@ -988,7 +1014,7 @@ impl GameStateHandle {
     pub fn current_normal_setup_json(&self) -> String {
         let setup = normalize_normal_setup(&self.normal_setup, &self.state.common);
         serde_json::to_string(&setup).unwrap_or_else(|_| {
-            "{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
+            "{\"boardName\":\"BoardAltDown\",\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
         })
     }
 
@@ -1018,6 +1044,7 @@ impl GameStateHandle {
         };
 
         let setup = snapped_normal_setup(&NormalSetup {
+            board_name: String::new(),
             move_cards,
             weapon_cards,
             failure_cards,
@@ -1051,13 +1078,13 @@ impl GameStateHandle {
     pub fn export_state_json(&self) -> String {
         let snapshot = PersistedGameState {
             version: PERSISTED_GAME_STATE_VERSION,
-            board_name: self.state.common.board.name.clone(),
+            board_name: self.state.common.board.json_name.clone(),
             normal_setup: normalize_normal_setup(&self.normal_setup, &self.state.common),
             normal_turns: collect_normal_turns(&self.state),
         };
 
         serde_json::to_string(&snapshot).unwrap_or_else(|_| {
-            "{\"version\":1,\"boardName\":\"\",\"normalSetup\":{\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"},\"normalTurns\":[]}".to_string()
+            "{\"version\":1,\"boardName\":\"BoardAltDown\",\"normalSetup\":{\"boardName\":\"BoardAltDown\",\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"},\"normalTurns\":[]}".to_string()
         })
     }
 
@@ -1072,10 +1099,24 @@ impl GameStateHandle {
             return format!("Unsupported saved game version {}.", snapshot.version);
         }
 
-        if snapshot.board_name != self.state.common.board.name {
+        if !is_matching_board_name(
+            &snapshot.board_name,
+            &self.state.common.board.name,
+            &self.state.common.board.json_name,
+        ) {
             return format!(
                 "Saved game board '{}' does not match current board '{}'.",
-                snapshot.board_name, self.state.common.board.name
+                snapshot.board_name, self.state.common.board.json_name
+            );
+        }
+        if !is_legacy_or_matching_board_name(
+            &snapshot.normal_setup.board_name,
+            &self.state.common.board.name,
+            &self.state.common.board.json_name,
+        ) {
+            return format!(
+                "Saved game setup board '{}' does not match current board '{}'.",
+                snapshot.normal_setup.board_name, self.state.common.board.json_name
             );
         }
 
@@ -1205,6 +1246,7 @@ mod tests {
     fn new_state_with_normal_setup_applies_rooms_and_current_player() {
         let common = sample_common();
         let setup = NormalSetup {
+            board_name: String::new(),
             move_cards: 0.5,
             weapon_cards: 1.5,
             failure_cards: 2.5,
@@ -1297,6 +1339,47 @@ mod tests {
         assert_eq!(
             validate_normal_setup(&setup, &common),
             Err("currentPlayerPieceId must be P1 or P3.".to_string())
+        );
+    }
+
+    #[test]
+    fn export_state_json_uses_board_json_name() {
+        let board = core::board::Board::from_embedded_json("BoardAltDown")
+            .expect("AltDown board should load");
+        let common =
+            core::common_game_state::CommonGameState::from_num_normal_players(true, board, 2);
+        let normal_setup = normalize_normal_setup(&default_normal_setup(), &common);
+        let state = new_state_with_normal_setup(common, &normal_setup);
+        let handle = GameStateHandle {
+            state,
+            normal_setup,
+        };
+
+        let snapshot = serde_json::from_str::<PersistedGameState>(&handle.export_state_json())
+            .expect("export should be valid persisted game json");
+
+        assert_eq!(snapshot.board_name, "BoardAltDown");
+        assert_eq!(snapshot.normal_setup.board_name, "BoardAltDown");
+    }
+
+    #[test]
+    fn saved_game_board_match_accepts_legacy_display_name() {
+        assert!(is_matching_board_name("Tiny", "Tiny", "BoardTiny"));
+        assert!(is_matching_board_name("BoardTiny", "Tiny", "BoardTiny"));
+        assert!(!is_matching_board_name("BoardMain", "Tiny", "BoardTiny"));
+    }
+
+    #[test]
+    fn import_state_json_rejects_mismatched_setup_board_name() {
+        let mut handle = new_default_game_state().expect("default game state should load");
+        let mut snapshot = serde_json::from_str::<PersistedGameState>(&handle.export_state_json())
+            .expect("export should be valid persisted game json");
+        snapshot.normal_setup.board_name = "BoardMain".to_string();
+        let snapshot_json = serde_json::to_string(&snapshot).expect("snapshot should serialize");
+
+        assert_eq!(
+            handle.import_state_json(&snapshot_json),
+            "Saved game setup board 'BoardMain' does not match current board 'BoardAltDown'."
         );
     }
 }

@@ -1,7 +1,23 @@
 {
     "ImagePath": "/BoardAltDown.jpg",
+    "JsonName": "BoardAltDown",
     "Name": "AltDown",
     "Description": "Kill Doctor Lucky Board Alternate Downstairs",
+    "UiLayout": {
+      "BoardWidth": 1480,
+      "BoardHeight": 965,
+      "BoardOverlayFontSizePx": 27,
+      "PieceSizeTarget": 80,
+      "WinnerOverlayFontSizePx": 52,
+      "RoomDistanceBoxWidth": 30,
+      "RoomDistanceBoxHeight": 30,
+      "RoomDistanceBoxTopRatio": 0.2,
+      "ActionDisplayBounds": {
+        "MinXAfterRoomId": 12,
+        "MaxXBeforeRoomId": 11,
+        "MinYBelowRoomId": 3
+      }
+    },
     "PlayerStartRoomIds": [6],
     "DoctorStartRoomIds": [9],
     "CatStartRoomIds": [7],
