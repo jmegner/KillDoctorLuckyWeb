@@ -4,8 +4,8 @@
   "Name": "MainWestWingClosed",
   "Description": "Kill Doctor Lucky Board Main With West Wing Closed",
   "UiLayout": {
-    "BoardWidth": 1480,
-    "BoardHeight": 965,
+    "BoardWidth": 1630,
+    "BoardHeight": 1490,
     "BoardOverlayFontSizePx": 27,
     "PieceSizeTarget": 80,
     "WinnerOverlayFontSizePx": 52,

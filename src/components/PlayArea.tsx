@@ -1,7 +1,11 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
-import wasmBindgenInit, { newDefaultGameState, type GameStateHandle } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
+import wasmBindgenInit, {
+  newGameStateForBoard,
+  type GameStateHandle,
+} from '@/KdlRust/pkg/kill_doctor_lucky_rust';
 import TreeSearchWorker from '@/workers/treeSearchWorker?worker';
-import boardData from '../data/boards/BoardAltDown.json';
+import boardAltDownData from '../data/boards/BoardAltDown.json';
+import boardMainWestWingClosedData from '../data/boards/BoardMainWestWingClosed.json';
 
 type PieceId = 'doctor' | 'player1' | 'player2' | 'stranger1' | 'stranger2';
 type NormalPlayerPieceId = 'player1' | 'player2';
@@ -163,6 +167,7 @@ type AiSuggestion = {
 };
 
 type AiResultsCacheEntry = {
+  boardName: string;
   stateJson: string;
   analysisLevel: number;
   bestTurn: BestTurnResponse;
@@ -217,8 +222,31 @@ type BoardLayout = {
   ImagePath: string;
   JsonName: string;
   Name: string;
+  PlayerStartRoomIds: number[];
+  DoctorStartRoomIds: number[];
+  CatStartRoomIds: number[];
+  DogStartRoomIds: number[];
   Rooms: BoardRoomRaw[];
   UiLayout: BoardUiLayout;
+};
+
+type BoardContext = {
+  layout: BoardLayout;
+  jsonName: string;
+  displayName: string;
+  uiLayout: BoardUiLayout;
+  width: number;
+  height: number;
+  overlayFontSizePx: number;
+  pieceSizeTarget: number;
+  winnerOverlayFontSizePx: number;
+  roomDistanceBoxWidth: number;
+  roomDistanceBoxHeight: number;
+  roomDistanceBoxTopRatio: number;
+  imageHref: string;
+  rooms: BoardRoom[];
+  roomById: Map<number, BoardRoom>;
+  actionDisplayBounds: { minX: number; maxX: number; minY: number } | null;
 };
 
 type ActionKind = 'loot' | 'attack';
@@ -257,27 +285,71 @@ type SlotLayout = {
   slots: SlotPosition[];
 };
 
-const boardLayout = boardData as BoardLayout;
-const boardJsonName = boardLayout.JsonName;
-const boardDisplayName = boardLayout.Name;
-const boardUiLayout = boardLayout.UiLayout;
-const boardWidth = boardUiLayout.BoardWidth;
-const boardHeight = boardUiLayout.BoardHeight;
-const boardOverlayFontSizePx = boardUiLayout.BoardOverlayFontSizePx;
-const pieceSizeTarget = boardUiLayout.PieceSizeTarget;
-const winnerOverlayFontSizePx = boardUiLayout.WinnerOverlayFontSizePx;
-const roomDistanceBoxWidth = boardUiLayout.RoomDistanceBoxWidth;
-const roomDistanceBoxHeight = boardUiLayout.RoomDistanceBoxHeight;
-const roomDistanceBoxTopRatio = boardUiLayout.RoomDistanceBoxTopRatio;
-const boardImageHref = `${import.meta.env.BASE_URL}${boardLayout.ImagePath.replace(/^\//, '')}`;
-const boardRooms: BoardRoom[] = boardLayout.Rooms.map((room) => ({
-  id: Number(room.Id),
-  name: room.Name,
-  coords: room.Coords,
-  adjacent: room.Adjacent?.map(Number) ?? [],
-  visible: room.Visible?.map(Number) ?? [],
-}));
-const boardRoomById = new Map<number, BoardRoom>(boardRooms.map((room) => [room.id, room] as const));
+const boardLayouts = [boardAltDownData, boardMainWestWingClosedData].map((data) => data as BoardLayout);
+const defaultBoardJsonName = 'BoardAltDown';
+const boardLayoutByJsonName = new Map(boardLayouts.map((layout) => [layout.JsonName, layout] as const));
+const getBoardLayout = (boardName: string) =>
+  boardLayoutByJsonName.get(boardName) ?? boardLayoutByJsonName.get(defaultBoardJsonName) ?? boardLayouts[0];
+const buildBoardContext = (layout: BoardLayout): BoardContext => {
+  const roomRectFromCoords = (coords: number[]) => ({
+    x: coords[0],
+    y: coords[1],
+    width: coords[2] - coords[0],
+    height: coords[3] - coords[1],
+  });
+  const rooms = layout.Rooms.map((room) => ({
+    id: Number(room.Id),
+    name: room.Name,
+    coords: room.Coords,
+    adjacent: room.Adjacent?.map(Number) ?? [],
+    visible: room.Visible?.map(Number) ?? [],
+  }));
+  const roomById = new Map<number, BoardRoom>(rooms.map((room) => [room.id, room] as const));
+  const config = layout.UiLayout.ActionDisplayBounds;
+  const actionDisplayBounds = (() => {
+    if (!config) {
+      return null;
+    }
+    const minYRoom = roomById.get(config.MinYBelowRoomId);
+    const maxXRoom = roomById.get(config.MaxXBeforeRoomId);
+    const minXRoom = roomById.get(config.MinXAfterRoomId);
+    if (!minYRoom || !maxXRoom || !minXRoom) {
+      return null;
+    }
+    const minYRoomRect = roomRectFromCoords(minYRoom.coords);
+    const maxXRoomRect = roomRectFromCoords(maxXRoom.coords);
+    const minXRoomRect = roomRectFromCoords(minXRoom.coords);
+    return {
+      minX: minXRoomRect.x + minXRoomRect.width,
+      maxX: maxXRoomRect.x,
+      minY: minYRoomRect.y + minYRoomRect.height,
+    };
+  })();
+  return {
+    layout,
+    jsonName: layout.JsonName,
+    displayName: layout.Name,
+    uiLayout: layout.UiLayout,
+    width: layout.UiLayout.BoardWidth,
+    height: layout.UiLayout.BoardHeight,
+    overlayFontSizePx: layout.UiLayout.BoardOverlayFontSizePx,
+    pieceSizeTarget: layout.UiLayout.PieceSizeTarget,
+    winnerOverlayFontSizePx: layout.UiLayout.WinnerOverlayFontSizePx,
+    roomDistanceBoxWidth: layout.UiLayout.RoomDistanceBoxWidth,
+    roomDistanceBoxHeight: layout.UiLayout.RoomDistanceBoxHeight,
+    roomDistanceBoxTopRatio: layout.UiLayout.RoomDistanceBoxTopRatio,
+    imageHref: `${import.meta.env.BASE_URL}${layout.ImagePath.replace(/^\//, '')}`,
+    rooms,
+    roomById,
+    actionDisplayBounds,
+  };
+};
+const boardContextByJsonName = new Map(boardLayouts.map((layout) => [layout.JsonName, buildBoardContext(layout)]));
+const getBoardContext = (boardName: string) =>
+  boardContextByJsonName.get(boardName) ??
+  boardContextByJsonName.get(defaultBoardJsonName) ??
+  buildBoardContext(getBoardLayout(defaultBoardJsonName));
+let currentBoardContext = getBoardContext(defaultBoardJsonName);
 
 const pieceOrder: PieceId[] = ['doctor', 'player1', 'player2', 'stranger1', 'stranger2'];
 const normalPlayerPieceIds: NormalPlayerPieceId[] = ['player1', 'player2'];
@@ -306,8 +378,8 @@ const analysisMaxTimeOptions = [
 const mullMaxTimeMs = 99999 * 1000;
 const aiAnalysisDisabledStatusMessage = 'AI analysis disabled.';
 const defaultAnalysisMaxTimeIndex = 2;
-const defaultMinAnalysisLevel = 2;
-const defaultMaxAnalysisLevel = 15;
+const defaultMinAnalysisLevel = 1;
+const defaultMaxAnalysisLevel = 18;
 const isPieceId = (value: string): value is PieceId => pieceOrder.includes(value as PieceId);
 const isSetupNormalPlayerPieceId = (value: string): value is NormalPlayerPieceId =>
   normalPlayerPieceIds.includes(value as NormalPlayerPieceId);
@@ -317,30 +389,35 @@ const aiResultsCacheStorageKey = 'kdl.aiResultsCache.v1';
 const setupPrefsStorageKey = 'kdl.setup.v1';
 const gameStateStorageKey = 'kdl.gameState.v1';
 const redoStateStackStorageKey = 'kdl.redoStack.v1';
+const selectedBoardStorageKey = 'kdl.selectedBoard.v1';
 const assumedLocalStorageLimitBytes = 5 * 1024 * 1024;
 const localStorageUsageThresholdRatio = 0.85;
-const defaultSetupRoomId = boardRooms[0]?.id ?? 1;
-const fallbackSetupPrefs = {
-  boardName: boardJsonName,
-  moveCards: 2,
-  weaponCards: 2,
-  failureCards: 4,
-  player2MoveCards: 2,
-  player2WeaponCards: 2,
-  player2FailureCards: 4,
-  doctorRoomId: defaultSetupRoomId,
-  player1RoomId: defaultSetupRoomId,
-  stranger1RoomId: defaultSetupRoomId,
-  player2RoomId: defaultSetupRoomId,
-  stranger2RoomId: defaultSetupRoomId,
-  player1Strength: 1,
-  stranger1Strength: 1,
-  player2Strength: 1,
-  stranger2Strength: 1,
-  turnId: 1,
-  currentPlayerPieceId: 'player1' as NormalPlayerPieceId,
+const boardScopedStorageKey = (baseKey: string, boardName: string) => `${baseKey}.${boardName}`;
+const defaultSetupPrefsForBoard = (boardContext: BoardContext): SetupPrefs => {
+  const defaultSetupRoomId = boardContext.rooms[0]?.id ?? 1;
+  const firstOpenStartRoom = (roomIds: number[]) =>
+    roomIds.find((roomId) => boardContext.roomById.has(Number(roomId))) ?? defaultSetupRoomId;
+  return {
+    boardName: boardContext.jsonName,
+    moveCards: 2,
+    weaponCards: 2,
+    failureCards: 4,
+    player2MoveCards: 2,
+    player2WeaponCards: 2,
+    player2FailureCards: 4,
+    doctorRoomId: firstOpenStartRoom(boardContext.layout.DoctorStartRoomIds),
+    player1RoomId: firstOpenStartRoom(boardContext.layout.PlayerStartRoomIds),
+    stranger1RoomId: firstOpenStartRoom(boardContext.layout.PlayerStartRoomIds),
+    player2RoomId: firstOpenStartRoom(boardContext.layout.PlayerStartRoomIds),
+    stranger2RoomId: firstOpenStartRoom(boardContext.layout.PlayerStartRoomIds),
+    player1Strength: 1,
+    stranger1Strength: 1,
+    player2Strength: 1,
+    stranger2Strength: 1,
+    turnId: 1,
+    currentPlayerPieceId: 'player1' as NormalPlayerPieceId,
+  };
 };
-
 type AnimationPrefs = {
   animationEnabled: boolean;
   animationSpeedIndex: number;
@@ -378,6 +455,7 @@ type SetupPrefs = {
 };
 
 type SetupPrefsDraft = {
+  boardName: string;
   moveCards: string;
   weaponCards: string;
   failureCards: string;
@@ -469,9 +547,11 @@ const parseMaxAnalysisLevelDraft = (draft: string) => {
   }
   return Math.trunc(parsed);
 };
-const isValidBoardRoomId = (value: number) => Number.isInteger(value) && boardRoomById.has(value);
+const isValidBoardRoomId = (value: number, boardContext = currentBoardContext) =>
+  Number.isInteger(value) && boardContext.roomById.has(value);
 const isFiniteNonNegativeInteger = (value: number) => Number.isFinite(value) && value >= 0 && Number.isInteger(value);
 const toSetupPrefsDraft = (prefs: SetupPrefs): SetupPrefsDraft => ({
+  boardName: prefs.boardName,
   moveCards: formatSetupCardDraft(prefs.moveCards),
   weaponCards: formatSetupCardDraft(prefs.weaponCards),
   failureCards: formatSetupCardDraft(prefs.failureCards),
@@ -491,8 +571,9 @@ const toSetupPrefsDraft = (prefs: SetupPrefs): SetupPrefsDraft => ({
   currentPlayerPieceId: prefs.currentPlayerPieceId,
 });
 const parseSetupPrefsDraft = (draft: SetupPrefsDraft): SetupPrefs | null => {
+  const boardContext = getBoardContext(draft.boardName);
   const parsed = {
-    boardName: boardJsonName,
+    boardName: boardContext.jsonName,
     moveCards: Number(draft.moveCards),
     weaponCards: Number(draft.weaponCards),
     failureCards: Number(draft.failureCards),
@@ -517,11 +598,11 @@ const parseSetupPrefsDraft = (draft: SetupPrefsDraft): SetupPrefs | null => {
     isFiniteNonNegative(parsed.player2MoveCards) &&
     isFiniteNonNegative(parsed.player2WeaponCards) &&
     isFiniteNonNegative(parsed.player2FailureCards) &&
-    isValidBoardRoomId(parsed.doctorRoomId) &&
-    isValidBoardRoomId(parsed.player1RoomId) &&
-    isValidBoardRoomId(parsed.stranger1RoomId) &&
-    isValidBoardRoomId(parsed.player2RoomId) &&
-    isValidBoardRoomId(parsed.stranger2RoomId) &&
+    isValidBoardRoomId(parsed.doctorRoomId, boardContext) &&
+    isValidBoardRoomId(parsed.player1RoomId, boardContext) &&
+    isValidBoardRoomId(parsed.stranger1RoomId, boardContext) &&
+    isValidBoardRoomId(parsed.player2RoomId, boardContext) &&
+    isValidBoardRoomId(parsed.stranger2RoomId, boardContext) &&
     isFiniteNonNegativeInteger(parsed.player1Strength) &&
     isFiniteNonNegativeInteger(parsed.stranger1Strength) &&
     isFiniteNonNegativeInteger(parsed.player2Strength) &&
@@ -545,10 +626,14 @@ const stepNonNegativeText = (raw: string, direction: StepDirection, step: number
   const next = direction === 'down' ? Math.max(0, base - step) : base + step;
   return formatSetupCardDraft(next);
 };
-const isCurrentBoardName = (value: unknown) =>
-  typeof value !== 'string' || value === '' || value === boardJsonName || value === boardDisplayName;
-const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs): SetupPrefs => {
-  if (!isCurrentBoardName(candidate.boardName)) {
+const isBoardNameForContext = (value: unknown, boardContext: BoardContext) =>
+  typeof value !== 'string' || value === '' || value === boardContext.jsonName || value === boardContext.displayName;
+const sanitizeSetupPrefs = (
+  candidate: Partial<SetupPrefs>,
+  fallback: SetupPrefs,
+  boardContext = getBoardContext(fallback.boardName),
+): SetupPrefs => {
+  if (!isBoardNameForContext(candidate.boardName, boardContext)) {
     return fallback;
   }
   const moveCards = isFiniteNonNegative(candidate.moveCards ?? NaN)
@@ -569,19 +654,19 @@ const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs
   const player2FailureCards = isFiniteNonNegative(candidate.player2FailureCards ?? NaN)
     ? (candidate.player2FailureCards as number)
     : failureCards;
-  const doctorRoomId = isValidBoardRoomId(candidate.doctorRoomId ?? NaN)
+  const doctorRoomId = isValidBoardRoomId(candidate.doctorRoomId ?? NaN, boardContext)
     ? (candidate.doctorRoomId as number)
     : fallback.doctorRoomId;
-  const player1RoomId = isValidBoardRoomId(candidate.player1RoomId ?? NaN)
+  const player1RoomId = isValidBoardRoomId(candidate.player1RoomId ?? NaN, boardContext)
     ? (candidate.player1RoomId as number)
     : fallback.player1RoomId;
-  const stranger1RoomId = isValidBoardRoomId(candidate.stranger1RoomId ?? NaN)
+  const stranger1RoomId = isValidBoardRoomId(candidate.stranger1RoomId ?? NaN, boardContext)
     ? (candidate.stranger1RoomId as number)
     : fallback.stranger1RoomId;
-  const player2RoomId = isValidBoardRoomId(candidate.player2RoomId ?? NaN)
+  const player2RoomId = isValidBoardRoomId(candidate.player2RoomId ?? NaN, boardContext)
     ? (candidate.player2RoomId as number)
     : fallback.player2RoomId;
-  const stranger2RoomId = isValidBoardRoomId(candidate.stranger2RoomId ?? NaN)
+  const stranger2RoomId = isValidBoardRoomId(candidate.stranger2RoomId ?? NaN, boardContext)
     ? (candidate.stranger2RoomId as number)
     : fallback.stranger2RoomId;
   const player1Strength = isFiniteNonNegativeInteger(candidate.player1Strength ?? NaN)
@@ -603,7 +688,7 @@ const sanitizeSetupPrefs = (candidate: Partial<SetupPrefs>, fallback: SetupPrefs
     ? (candidate.currentPlayerPieceId as NormalPlayerPieceId)
     : fallback.currentPlayerPieceId;
   return {
-    boardName: boardJsonName,
+    boardName: boardContext.jsonName,
     moveCards,
     weaponCards,
     failureCards,
@@ -640,7 +725,7 @@ const shouldUseAdvancedSetup = (prefs: SetupPrefs, defaults: SetupPrefs) =>
   prefs.turnId !== defaults.turnId ||
   prefs.currentPlayerPieceId !== defaults.currentPlayerPieceId;
 const buildSetupPrefsForStart = (prefs: SetupPrefs, defaults: SetupPrefs, useAdvanced: boolean): SetupPrefs => ({
-  boardName: boardJsonName,
+  boardName: prefs.boardName,
   moveCards: snapCardQuantityToThirtySeconds(prefs.moveCards),
   weaponCards: snapCardQuantityToThirtySeconds(prefs.weaponCards),
   failureCards: snapCardQuantityToThirtySeconds(prefs.failureCards),
@@ -665,37 +750,76 @@ const buildSetupPrefsForStart = (prefs: SetupPrefs, defaults: SetupPrefs, useAdv
   turnId: useAdvanced ? prefs.turnId : defaults.turnId,
   currentPlayerPieceId: useAdvanced ? prefs.currentPlayerPieceId : defaults.currentPlayerPieceId,
 });
-const parseSetupPrefsJson = (raw: string, fallback: SetupPrefs): SetupPrefs => {
+const parseSetupPrefsJson = (raw: string, fallback: SetupPrefs, boardContext = getBoardContext(fallback.boardName)): SetupPrefs => {
   try {
     const parsed = JSON.parse(raw) as Partial<SetupPrefs>;
-    return sanitizeSetupPrefs(parsed, fallback);
+    return sanitizeSetupPrefs(parsed, fallback, boardContext);
   } catch {
     return fallback;
   }
 };
-const loadSetupPrefs = (fallback: SetupPrefs): SetupPrefs => {
+const loadSetupPrefs = (fallback: SetupPrefs, boardContext = getBoardContext(fallback.boardName)): SetupPrefs => {
   if (typeof window === 'undefined') {
     return fallback;
   }
 
   try {
-    const raw = window.localStorage.getItem(setupPrefsStorageKey);
+    const raw =
+      window.localStorage.getItem(boardScopedStorageKey(setupPrefsStorageKey, boardContext.jsonName)) ??
+      (boardContext.jsonName === defaultBoardJsonName ? window.localStorage.getItem(setupPrefsStorageKey) : null);
     if (!raw) {
       return fallback;
     }
     const parsed = JSON.parse(raw) as Partial<SetupPrefs>;
-    return sanitizeSetupPrefs(parsed, fallback);
+    return sanitizeSetupPrefs(parsed, fallback, boardContext);
   } catch {
     return fallback;
   }
 };
-const saveSetupPrefs = (prefs: SetupPrefs) => {
+const saveSetupPrefs = (prefs: SetupPrefs, boardContext = getBoardContext(prefs.boardName)) => {
   if (typeof window === 'undefined') {
     return;
   }
 
   try {
-    window.localStorage.setItem(setupPrefsStorageKey, JSON.stringify(sanitizeSetupPrefs(prefs, fallbackSetupPrefs)));
+    window.localStorage.setItem(
+      boardScopedStorageKey(setupPrefsStorageKey, boardContext.jsonName),
+      JSON.stringify(sanitizeSetupPrefs(prefs, defaultSetupPrefsForBoard(boardContext), boardContext)),
+    );
+    if (boardContext.jsonName === defaultBoardJsonName) {
+      window.localStorage.setItem(
+        setupPrefsStorageKey,
+        JSON.stringify(sanitizeSetupPrefs(prefs, defaultSetupPrefsForBoard(boardContext), boardContext)),
+      );
+    }
+  } catch {
+    // Ignore persistence failures (e.g. private mode / quota).
+  }
+};
+
+const loadSelectedBoardName = () => {
+  if (typeof window === 'undefined') {
+    return defaultBoardJsonName;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(selectedBoardStorageKey);
+    if (raw && boardLayoutByJsonName.has(raw)) {
+      return raw;
+    }
+  } catch {
+    // Fall back to the default board.
+  }
+  return defaultBoardJsonName;
+};
+
+const saveSelectedBoardName = (boardName: string) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(selectedBoardStorageKey, getBoardContext(boardName).jsonName);
   } catch {
     // Ignore persistence failures (e.g. private mode / quota).
   }
@@ -879,6 +1003,13 @@ const sanitizeAiResultsCacheEntry = (candidate: unknown): AiResultsCacheEntry | 
   if (typeof parsed.stateJson !== 'string' || parsed.stateJson.length === 0) {
     return null;
   }
+  const boardName =
+    typeof parsed.boardName === 'string' && boardLayoutByJsonName.has(parsed.boardName)
+      ? parsed.boardName
+      : boardNameFromSnapshotJson(parsed.stateJson);
+  if (!boardName) {
+    return null;
+  }
   if (typeof parsed.analysisLevel !== 'number' || !Number.isFinite(parsed.analysisLevel) || parsed.analysisLevel < 0) {
     return null;
   }
@@ -904,6 +1035,7 @@ const sanitizeAiResultsCacheEntry = (candidate: unknown): AiResultsCacheEntry | 
   }
 
   return {
+    boardName,
     stateJson: parsed.stateJson,
     analysisLevel: Math.trunc(parsed.analysisLevel),
     bestTurn,
@@ -917,9 +1049,10 @@ const sanitizeAiResultsCacheEntry = (candidate: unknown): AiResultsCacheEntry | 
 const normalizeAiResultsCacheEntries = (entries: AiResultsCacheEntry[]) => {
   const entriesByState = new Map<string, AiResultsCacheEntry>();
   entries.forEach((entry) => {
-    const previous = entriesByState.get(entry.stateJson);
+    const cacheKey = `${entry.boardName}\n${entry.stateJson}`;
+    const previous = entriesByState.get(cacheKey);
     if (!previous || previous.lastUsedAtMs <= entry.lastUsedAtMs) {
-      entriesByState.set(entry.stateJson, entry);
+      entriesByState.set(cacheKey, entry);
     }
   });
   return Array.from(entriesByState.values());
@@ -1044,44 +1177,74 @@ const clearAiResultsCacheStore = (): AiResultsCacheStore => {
   return createEmptyAiResultsCacheStore();
 };
 
-const saveGameStateSnapshot = (gameState: GameStateHandle | null) => {
+const boardNameFromSnapshotJson = (snapshotJson: string): string | null => {
+  try {
+    const parsed = JSON.parse(snapshotJson) as { boardName?: unknown; board_name?: unknown };
+    const boardName = typeof parsed.boardName === 'string' ? parsed.boardName : parsed.board_name;
+    return typeof boardName === 'string' && boardLayoutByJsonName.has(boardName) ? boardName : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveGameStateSnapshot = (gameState: GameStateHandle | null, boardName = currentBoardContext.jsonName) => {
   if (!gameState || typeof window === 'undefined') {
     return;
   }
 
   try {
-    window.localStorage.setItem(gameStateStorageKey, gameState.exportStateJson());
+    const snapshot = gameState.exportStateJson();
+    const snapshotBoardName = boardNameFromSnapshotJson(snapshot) ?? boardName;
+    window.localStorage.setItem(boardScopedStorageKey(gameStateStorageKey, snapshotBoardName), snapshot);
+    if (snapshotBoardName === defaultBoardJsonName) {
+      window.localStorage.setItem(gameStateStorageKey, snapshot);
+    }
   } catch {
     // Ignore persistence failures (e.g. private mode / quota).
   }
 };
 
-const loadRedoStateStack = (): string[] => {
+const loadRedoStateStack = (boardName = currentBoardContext.jsonName): string[] => {
   if (typeof window === 'undefined') {
     return [];
   }
 
   try {
-    const hasGameStateSnapshot = window.localStorage.getItem(gameStateStorageKey) !== null;
+    const gameStateKey = boardScopedStorageKey(gameStateStorageKey, boardName);
+    const redoStateKey = boardScopedStorageKey(redoStateStackStorageKey, boardName);
+    const hasGameStateSnapshot =
+      window.localStorage.getItem(gameStateKey) !== null ||
+      (boardName === defaultBoardJsonName && window.localStorage.getItem(gameStateStorageKey) !== null);
     if (!hasGameStateSnapshot) {
-      window.localStorage.removeItem(redoStateStackStorageKey);
+      window.localStorage.removeItem(redoStateKey);
+      if (boardName === defaultBoardJsonName) {
+        window.localStorage.removeItem(redoStateStackStorageKey);
+      }
       return [];
     }
 
-    const raw = window.localStorage.getItem(redoStateStackStorageKey);
+    const raw =
+      window.localStorage.getItem(redoStateKey) ??
+      (boardName === defaultBoardJsonName ? window.localStorage.getItem(redoStateStackStorageKey) : null);
     if (!raw) {
       return [];
     }
 
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      window.localStorage.removeItem(redoStateStackStorageKey);
+      window.localStorage.removeItem(redoStateKey);
+      if (boardName === defaultBoardJsonName) {
+        window.localStorage.removeItem(redoStateStackStorageKey);
+      }
       return [];
     }
-    return parsed.filter((snapshot): snapshot is string => typeof snapshot === 'string');
+    return parsed.filter(
+      (snapshot): snapshot is string =>
+        typeof snapshot === 'string' && (boardNameFromSnapshotJson(snapshot) ?? boardName) === boardName,
+    );
   } catch {
     try {
-      window.localStorage.removeItem(redoStateStackStorageKey);
+      window.localStorage.removeItem(boardScopedStorageKey(redoStateStackStorageKey, boardName));
     } catch {
       // Ignore cleanup failures.
     }
@@ -1089,47 +1252,74 @@ const loadRedoStateStack = (): string[] => {
   }
 };
 
-const saveRedoStateStack = (redoStateStack: string[]) => {
+const saveRedoStateStack = (redoStateStack: string[], boardName = currentBoardContext.jsonName) => {
   if (typeof window === 'undefined') {
     return;
   }
 
   try {
-    const snapshots = redoStateStack.filter((snapshot): snapshot is string => typeof snapshot === 'string');
+    const redoStateKey = boardScopedStorageKey(redoStateStackStorageKey, boardName);
+    const snapshots = redoStateStack.filter(
+      (snapshot): snapshot is string =>
+        typeof snapshot === 'string' && (boardNameFromSnapshotJson(snapshot) ?? boardName) === boardName,
+    );
     if (snapshots.length === 0) {
-      window.localStorage.removeItem(redoStateStackStorageKey);
+      window.localStorage.removeItem(redoStateKey);
+      if (boardName === defaultBoardJsonName) {
+        window.localStorage.removeItem(redoStateStackStorageKey);
+      }
       return;
     }
-    window.localStorage.setItem(redoStateStackStorageKey, JSON.stringify(snapshots));
+    window.localStorage.setItem(redoStateKey, JSON.stringify(snapshots));
+    if (boardName === defaultBoardJsonName) {
+      window.localStorage.setItem(redoStateStackStorageKey, JSON.stringify(snapshots));
+    }
   } catch {
     // Ignore persistence failures (e.g. private mode / quota).
   }
 };
 
-const loadGameStateSnapshot = (gameState: GameStateHandle) => {
+const loadGameStateSnapshot = (gameState: GameStateHandle, boardContext = currentBoardContext) => {
   if (typeof window === 'undefined') {
     return;
   }
 
   try {
-    const rawSnapshot = window.localStorage.getItem(gameStateStorageKey);
+    const rawSnapshot =
+      window.localStorage.getItem(boardScopedStorageKey(gameStateStorageKey, boardContext.jsonName)) ??
+      (boardContext.jsonName === defaultBoardJsonName ? window.localStorage.getItem(gameStateStorageKey) : null);
     if (!rawSnapshot) {
+      return;
+    }
+    if (boardNameFromSnapshotJson(rawSnapshot) !== boardContext.jsonName) {
       return;
     }
 
     const importError = gameState.importStateJson(rawSnapshot);
     if (importError) {
-      window.localStorage.removeItem(gameStateStorageKey);
-      window.localStorage.removeItem(redoStateStackStorageKey);
+      window.localStorage.removeItem(boardScopedStorageKey(gameStateStorageKey, boardContext.jsonName));
+      window.localStorage.removeItem(boardScopedStorageKey(redoStateStackStorageKey, boardContext.jsonName));
+      if (boardContext.jsonName === defaultBoardJsonName) {
+        window.localStorage.removeItem(gameStateStorageKey);
+        window.localStorage.removeItem(redoStateStackStorageKey);
+      }
       console.warn(`Saved game ignored: ${importError}`);
       return;
     }
-    const setupFromGame = parseSetupPrefsJson(gameState.currentNormalSetupJson(), fallbackSetupPrefs);
-    saveSetupPrefs(setupFromGame);
+    const setupFromGame = parseSetupPrefsJson(
+      gameState.currentNormalSetupJson(),
+      defaultSetupPrefsForBoard(boardContext),
+      boardContext,
+    );
+    saveSetupPrefs(setupFromGame, boardContext);
   } catch {
     try {
-      window.localStorage.removeItem(gameStateStorageKey);
-      window.localStorage.removeItem(redoStateStackStorageKey);
+      window.localStorage.removeItem(boardScopedStorageKey(gameStateStorageKey, boardContext.jsonName));
+      window.localStorage.removeItem(boardScopedStorageKey(redoStateStackStorageKey, boardContext.jsonName));
+      if (boardContext.jsonName === defaultBoardJsonName) {
+        window.localStorage.removeItem(gameStateStorageKey);
+        window.localStorage.removeItem(redoStateStackStorageKey);
+      }
     } catch {
       // Ignore cleanup failures.
     }
@@ -1212,13 +1402,13 @@ const getSlotLayout = (count: number, roomRect: RoomRect): SlotLayout => {
 
 const getPiecePositionsInRoom = (count: number, roomRect: RoomRect) => {
   if (count === 0) {
-    return { size: pieceSizeTarget, positions: [] as Array<{ x: number; y: number }> };
+    return { size: currentBoardContext.pieceSizeTarget, positions: [] as Array<{ x: number; y: number }> };
   }
 
   const { cols, rows, slots } = getSlotLayout(count, roomRect);
   const maxPieceWidth = (roomRect.width - pieceGap * (cols - 1)) / cols;
   const maxPieceHeight = (roomRect.height - pieceGap * (rows - 1)) / rows;
-  const size = Math.min(pieceSizeTarget, maxPieceWidth, maxPieceHeight);
+  const size = Math.min(currentBoardContext.pieceSizeTarget, maxPieceWidth, maxPieceHeight);
   const gridWidth = cols * size + pieceGap * (cols - 1);
   const gridHeight = rows * size + pieceGap * (rows - 1);
   const offsetX = roomRect.x + (roomRect.width - gridWidth) / 2;
@@ -1245,27 +1435,6 @@ const getHexPoints = (x: number, y: number, size: number) => {
   return points.join(' ');
 };
 
-const actionDisplayBounds = (() => {
-  const config = boardUiLayout.ActionDisplayBounds;
-  if (!config) {
-    return null;
-  }
-  const minYRoom = boardRoomById.get(config.MinYBelowRoomId);
-  const maxXRoom = boardRoomById.get(config.MaxXBeforeRoomId);
-  const minXRoom = boardRoomById.get(config.MinXAfterRoomId);
-  if (!minYRoom || !maxXRoom || !minXRoom) {
-    return null;
-  }
-  const minYRoomRect = getRoomRect(minYRoom.coords);
-  const maxXRoomRect = getRoomRect(maxXRoom.coords);
-  const minXRoomRect = getRoomRect(minXRoom.coords);
-  return {
-    minX: minXRoomRect.x + minXRoomRect.width,
-    maxX: maxXRoomRect.x,
-    minY: minYRoomRect.y + minYRoomRect.height,
-  };
-})();
-
 const buildRoomDistanceMap = (startRoomId: number) => {
   const distances = new Map<number, number>();
   const queue = [startRoomId];
@@ -1280,7 +1449,7 @@ const buildRoomDistanceMap = (startRoomId: number) => {
     if (currentDistance === undefined) {
       continue;
     }
-    const room = boardRoomById.get(current);
+    const room = currentBoardContext.roomById.get(current);
     if (!room) {
       continue;
     }
@@ -1375,21 +1544,21 @@ const parseActionSummaries = (summary: string): Array<ActionInfo | null> => {
 };
 
 const buildActionOverlayLayout = (text: string) => {
-  const fontSize = boardOverlayFontSizePx;
+  const fontSize = currentBoardContext.overlayFontSizePx;
   const paddingX = 16;
   const paddingY = 8;
   const estimatedTextWidth = Math.max(60, text.length * fontSize * 0.6);
   const boxHeight = fontSize + paddingY * 2;
-  const bounds = actionDisplayBounds;
+  const bounds = currentBoardContext.actionDisplayBounds;
   const minX = bounds ? bounds.minX + 8 : 12;
-  const maxX = bounds ? bounds.maxX - 8 : boardWidth - 12;
+  const maxX = bounds ? bounds.maxX - 8 : currentBoardContext.width - 12;
   const minY = bounds ? bounds.minY + 6 : 12;
   const maxWidth = Math.max(120, maxX - minX);
   const boxWidth = Math.min(maxWidth, Math.max(160, estimatedTextWidth + paddingX * 2));
-  const desiredX = boardWidth / 2 - boxWidth / 2;
-  const desiredY = boardHeight - boxHeight - 12;
+  const desiredX = currentBoardContext.width / 2 - boxWidth / 2;
+  const desiredY = currentBoardContext.height - boxHeight - 12;
   const clampedX = Math.min(Math.max(desiredX, minX), Math.max(minX, maxX - boxWidth));
-  const clampedY = Math.min(Math.max(desiredY, minY), Math.max(minY, boardHeight - boxHeight - 6));
+  const clampedY = Math.min(Math.max(desiredY, minY), Math.max(minY, currentBoardContext.height - boxHeight - 6));
 
   return {
     boxX: clampedX,
@@ -1403,15 +1572,15 @@ const buildActionOverlayLayout = (text: string) => {
 };
 
 const buildWinnerOverlayLayout = (text: string) => {
-  const fontSize = winnerOverlayFontSizePx;
+  const fontSize = currentBoardContext.winnerOverlayFontSizePx;
   const paddingX = 24;
   const paddingY = 18;
   const estimatedTextWidth = Math.max(180, text.length * fontSize * 0.58);
-  const maxWidth = Math.max(220, boardWidth - 40);
+  const maxWidth = Math.max(220, currentBoardContext.width - 40);
   const boxWidth = Math.min(maxWidth, Math.max(280, estimatedTextWidth + paddingX * 2));
   const boxHeight = fontSize + paddingY * 2;
-  const boxX = boardWidth / 2 - boxWidth / 2;
-  const boxY = boardHeight / 2 - boxHeight / 2;
+  const boxX = currentBoardContext.width / 2 - boxWidth / 2;
+  const boxY = currentBoardContext.height / 2 - boxHeight / 2;
 
   return {
     boxX,
@@ -1590,24 +1759,41 @@ const isNormalPlayerPieceId = (pieceId: PieceId): pieceId is NormalPlayerPieceId
   pieceId === 'player1' || pieceId === 'player2';
 
 function PlayArea() {
+  const [selectedBoardName, setSelectedBoardName] = useState(loadSelectedBoardName);
+  const boardContext = getBoardContext(selectedBoardName);
+  currentBoardContext = boardContext;
+  const boardJsonName = boardContext.jsonName;
+  const boardWidth = boardContext.width;
+  const boardHeight = boardContext.height;
+  const boardImageHref = boardContext.imageHref;
+  const boardRooms = boardContext.rooms;
+  const boardRoomById = boardContext.roomById;
+  const roomDistanceBoxWidth = boardContext.roomDistanceBoxWidth;
+  const roomDistanceBoxHeight = boardContext.roomDistanceBoxHeight;
+  const roomDistanceBoxTopRatio = boardContext.roomDistanceBoxTopRatio;
+  const fallbackSetupPrefsForCurrentBoard = defaultSetupPrefsForBoard(boardContext);
   const [gameState] = useState<GameStateHandle | null>(() => {
     try {
-      const freshState = newDefaultGameState();
-      loadGameStateSnapshot(freshState);
-      const setupFromGame = parseSetupPrefsJson(freshState.currentNormalSetupJson(), fallbackSetupPrefs);
-      saveSetupPrefs(setupFromGame);
+      const freshState = newGameStateForBoard(boardContext.jsonName);
+      loadGameStateSnapshot(freshState, boardContext);
+      const setupFromGame = parseSetupPrefsJson(
+        freshState.currentNormalSetupJson(),
+        fallbackSetupPrefsForCurrentBoard,
+        boardContext,
+      );
+      saveSetupPrefs(setupFromGame, boardContext);
       return freshState;
     } catch {
       return null;
     }
   });
   const defaultSetupPrefs = gameState
-    ? parseSetupPrefsJson(gameState.defaultNormalSetupJson(), fallbackSetupPrefs)
-    : fallbackSetupPrefs;
+    ? parseSetupPrefsJson(gameState.defaultNormalSetupJson(), fallbackSetupPrefsForCurrentBoard, boardContext)
+    : fallbackSetupPrefsForCurrentBoard;
   const currentSetupPrefs = gameState
-    ? parseSetupPrefsJson(gameState.currentNormalSetupJson(), defaultSetupPrefs)
+    ? parseSetupPrefsJson(gameState.currentNormalSetupJson(), defaultSetupPrefs, boardContext)
     : defaultSetupPrefs;
-  const persistedSetupPrefs = loadSetupPrefs(currentSetupPrefs);
+  const persistedSetupPrefs = loadSetupPrefs(currentSetupPrefs, boardContext);
   const [selectedPieceId, setSelectedPieceId] = useState<PieceId | null>(null);
   const [plannedMoves, setPlannedMoves] = useState<Partial<Record<PieceId, number>>>({});
   const [planOrder, setPlanOrder] = useState<PieceId[]>([]);
@@ -1621,7 +1807,9 @@ function PlayArea() {
   const [setupAdvanced, setSetupAdvanced] = useState(() =>
     shouldUseAdvancedSetup(persistedSetupPrefs, defaultSetupPrefs),
   );
-  const [redoStateStack, setRedoStateStack] = useState<string[]>(() => (gameState ? loadRedoStateStack() : []));
+  const [redoStateStack, setRedoStateStack] = useState<string[]>(() =>
+    gameState ? loadRedoStateStack(boardContext.jsonName) : [],
+  );
   const [turnCounter, setTurnCounter] = useState(0);
   const turnCounterRef = useRef(turnCounter);
   turnCounterRef.current = turnCounter;
@@ -1760,8 +1948,14 @@ function PlayArea() {
       showOnBoardP3: nextShowOnBoardP3,
     });
   };
-  const findAiResultsCacheEntry = (stateJson: string) =>
-    aiResultsCacheRef.current.entries.find((entry) => entry.stateJson === stateJson) ?? null;
+  const findAiResultsCacheEntry = (stateJson: string) => {
+    const boardName = boardNameFromSnapshotJson(stateJson);
+    return (
+      aiResultsCacheRef.current.entries.find(
+        (entry) => entry.stateJson === stateJson && entry.boardName === boardName,
+      ) ?? null
+    );
+  };
   const toAiSuggestionFromCacheEntry = (entry: AiResultsCacheEntry, sourceTurnCounter: number): AiSuggestion => ({
     sourceTurnCounter,
     analysisLevel: entry.analysisLevel,
@@ -1776,7 +1970,7 @@ function PlayArea() {
       lastUsedAtMs: touchedAtMs,
     };
     const otherEntries = aiResultsCacheRef.current.entries.filter(
-      (candidate) => candidate.stateJson !== entry.stateJson,
+      (candidate) => candidate.stateJson !== entry.stateJson || candidate.boardName !== entry.boardName,
     );
     aiResultsCacheRef.current = saveAiResultsCacheStore({
       version: 1,
@@ -1785,7 +1979,9 @@ function PlayArea() {
     return nextEntry;
   };
   const upsertAiResultsCacheFromSuggestion = (stateJson: string, suggestion: AiSuggestion, touchedAtMs: number) => {
+    const boardName = boardNameFromSnapshotJson(stateJson) ?? boardJsonName;
     const nextEntry: AiResultsCacheEntry = {
+      boardName,
       stateJson,
       analysisLevel: suggestion.analysisLevel,
       bestTurn: suggestion.bestTurn,
@@ -1794,7 +1990,9 @@ function PlayArea() {
       levelElapsedMs: suggestion.levelElapsedMs,
       lastUsedAtMs: touchedAtMs,
     };
-    const otherEntries = aiResultsCacheRef.current.entries.filter((entry) => entry.stateJson !== stateJson);
+    const otherEntries = aiResultsCacheRef.current.entries.filter(
+      (entry) => entry.stateJson !== stateJson || entry.boardName !== boardName,
+    );
     aiResultsCacheRef.current = saveAiResultsCacheStore({
       version: 1,
       entries: [...otherEntries, nextEntry],
@@ -2774,7 +2972,7 @@ function PlayArea() {
       return 0;
     }
     const snapshot = gameState.exportStateJson();
-    const simulation = newDefaultGameState();
+    const simulation = newGameStateForBoard(boardJsonName);
     try {
       const importError = simulation.importStateJson(snapshot);
       if (importError) {
@@ -3046,6 +3244,15 @@ function PlayArea() {
     }
   };
 
+  const handleSetupBoardChange = (boardName: string) => {
+    const setupBoardContext = getBoardContext(boardName);
+    const setupDefaults = defaultSetupPrefsForBoard(setupBoardContext);
+    const nextPrefs = loadSetupPrefs(setupDefaults, setupBoardContext);
+    setSetupPrefsDraft(toSetupPrefsDraft(nextPrefs));
+    setSetupAdvanced(shouldUseAdvancedSetup(nextPrefs, setupDefaults));
+    setSetupError(null);
+  };
+
   const handleAnalysisLevelStep = (direction: StepDirection) => {
     if (analysisIsRunning) {
       return;
@@ -3180,9 +3387,11 @@ function PlayArea() {
   };
 
   const handleRestoreSetupDefaults = () => {
-    setSetupPrefsDraft(toSetupPrefsDraft(defaultSetupPrefs));
+    const setupBoardContext = getBoardContext(setupPrefsDraft.boardName);
+    const setupDefaults = defaultSetupPrefsForBoard(setupBoardContext);
+    setSetupPrefsDraft(toSetupPrefsDraft(setupDefaults));
     setSetupAdvanced(false);
-    saveSetupPrefs(defaultSetupPrefs);
+    saveSetupPrefs(setupDefaults, setupBoardContext);
     setSetupError(null);
   };
 
@@ -3195,7 +3404,17 @@ function PlayArea() {
       setSetupError('Setup values must be valid numbers and rooms.');
       return;
     }
-    const setupToStart = buildSetupPrefsForStart(parsedSetup, defaultSetupPrefs, setupAdvanced);
+    const setupBoardContext = getBoardContext(parsedSetup.boardName);
+    const setupDefaults = defaultSetupPrefsForBoard(setupBoardContext);
+    const setupToStart = buildSetupPrefsForStart(parsedSetup, setupDefaults, setupAdvanced);
+
+    if (setupToStart.boardName !== boardJsonName) {
+      const boardLoadError = gameState.loadBoard(setupToStart.boardName);
+      if (boardLoadError) {
+        setSetupError(boardLoadError);
+        return;
+      }
+    }
 
     const startError = gameState.startNewGameWithSetup(
       setupToStart.moveCards,
@@ -3233,12 +3452,14 @@ function PlayArea() {
     setSetupPopupOpen(false);
     setSetupError(null);
     resetAiOutputs();
-    saveSetupPrefs(setupToStart);
+    saveSelectedBoardName(setupToStart.boardName);
+    setSelectedBoardName(setupToStart.boardName);
+    saveSetupPrefs(setupToStart, setupBoardContext);
     setSetupPrefsDraft(toSetupPrefsDraft(setupToStart));
-    setSetupAdvanced(shouldUseAdvancedSetup(setupToStart, defaultSetupPrefs));
+    setSetupAdvanced(shouldUseAdvancedSetup(setupToStart, setupDefaults));
     setRedoStateStack([]);
-    saveRedoStateStack([]);
-    saveGameStateSnapshot(gameState);
+    saveRedoStateStack([], setupToStart.boardName);
+    saveGameStateSnapshot(gameState, setupToStart.boardName);
     const nextTurnCounter = advanceTurnCounter();
     if (!gameState.hasWinner()) {
       startBestTurnAnalysis(false, nextTurnCounter);
@@ -3437,6 +3658,8 @@ function PlayArea() {
   const aiSuggestionOverlayVisible = Boolean(aiSuggestionBoardText && !animatedPieces && !animationRef.current);
   const boardOverlayText = actionOverlay ?? (aiSuggestionOverlayVisible ? aiSuggestionBoardText : null);
   const actionOverlayLayout = boardOverlayText ? buildActionOverlayLayout(boardOverlayText) : null;
+  const setupDraftBoardContext = getBoardContext(setupPrefsDraft.boardName);
+  const setupBoardRooms = setupDraftBoardContext.rooms;
   const aiSuggestionBoardDoButtonVisible =
     actionOverlay === null && aiSuggestionOverlayVisible && aiCanDoIt && !hasWinner;
   const aiSuggestionBoardDoButtonLayout =
@@ -4693,6 +4916,20 @@ function PlayArea() {
           <div className="info-popup setup-popup" onClick={(event) => event.stopPropagation()}>
             <h3>Setup</h3>
             <div className="setup-popup-form">
+              <label className="setup-popup-row">
+                <span>Board</span>
+                <select
+                  aria-label="Board"
+                  value={setupPrefsDraft.boardName}
+                  onChange={(event) => handleSetupBoardChange(event.target.value)}
+                >
+                  {boardLayouts.map((layout) => (
+                    <option key={layout.JsonName} value={layout.JsonName}>
+                      {layout.Name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="setup-popup-toggle">
                 <input
                   type="checkbox"
@@ -4891,7 +5128,7 @@ function PlayArea() {
                       value={setupPrefsDraft.doctorRoomId}
                       onChange={(event) => handleSetupDraftChange('doctorRoomId', event.target.value)}
                     >
-                      {boardRooms.map((room) => (
+                      {setupBoardRooms.map((room) => (
                         <option key={`setup-doctor-${room.id}`} value={room.id.toString()}>
                           {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
                         </option>
@@ -4905,7 +5142,7 @@ function PlayArea() {
                       value={setupPrefsDraft.player1RoomId}
                       onChange={(event) => handleSetupDraftChange('player1RoomId', event.target.value)}
                     >
-                      {boardRooms.map((room) => (
+                      {setupBoardRooms.map((room) => (
                         <option key={`setup-p1-${room.id}`} value={room.id.toString()}>
                           {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
                         </option>
@@ -4919,7 +5156,7 @@ function PlayArea() {
                       value={setupPrefsDraft.stranger1RoomId}
                       onChange={(event) => handleSetupDraftChange('stranger1RoomId', event.target.value)}
                     >
-                      {boardRooms.map((room) => (
+                      {setupBoardRooms.map((room) => (
                         <option key={`setup-p2-${room.id}`} value={room.id.toString()}>
                           {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
                         </option>
@@ -4933,7 +5170,7 @@ function PlayArea() {
                       value={setupPrefsDraft.player2RoomId}
                       onChange={(event) => handleSetupDraftChange('player2RoomId', event.target.value)}
                     >
-                      {boardRooms.map((room) => (
+                      {setupBoardRooms.map((room) => (
                         <option key={`setup-p3-${room.id}`} value={room.id.toString()}>
                           {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
                         </option>
@@ -4947,7 +5184,7 @@ function PlayArea() {
                       value={setupPrefsDraft.stranger2RoomId}
                       onChange={(event) => handleSetupDraftChange('stranger2RoomId', event.target.value)}
                     >
-                      {boardRooms.map((room) => (
+                      {setupBoardRooms.map((room) => (
                         <option key={`setup-p4-${room.id}`} value={room.id.toString()}>
                           {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
                         </option>

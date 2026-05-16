@@ -19,6 +19,10 @@ const EMBEDDED_BOARD_DATA: &[(&str, &str)] = &[
     ("LairNorth", include_str!("boards/LairNorth.json")),
     ("LairSouth", include_str!("boards/LairSouth.json")),
     ("Main", include_str!("boards/Main.json")),
+    (
+        "MainWestWingClosed",
+        include_str!("../../../data/boards/BoardMainWestWingClosed.json"),
+    ),
     ("Tiny", include_str!("boards/Tiny.json")),
 ];
 
@@ -31,6 +35,7 @@ pub struct BoardSpecification {
     pub doctor_start_room_ids: Vec<RoomId>,
     pub cat_start_room_ids: Vec<RoomId>,
     pub dog_start_room_ids: Vec<RoomId>,
+    #[serde(default)]
     pub wings: Vec<Wing>,
     pub rooms: Vec<Room>,
 }

@@ -1,4 +1,4 @@
-import wasmBindgenInit, { initSync, newDefaultGameState } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
+import wasmBindgenInit, { initSync, newGameStateForBoard } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
 import { analyzeTreeSearchRequest, type AnalyzeRequest, type WorkerResponse } from './treeSearchWorkerCore';
 
 type InitRequest = {
@@ -46,7 +46,7 @@ workerScope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   }
   try {
     await ensureWasmReady();
-    workerScope.postMessage(analyzeTreeSearchRequest(message, newDefaultGameState));
+    workerScope.postMessage(analyzeTreeSearchRequest(message, newGameStateForBoard));
   } catch (error) {
     const messageText = error instanceof Error ? error.message : 'Tree search worker failed.';
     const response: WorkerResponse = {

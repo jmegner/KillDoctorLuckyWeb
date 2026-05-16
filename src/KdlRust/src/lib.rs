@@ -824,6 +824,20 @@ impl GameStateHandle {
         self.state = new_state_with_normal_setup(common, &self.normal_setup);
     }
 
+    #[wasm_bindgen(js_name = "loadBoard")]
+    pub fn load_board(&mut self, board_name: &str) -> String {
+        match new_game_state_for_board(board_name) {
+            Ok(next) => {
+                self.state = next.state;
+                self.normal_setup = next.normal_setup;
+                String::new()
+            }
+            Err(err) => err
+                .as_string()
+                .unwrap_or_else(|| "Failed to load board.".to_string()),
+        }
+    }
+
     #[wasm_bindgen(js_name = "normalTurnHistory")]
     pub fn normal_turn_history(&self) -> String {
         self.state.normal_turn_hist()
@@ -1143,7 +1157,12 @@ impl GameStateHandle {
 
 #[wasm_bindgen(js_name = "newDefaultGameState")]
 pub fn new_default_game_state() -> Result<GameStateHandle, JsValue> {
-    let board = core::board::Board::from_embedded_json("BoardAltDown")
+    new_game_state_for_board("BoardAltDown")
+}
+
+#[wasm_bindgen(js_name = "newGameStateForBoard")]
+pub fn new_game_state_for_board(board_name: &str) -> Result<GameStateHandle, JsValue> {
+    let board = core::board::Board::from_embedded_json(board_name)
         .map_err(|err| JsValue::from_str(&err.to_string()))?;
     let common = core::common_game_state::CommonGameState::from_num_normal_players(true, board, 2);
     let normal_setup = normalize_normal_setup(&default_normal_setup(), &common);
