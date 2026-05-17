@@ -1830,6 +1830,11 @@ function PlayArea() {
   const aiShowOnBoardP3Ref = useRef(aiShowOnBoardP3);
   aiShowOnBoardP3Ref.current = aiShowOnBoardP3;
   const [analysisIsRunning, setAnalysisIsRunning] = useState(false);
+  const analysisIsRunningRef = useRef(false);
+  const setAnalysisRunningState = (isRunning: boolean) => {
+    analysisIsRunningRef.current = isRunning;
+    setAnalysisIsRunning(isRunning);
+  };
   const [analysisRunningLevel, setAnalysisRunningLevel] = useState<number | null>(null);
   const analysisRunningLevelRef = useRef<number | null>(analysisRunningLevel);
   analysisRunningLevelRef.current = analysisRunningLevel;
@@ -2344,9 +2349,9 @@ function PlayArea() {
   ) => {
     stopAnalysisTimer();
     if (options?.terminateWorker ?? true) {
-      stopAnalysisWorker();
+      stopAnalysisWorker({ replace: true });
     }
-    setAnalysisIsRunning(false);
+    setAnalysisRunningState(false);
     analysisRunningLevelRef.current = null;
     setAnalysisRunningLevel(null);
     setAnalysisCurrentLevelElapsedMs(0);
@@ -2413,7 +2418,7 @@ function PlayArea() {
     setPlanOrder([]);
     setSelectedPieceId(null);
     setValidationMessage(null);
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
@@ -2545,7 +2550,7 @@ function PlayArea() {
       : minAnalysisLevel;
 
     stopAnalysisTimer();
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       stopAnalysisWorker();
     }
 
@@ -2559,7 +2564,7 @@ function PlayArea() {
         `max turn depth is L${effectiveMaxAnalysisLevel}`,
       );
       setAiSuggestion(cachedSuggestion);
-      setAnalysisIsRunning(false);
+      setAnalysisRunningState(false);
       analysisRunningLevelRef.current = null;
       setAnalysisRunningLevel(null);
       setAnalysisCurrentLevelElapsedMs(0);
@@ -2597,7 +2602,7 @@ function PlayArea() {
         `${cachedTerminalOutcomeText} was found from cache at L${cachedSuggestion.analysisLevel}`,
       );
       setAiSuggestion(cachedSuggestion);
-      setAnalysisIsRunning(false);
+      setAnalysisRunningState(false);
       analysisRunningLevelRef.current = null;
       setAnalysisRunningLevel(null);
       setAnalysisCurrentLevelElapsedMs(0);
@@ -2627,7 +2632,7 @@ function PlayArea() {
     }
 
     setAiSuggestion(cachedSuggestion);
-    setAnalysisIsRunning(true);
+    setAnalysisRunningState(true);
     analysisRunningLevelRef.current = initialAnalysisLevel;
     setAnalysisRunningLevel(initialAnalysisLevel);
     setAnalysisCurrentLevelElapsedMs(0);
@@ -2717,7 +2722,6 @@ function PlayArea() {
           `Max turn depth reached at L${deepestCompletedLevel}.`,
           `max turn depth is L${effectiveMaxAnalysisLevel}`,
           {
-            terminateWorker: true,
             stopLevel: deepestCompletedLevel,
           },
         );
@@ -2732,7 +2736,7 @@ function PlayArea() {
         completeAndMaybeSubmit(
           `Time limit during L${levelAtTimeout}.`,
           `time limit was reached during L${levelAtTimeout}`,
-          { terminateWorker: true, stopLevel },
+          { stopLevel },
         );
         return;
       }
@@ -2742,7 +2746,7 @@ function PlayArea() {
         completeAndMaybeSubmit(
           `Time limit during L${levelAtTimeout}.`,
           `time limit was reached during L${levelAtTimeout}`,
-          { terminateWorker: true, stopLevel },
+          { stopLevel },
         );
         return;
       }
@@ -2756,7 +2760,6 @@ function PlayArea() {
               mostRecentCompletedLevelElapsedMs,
             )} and there was only ${formatDebugSeconds(remainingMs)} remaining for L${currentLevel}`,
             {
-              terminateWorker: true,
               stopLevel: deepestCompletedLevel,
             },
           );
@@ -2920,7 +2923,7 @@ function PlayArea() {
   };
 
   const handleAnalysisCancel = () => {
-    if (!analysisIsRunning) {
+    if (!analysisIsRunningRef.current) {
       return;
     }
     const levelAtCancel = analysisRunningLevelRef.current;
@@ -3126,7 +3129,7 @@ function PlayArea() {
     if (!gameState) {
       return;
     }
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
@@ -3139,7 +3142,7 @@ function PlayArea() {
     if (!gameState) {
       return;
     }
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
@@ -3152,7 +3155,7 @@ function PlayArea() {
     if (!gameState) {
       return;
     }
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
@@ -3170,7 +3173,7 @@ function PlayArea() {
       return;
     }
     const animateFromCurrentState = options?.animateFromCurrentState ?? false;
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
@@ -3189,7 +3192,7 @@ function PlayArea() {
       setValidationMessage('No undone turn to redo.');
       return;
     }
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
@@ -3200,7 +3203,7 @@ function PlayArea() {
     if (!gameState) {
       return;
     }
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
@@ -3254,7 +3257,7 @@ function PlayArea() {
   };
 
   const handleAnalysisLevelStep = (direction: StepDirection) => {
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       return;
     }
     setMinAnalysisLevelDraft((prev) => {
@@ -3282,7 +3285,7 @@ function PlayArea() {
   };
 
   const handleMaxAnalysisLevelStep = (direction: StepDirection) => {
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       return;
     }
     setMaxAnalysisLevelDraft((prev) => {
@@ -3310,7 +3313,7 @@ function PlayArea() {
   };
 
   const handleAnalysisMaxTimeStep = (direction: StepDirection) => {
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       return;
     }
     const nextIndex = clampAnalysisMaxTimeIndex(direction === 'down' ? analysisMaxTimeIndex - 1 : analysisMaxTimeIndex + 1);
@@ -3326,7 +3329,7 @@ function PlayArea() {
   };
 
   const handleAnalysisMaxTimeChange = (rawIndex: string) => {
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       return;
     }
     const parsed = Number(rawIndex);
@@ -3440,7 +3443,7 @@ function PlayArea() {
       return;
     }
 
-    if (analysisIsRunning) {
+    if (analysisIsRunningRef.current) {
       analysisRunIdRef.current += 1;
       stopAnalysisRun('Analysis stopped because the position changed.');
     }

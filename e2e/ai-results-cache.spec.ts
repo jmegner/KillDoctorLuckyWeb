@@ -275,7 +275,7 @@ test.describe('AI results cache', () => {
     await expect.poll(() => readAiLineValue(page, 'Suggested'), { timeout: 5000 }).toBe('No suggestion yet.');
   });
 
-  test('Max Turn Depth defaults to 15 and +/- buttons adjust it', async ({ page }) => {
+  test('Max Turn Depth defaults to 18 and +/- buttons adjust it', async ({ page }) => {
     await page.goto('/');
     await cancelAiAnalysisIfRunning(page);
 
@@ -290,11 +290,11 @@ test.describe('AI results cache', () => {
     const decreaseButton = aiPanel.getByRole('button', { name: 'Decrease max turn depth' });
     const increaseButton = aiPanel.getByRole('button', { name: 'Increase max turn depth' });
 
-    await expect.poll(() => readInputValue(page, '#analysis-max-level')).toBe('15');
+    await expect.poll(() => readInputValue(page, '#analysis-max-level')).toBe('18');
     await increaseButton.click();
-    await expect.poll(() => readInputValue(page, '#analysis-max-level')).toBe('16');
+    await expect.poll(() => readInputValue(page, '#analysis-max-level')).toBe('19');
     await decreaseButton.click();
-    await expect.poll(() => readInputValue(page, '#analysis-max-level')).toBe('15');
+    await expect.poll(() => readInputValue(page, '#analysis-max-level')).toBe('18');
   });
 
   test('No AI max time option disables analysis', async ({ page }) => {
