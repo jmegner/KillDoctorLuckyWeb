@@ -215,6 +215,55 @@ test('advanced setup +/- buttons move card quantities by 1', async ({ page }) =>
   await expect(p1MoveCards).toHaveValue('2');
 });
 
+test('advanced setup +/- buttons step room dropdown options', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Setup' }).click();
+  await page.getByRole('checkbox', { name: 'Advanced' }).check();
+
+  const visibleRoomLabels = await page.evaluate(() =>
+    ['Doctor room', 'P1 room', 'p2 room', 'P3 room', 'p4 room'].map((ariaLabel) => {
+      const select = document.querySelector(`select[aria-label="${ariaLabel}"]`);
+      const row = select?.closest('.setup-popup-row');
+      return row?.querySelector(':scope > span')?.textContent ?? null;
+    }),
+  );
+  expect(visibleRoomLabels).toEqual(['Dr', 'P1', 'p2', 'P3', 'p4']);
+
+  const rooms = await page.getByLabel('Doctor room').evaluate((select) =>
+    Array.from((select as HTMLSelectElement).options, (option) => option.value),
+  );
+  expect(rooms.length).toBeGreaterThan(2);
+  const firstRoom = rooms[0];
+  const secondRoom = rooms[1];
+  const lastRoom = rooms.at(-1);
+  if (!firstRoom || !secondRoom || !lastRoom) {
+    throw new Error('Expected at least two setup room options.');
+  }
+
+  const roomStepperCases = [
+    { selectName: 'Doctor room', previousName: 'Previous Doctor', nextName: 'Next Doctor' },
+    { selectName: 'P1 room', previousName: 'Previous P1', nextName: 'Next P1' },
+    { selectName: 'p2 room', previousName: 'Previous p2', nextName: 'Next p2' },
+    { selectName: 'P3 room', previousName: 'Previous P3', nextName: 'Next P3' },
+    { selectName: 'p4 room', previousName: 'Previous p4', nextName: 'Next p4' },
+  ];
+
+  for (const { selectName, previousName, nextName } of roomStepperCases) {
+    const roomSelect = page.getByLabel(selectName);
+    await roomSelect.selectOption(secondRoom);
+    await page.getByRole('button', { name: previousName }).click();
+    await expect(roomSelect).toHaveValue(firstRoom);
+    await page.getByRole('button', { name: nextName }).click();
+    await expect(roomSelect).toHaveValue(secondRoom);
+    await roomSelect.selectOption(firstRoom);
+    await page.getByRole('button', { name: previousName }).click();
+    await expect(roomSelect).toHaveValue(lastRoom);
+    await page.getByRole('button', { name: nextName }).click();
+    await expect(roomSelect).toHaveValue(firstRoom);
+  }
+});
+
 test('fractional shared card quantities do not force advanced setup when reopening', async ({ page }) => {
   await page.goto('/');
 

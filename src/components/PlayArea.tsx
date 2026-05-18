@@ -485,6 +485,7 @@ type SetupPrefsDraft = {
 };
 
 type StepDirection = 'down' | 'up';
+type SetupRoomField = 'doctorRoomId' | 'player1RoomId' | 'stranger1RoomId' | 'player2RoomId' | 'stranger2RoomId';
 
 const createTreeSearchWorker = () => {
   if (typeof Worker === 'undefined') {
@@ -3460,6 +3461,24 @@ function PlayArea() {
     handleSetupDraftChange(field, stepNonNegativeText(setupPrefsDraft[field], direction, 1));
   };
 
+  const handleSetupRoomStep = (field: SetupRoomField, direction: StepDirection) => {
+    if (setupBoardRooms.length === 0) {
+      return;
+    }
+    const currentRoomId = Number(setupPrefsDraft[field]);
+    const currentIndex = setupBoardRooms.findIndex((room) => room.id === currentRoomId);
+    const baseIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex =
+      direction === 'down'
+        ? (baseIndex - 1 + setupBoardRooms.length) % setupBoardRooms.length
+        : (baseIndex + 1) % setupBoardRooms.length;
+    const nextRoom = setupBoardRooms[nextIndex];
+    if (!nextRoom) {
+      return;
+    }
+    handleSetupDraftChange(field, nextRoom.id.toString());
+  };
+
   const handleRestoreSetupDefaults = () => {
     const setupBoardContext = getBoardContext(setupPrefsDraft.boardName);
     const setupDefaults = defaultSetupPrefsForBoard(setupBoardContext);
@@ -5217,74 +5236,164 @@ function PlayArea() {
                   </label>
                   <p className="setup-popup-note">Card amounts entered in hundredths snap to the nearest 1/32 on start.</p>
                   <label className="setup-popup-row">
-                    <span>Dr Room</span>
-                    <select
-                      aria-label="Doctor room"
-                      value={setupPrefsDraft.doctorRoomId}
-                      onChange={(event) => handleSetupDraftChange('doctorRoomId', event.target.value)}
-                    >
-                      {setupBoardRooms.map((room) => (
-                        <option key={`setup-doctor-${room.id}`} value={room.id.toString()}>
-                          {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
-                        </option>
-                      ))}
-                    </select>
+                    <span>Dr</span>
+                    <div className="number-stepper">
+                      <select
+                        aria-label="Doctor room"
+                        value={setupPrefsDraft.doctorRoomId}
+                        onChange={(event) => handleSetupDraftChange('doctorRoomId', event.target.value)}
+                      >
+                        {setupBoardRooms.map((room) => (
+                          <option key={`setup-doctor-${room.id}`} value={room.id.toString()}>
+                            {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupRoomStep('doctorRoomId', 'down')}
+                        aria-label="Previous Doctor"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupRoomStep('doctorRoomId', 'up')}
+                        aria-label="Next Doctor"
+                      >
+                        +
+                      </button>
+                    </div>
                   </label>
                   <label className="setup-popup-row">
-                    <span>P1 Room</span>
-                    <select
-                      aria-label="P1 room"
-                      value={setupPrefsDraft.player1RoomId}
-                      onChange={(event) => handleSetupDraftChange('player1RoomId', event.target.value)}
-                    >
-                      {setupBoardRooms.map((room) => (
-                        <option key={`setup-p1-${room.id}`} value={room.id.toString()}>
-                          {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
-                        </option>
-                      ))}
-                    </select>
+                    <span>P1</span>
+                    <div className="number-stepper">
+                      <select
+                        aria-label="P1 room"
+                        value={setupPrefsDraft.player1RoomId}
+                        onChange={(event) => handleSetupDraftChange('player1RoomId', event.target.value)}
+                      >
+                        {setupBoardRooms.map((room) => (
+                          <option key={`setup-p1-${room.id}`} value={room.id.toString()}>
+                            {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupRoomStep('player1RoomId', 'down')}
+                        aria-label="Previous P1"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupRoomStep('player1RoomId', 'up')}
+                        aria-label="Next P1"
+                      >
+                        +
+                      </button>
+                    </div>
                   </label>
                   <label className="setup-popup-row">
-                    <span>p2 Room</span>
-                    <select
-                      aria-label="p2 room"
-                      value={setupPrefsDraft.stranger1RoomId}
-                      onChange={(event) => handleSetupDraftChange('stranger1RoomId', event.target.value)}
-                    >
-                      {setupBoardRooms.map((room) => (
-                        <option key={`setup-p2-${room.id}`} value={room.id.toString()}>
-                          {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
-                        </option>
-                      ))}
-                    </select>
+                    <span>p2</span>
+                    <div className="number-stepper">
+                      <select
+                        aria-label="p2 room"
+                        value={setupPrefsDraft.stranger1RoomId}
+                        onChange={(event) => handleSetupDraftChange('stranger1RoomId', event.target.value)}
+                      >
+                        {setupBoardRooms.map((room) => (
+                          <option key={`setup-p2-${room.id}`} value={room.id.toString()}>
+                            {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupRoomStep('stranger1RoomId', 'down')}
+                        aria-label="Previous p2"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupRoomStep('stranger1RoomId', 'up')}
+                        aria-label="Next p2"
+                      >
+                        +
+                      </button>
+                    </div>
                   </label>
                   <label className="setup-popup-row">
-                    <span>P3 Room</span>
-                    <select
-                      aria-label="P3 room"
-                      value={setupPrefsDraft.player2RoomId}
-                      onChange={(event) => handleSetupDraftChange('player2RoomId', event.target.value)}
-                    >
-                      {setupBoardRooms.map((room) => (
-                        <option key={`setup-p3-${room.id}`} value={room.id.toString()}>
-                          {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
-                        </option>
-                      ))}
-                    </select>
+                    <span>P3</span>
+                    <div className="number-stepper">
+                      <select
+                        aria-label="P3 room"
+                        value={setupPrefsDraft.player2RoomId}
+                        onChange={(event) => handleSetupDraftChange('player2RoomId', event.target.value)}
+                      >
+                        {setupBoardRooms.map((room) => (
+                          <option key={`setup-p3-${room.id}`} value={room.id.toString()}>
+                            {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupRoomStep('player2RoomId', 'down')}
+                        aria-label="Previous P3"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupRoomStep('player2RoomId', 'up')}
+                        aria-label="Next P3"
+                      >
+                        +
+                      </button>
+                    </div>
                   </label>
                   <label className="setup-popup-row">
-                    <span>p4 Room</span>
-                    <select
-                      aria-label="p4 room"
-                      value={setupPrefsDraft.stranger2RoomId}
-                      onChange={(event) => handleSetupDraftChange('stranger2RoomId', event.target.value)}
-                    >
-                      {setupBoardRooms.map((room) => (
-                        <option key={`setup-p4-${room.id}`} value={room.id.toString()}>
-                          {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
-                        </option>
-                      ))}
-                    </select>
+                    <span>p4</span>
+                    <div className="number-stepper">
+                      <select
+                        aria-label="p4 room"
+                        value={setupPrefsDraft.stranger2RoomId}
+                        onChange={(event) => handleSetupDraftChange('stranger2RoomId', event.target.value)}
+                      >
+                        {setupBoardRooms.map((room) => (
+                          <option key={`setup-p4-${room.id}`} value={room.id.toString()}>
+                            {`R${room.id}: ${room.name ?? `Room ${room.id}`}`}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupRoomStep('stranger2RoomId', 'down')}
+                        aria-label="Previous p4"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        className="number-stepper-button"
+                        onClick={() => handleSetupRoomStep('stranger2RoomId', 'up')}
+                        aria-label="Next p4"
+                      >
+                        +
+                      </button>
+                    </div>
                   </label>
                   <label className="setup-popup-row">
                     <span>P1 Strength</span>
