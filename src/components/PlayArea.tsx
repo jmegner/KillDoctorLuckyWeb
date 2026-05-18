@@ -4460,6 +4460,20 @@ function PlayArea() {
             </div>
             <div className="planner-header-actions">
               <button
+                className="planner-button planner-button--primary planner-header-ai-button"
+                onClick={handleThink}
+                disabled={hasWinner || analysisIsRunning || aiAnalysisDisabled}
+              >
+                Think
+              </button>
+              <button
+                className="planner-button planner-header-ai-button"
+                onClick={handleMull}
+                disabled={hasWinner || analysisIsRunning || aiAnalysisDisabled}
+              >
+                Mull
+              </button>
+              <button
                 type="button"
                 className="planner-help-icon-button"
                 onClick={() => handleInfoToggle('turnPlanner')}

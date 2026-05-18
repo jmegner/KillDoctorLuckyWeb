@@ -300,6 +300,12 @@
   gap: 10px;
 }
 
+.planner-header-ai-button {
+  padding: 0.285rem 0.3rem;
+  font-size: 0.585rem;
+  min-width: 0;
+}
+
 .planner-help-icon-button {
   width: 1.75rem;
   min-width: 1.75rem;
