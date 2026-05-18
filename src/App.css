@@ -301,8 +301,9 @@
 }
 
 .planner-header-ai-button {
+  display: none;
   padding: 0.285rem 0.3rem;
-  font-size: 0.585rem;
+  font-size: 0.85rem;
   min-width: 0;
 }
 
@@ -877,6 +878,10 @@ body:has(.info-overlay) {
   .play-area {
     grid-template-columns: 1fr;
     padding-inline: 0;
+  }
+
+  .planner-header-ai-button {
+    display: inline-flex;
   }
 
   .side-column {

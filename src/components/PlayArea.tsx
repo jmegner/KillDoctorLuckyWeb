@@ -182,6 +182,15 @@ type AiResultsCacheStore = {
   entries: AiResultsCacheEntry[];
 };
 
+type AnalysisRunKind = 'think' | 'mull';
+
+type AnalysisRunLimits = {
+  kind: AnalysisRunKind;
+  minAnalysisLevel: number;
+  maxAnalysisLevel: number | null;
+  maxTimeMs: number;
+};
+
 type WasmBindgenInitWithModule = typeof wasmBindgenInit & {
   __wbindgen_wasm_module?: WebAssembly.Module;
 };
@@ -1843,12 +1852,15 @@ function PlayArea() {
   const [analysisRunMaxTimeMs, setAnalysisRunMaxTimeMs] = useState<number>(
     () => getAnalysisMaxTimeMs(loadAiPrefs().analysisMaxTimeIndex) ?? 0,
   );
+  const [analysisRunKind, setAnalysisRunKind] = useState<AnalysisRunKind | null>(null);
   const [analysisStatusMessage, setAnalysisStatusMessage] = useState<string | null>(null);
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null);
   const aiResultsCacheRef = useRef<AiResultsCacheStore>(loadAiResultsCacheStore());
   const analysisTimerRef = useRef<number | null>(null);
   const analysisDeadlineTimerRef = useRef<number | null>(null);
   const analysisTimingRef = useRef<{ runStartMs: number; levelStartMs: number } | null>(null);
+  const analysisRunLimitsRef = useRef<AnalysisRunLimits | null>(null);
+  const analysisTimeLimitReachedRef = useRef(false);
   const analysisWorkerRef = useRef<Worker | null>(null);
   const analysisWorkerInitializedRef = useRef(false);
   const analysisRunIdRef = useRef(0);
@@ -2352,6 +2364,9 @@ function PlayArea() {
       stopAnalysisWorker({ replace: true });
     }
     setAnalysisRunningState(false);
+    analysisRunLimitsRef.current = null;
+    analysisTimeLimitReachedRef.current = false;
+    setAnalysisRunKind(null);
     analysisRunningLevelRef.current = null;
     setAnalysisRunningLevel(null);
     setAnalysisCurrentLevelElapsedMs(0);
@@ -2360,6 +2375,9 @@ function PlayArea() {
 
   const resetAiOutputs = () => {
     setAiSuggestion(null);
+    analysisRunLimitsRef.current = null;
+    analysisTimeLimitReachedRef.current = false;
+    setAnalysisRunKind(null);
     analysisRunningLevelRef.current = null;
     setAnalysisRunningLevel(null);
     setAnalysisElapsedMs(0);
@@ -2459,7 +2477,7 @@ function PlayArea() {
   const startBestTurnAnalysis = (
     autoSubmit: boolean,
     sourceTurnCounterOverride?: number,
-    runOptions?: { minAnalysisLevel: number; maxAnalysisLevel: number; maxTimeMs: number },
+    runOptions?: { kind?: AnalysisRunKind; minAnalysisLevel: number; maxAnalysisLevel: number; maxTimeMs: number },
   ) => {
     if (!gameState) {
       setAnalysisStatusMessage('Analysis unavailable.');
@@ -2469,13 +2487,14 @@ function PlayArea() {
       setAnalysisStatusMessage('Game already has a winner.');
       return;
     }
+    const hasRunOverrides = runOptions !== undefined;
+    const runKind = runOptions?.kind ?? 'think';
     const selectedMaxTimeMs = getAnalysisMaxTimeMs(analysisMaxTimeIndex);
-    if (selectedMaxTimeMs === null) {
+    if (!hasRunOverrides && selectedMaxTimeMs === null) {
       stopAiAnalysisBecauseDisabled();
       return;
     }
 
-    const hasRunOverrides = runOptions !== undefined;
     const parsedMinLevel = hasRunOverrides ? runOptions.minAnalysisLevel : Number(minAnalysisLevelDraft);
     if (!Number.isFinite(parsedMinLevel) || parsedMinLevel < 0) {
       setAnalysisStatusMessage('Min turn depth must be a number >= 0.');
@@ -2492,7 +2511,15 @@ function PlayArea() {
     const effectiveMaxAnalysisLevel = minAnalysisLevel <= maxAnalysisLevel ? maxAnalysisLevel : null;
     const maxTimeMs = hasRunOverrides
       ? Math.max(0, Math.trunc(runOptions.maxTimeMs))
-      : selectedMaxTimeMs;
+      : (selectedMaxTimeMs ?? 0);
+    const initialRunLimits: AnalysisRunLimits = {
+      kind: runKind,
+      minAnalysisLevel,
+      maxAnalysisLevel: effectiveMaxAnalysisLevel,
+      maxTimeMs,
+    };
+    analysisRunLimitsRef.current = initialRunLimits;
+    setAnalysisRunKind(runKind);
     setAnalysisRunMaxTimeMs(maxTimeMs);
     if (!hasRunOverrides) {
       setMinAnalysisLevelDraft(minAnalysisLevel.toString());
@@ -2565,6 +2592,8 @@ function PlayArea() {
       );
       setAiSuggestion(cachedSuggestion);
       setAnalysisRunningState(false);
+      analysisRunLimitsRef.current = null;
+      setAnalysisRunKind(null);
       analysisRunningLevelRef.current = null;
       setAnalysisRunningLevel(null);
       setAnalysisCurrentLevelElapsedMs(0);
@@ -2603,6 +2632,8 @@ function PlayArea() {
       );
       setAiSuggestion(cachedSuggestion);
       setAnalysisRunningState(false);
+      analysisRunLimitsRef.current = null;
+      setAnalysisRunKind(null);
       analysisRunningLevelRef.current = null;
       setAnalysisRunningLevel(null);
       setAnalysisCurrentLevelElapsedMs(0);
@@ -2669,7 +2700,8 @@ function PlayArea() {
     let currentLevel = initialAnalysisLevel;
     let deepestCompletedSuggestion: AiSuggestion | null = cachedSuggestion;
     let mostRecentCompletedLevelElapsedMs: number | null = cachedSuggestion ? cachedSuggestion.levelElapsedMs : null;
-    let timeLimitReached = false;
+    analysisTimeLimitReachedRef.current = false;
+    const getActiveRunLimits = () => analysisRunLimitsRef.current ?? initialRunLimits;
 
     const completeAndMaybeSubmit = (
       completionMessage: string,
@@ -2716,11 +2748,13 @@ function PlayArea() {
       if (runId !== analysisRunIdRef.current) {
         return;
       }
-      if (effectiveMaxAnalysisLevel !== null && currentLevel > effectiveMaxAnalysisLevel) {
-        const deepestCompletedLevel = deepestCompletedSuggestion?.analysisLevel ?? effectiveMaxAnalysisLevel;
+      const activeRunLimits = getActiveRunLimits();
+      const activeMaxAnalysisLevel = activeRunLimits.maxAnalysisLevel;
+      if (activeMaxAnalysisLevel !== null && currentLevel > activeMaxAnalysisLevel) {
+        const deepestCompletedLevel = deepestCompletedSuggestion?.analysisLevel ?? activeMaxAnalysisLevel;
         completeAndMaybeSubmit(
           `Max turn depth reached at L${deepestCompletedLevel}.`,
-          `max turn depth is L${effectiveMaxAnalysisLevel}`,
+          `max turn depth is L${activeMaxAnalysisLevel}`,
           {
             stopLevel: deepestCompletedLevel,
           },
@@ -2730,7 +2764,7 @@ function PlayArea() {
       const now = performance.now();
       const elapsedMs = Math.max(0, now - timerStart);
       setAnalysisElapsedMs(elapsedMs);
-      if (timeLimitReached) {
+      if (analysisTimeLimitReachedRef.current) {
         const levelAtTimeout = analysisRunningLevelRef.current ?? currentLevel;
         const stopLevel = deepestCompletedSuggestion?.analysisLevel ?? levelAtTimeout;
         completeAndMaybeSubmit(
@@ -2740,7 +2774,7 @@ function PlayArea() {
         );
         return;
       }
-      if (currentLevel > minAnalysisLevel && elapsedMs >= maxTimeMs) {
+      if (currentLevel > activeRunLimits.minAnalysisLevel && elapsedMs >= activeRunLimits.maxTimeMs) {
         const levelAtTimeout = analysisRunningLevelRef.current ?? currentLevel;
         const stopLevel = deepestCompletedSuggestion?.analysisLevel ?? levelAtTimeout;
         completeAndMaybeSubmit(
@@ -2750,8 +2784,8 @@ function PlayArea() {
         );
         return;
       }
-      if (currentLevel > minAnalysisLevel && mostRecentCompletedLevelElapsedMs !== null) {
-        const remainingMs = Math.max(0, maxTimeMs - elapsedMs);
+      if (currentLevel > activeRunLimits.minAnalysisLevel && mostRecentCompletedLevelElapsedMs !== null) {
+        const remainingMs = Math.max(0, activeRunLimits.maxTimeMs - elapsedMs);
         if (remainingMs < mostRecentCompletedLevelElapsedMs) {
           const deepestCompletedLevel = deepestCompletedSuggestion?.analysisLevel ?? currentLevel - 1;
           completeAndMaybeSubmit(
@@ -2796,26 +2830,42 @@ function PlayArea() {
       worker.postMessage(request);
     };
 
-    analysisDeadlineTimerRef.current = window.setTimeout(() => {
-      if (runId !== analysisRunIdRef.current) {
-        return;
+    const scheduleAnalysisDeadline = () => {
+      const existingDeadlineTimerId = analysisDeadlineTimerRef.current;
+      if (existingDeadlineTimerId !== null) {
+        window.clearTimeout(existingDeadlineTimerId);
       }
-      timeLimitReached = true;
-      const levelAtTimeout = analysisRunningLevelRef.current ?? currentLevel;
-      if (levelAtTimeout <= minAnalysisLevel) {
-        return;
-      }
-      analysisRunIdRef.current += 1;
-      const stopLevel = deepestCompletedSuggestion?.analysisLevel ?? levelAtTimeout;
-      completeAndMaybeSubmit(
-        `Time limit during L${levelAtTimeout}.`,
-        `time limit was reached during L${levelAtTimeout}`,
-        {
-          terminateWorker: true,
-          stopLevel,
-        },
-      );
-    }, maxTimeMs);
+      const activeRunLimits = getActiveRunLimits();
+      const elapsedMs = Math.max(0, performance.now() - timerStart);
+      const remainingMs = Math.max(0, activeRunLimits.maxTimeMs - elapsedMs);
+      analysisDeadlineTimerRef.current = window.setTimeout(() => {
+        if (runId !== analysisRunIdRef.current) {
+          return;
+        }
+        const latestRunLimits = getActiveRunLimits();
+        const latestElapsedMs = Math.max(0, performance.now() - timerStart);
+        if (latestElapsedMs < latestRunLimits.maxTimeMs) {
+          scheduleAnalysisDeadline();
+          return;
+        }
+        analysisTimeLimitReachedRef.current = true;
+        const levelAtTimeout = analysisRunningLevelRef.current ?? currentLevel;
+        if (levelAtTimeout <= latestRunLimits.minAnalysisLevel) {
+          return;
+        }
+        analysisRunIdRef.current += 1;
+        const stopLevel = deepestCompletedSuggestion?.analysisLevel ?? levelAtTimeout;
+        completeAndMaybeSubmit(
+          `Time limit during L${levelAtTimeout}.`,
+          `time limit was reached during L${levelAtTimeout}`,
+          {
+            terminateWorker: true,
+            stopLevel,
+          },
+        );
+      }, remainingMs);
+    };
+    scheduleAnalysisDeadline();
 
     worker.onmessage = (event: MessageEvent<TreeSearchWorkerResponse>) => {
       if (runId !== analysisRunIdRef.current) {
@@ -2876,10 +2926,12 @@ function PlayArea() {
         formatAnalysisLevelDebugLine(sourceNormalTurnCount, currentLevel, completedLevelElapsedMs, bestTurn),
       );
 
-      if (effectiveMaxAnalysisLevel !== null && currentLevel >= effectiveMaxAnalysisLevel) {
+      const activeRunLimits = getActiveRunLimits();
+      const activeMaxAnalysisLevel = activeRunLimits.maxAnalysisLevel;
+      if (activeMaxAnalysisLevel !== null && currentLevel >= activeMaxAnalysisLevel) {
         completeAndMaybeSubmit(
           `Max turn depth reached at L${currentLevel}.`,
-          `max turn depth is L${effectiveMaxAnalysisLevel}`,
+          `max turn depth is L${activeMaxAnalysisLevel}`,
           {
             stopLevel: currentLevel,
           },
@@ -2896,7 +2948,7 @@ function PlayArea() {
         return;
       }
 
-      if (completedElapsedMs >= maxTimeMs) {
+      if (completedElapsedMs >= activeRunLimits.maxTimeMs) {
         completeAndMaybeSubmit(
           `Time limit during L${currentLevel}.`,
           `time limit was reached during L${currentLevel}`,
@@ -2937,7 +2989,24 @@ function PlayArea() {
   };
 
   const handleMull = () => {
+    if (analysisIsRunningRef.current && analysisRunKind === 'mull') {
+      return;
+    }
+    if (analysisIsRunningRef.current) {
+      analysisRunLimitsRef.current = {
+        kind: 'mull',
+        minAnalysisLevel: 1,
+        maxAnalysisLevel: 99,
+        maxTimeMs: mullMaxTimeMs,
+      };
+      analysisTimeLimitReachedRef.current = false;
+      setAnalysisRunKind('mull');
+      setAnalysisRunMaxTimeMs(mullMaxTimeMs);
+      setAnalysisStatusMessage('Analyzing with Mull limits...');
+      return;
+    }
     startBestTurnAnalysis(false, undefined, {
+      kind: 'mull',
       minAnalysisLevel: 1,
       maxAnalysisLevel: 99,
       maxTimeMs: mullMaxTimeMs,
@@ -3593,6 +3662,7 @@ function PlayArea() {
     currentPlayerPieceId === 'player1' ? aiShowOnBoardP1 : currentPlayerPieceId === 'player2' ? aiShowOnBoardP3 : false;
   const analysisMaxTimeMs = getAnalysisMaxTimeMs(analysisMaxTimeIndex);
   const aiAnalysisDisabled = analysisMaxTimeMs === null;
+  const mullButtonDisabled = hasWinner || analysisRunKind === 'mull';
   const displayedAnalysisMaxTimeMs = analysisIsRunning ? analysisRunMaxTimeMs : (analysisMaxTimeMs ?? 0);
   const aiSuggestionBoardText = (() => {
     if (hasWinner || !aiShowOnBoardEnabledForCurrentPlayer) {
@@ -4087,7 +4157,8 @@ function PlayArea() {
           </li>
           <li>
             <strong>Mull</strong>: runs analysis like Think, but always uses Min Turn Depth 1, Max Turn Depth 99, and Max
-            Time 99999 seconds instead of respecting the choices below. It is disabled when Max Time is No AI.
+            Time 99999 seconds instead of respecting the choices below. If Think is already running, Mull keeps the
+            active analysis going and switches it to these limits.
           </li>
           <li>
             <strong>Cancel</strong>: stops an in-progress analysis run and keeps the best completed level found so far.
@@ -4461,15 +4532,15 @@ function PlayArea() {
             <div className="planner-header-actions">
               <button
                 className="planner-button planner-button--primary planner-header-ai-button"
-                onClick={handleThink}
-                disabled={hasWinner || analysisIsRunning || aiAnalysisDisabled}
+                onClick={handleDoSuggestedTurn}
+                disabled={!aiCanDoIt || hasWinner}
               >
-                Think
+                Do
               </button>
               <button
                 className="planner-button planner-header-ai-button"
                 onClick={handleMull}
-                disabled={hasWinner || analysisIsRunning || aiAnalysisDisabled}
+                disabled={mullButtonDisabled}
               >
                 Mull
               </button>
@@ -4686,7 +4757,7 @@ function PlayArea() {
             >
               Do
             </button>
-            <button className="planner-button" onClick={handleMull} disabled={hasWinner || analysisIsRunning || aiAnalysisDisabled}>
+            <button className="planner-button" onClick={handleMull} disabled={mullButtonDisabled}>
               Mull
             </button>
             <button className="planner-button" onClick={handleAnalysisCancel} disabled={!analysisIsRunning}>

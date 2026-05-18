@@ -312,10 +312,36 @@ test.describe('AI results cache', () => {
     const aiPanel = page.locator('.ai-panel');
     await expect(page.locator('#analysis-max-time')).toHaveValue('0');
     await expect(aiPanel.getByRole('button', { name: 'Think', exact: true })).toBeDisabled();
-    await expect(aiPanel.getByRole('button', { name: 'Mull' })).toBeDisabled();
+    await expect(aiPanel.getByRole('button', { name: 'Mull' })).toBeEnabled();
     await expect.poll(() => readAiLineValue(page, 'Status'), { timeout: 5000 }).toBe('AI analysis disabled.');
     await expect.poll(() => readAiLineValue(page, 'Suggested'), { timeout: 5000 }).toBe('No suggestion yet.');
     await expect.poll(() => readBoardOverlayText(page)).toBeNull();
+  });
+
+  test('Mull switches an active Think analysis to Mull limits', async ({ page }) => {
+    await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
+
+    await seedDefaultStateAndAiSetup(page, {
+      minAnalysisLevel: 8,
+      maxAnalysisLevel: 99,
+      analysisMaxTimeIndex: 14,
+      showOnBoardP1: true,
+    });
+    await page.reload();
+
+    const aiPanel = page.locator('.ai-panel');
+
+    await expect(aiPanel.getByRole('button', { name: 'Think', exact: true })).toBeDisabled();
+    await expect.poll(async () => (await readBoardOverlayText(page)) ?? '', { timeout: 5000 }).toContain('thinking');
+    await expect.poll(async () => (await readBoardOverlayText(page)) ?? '', { timeout: 5000 }).not.toContain('/99999s)');
+    await expect(aiPanel.getByRole('button', { name: 'Mull' })).toBeEnabled();
+
+    await aiPanel.getByRole('button', { name: 'Mull' }).click();
+
+    await expect.poll(async () => (await readBoardOverlayText(page)) ?? '', { timeout: 5000 }).toContain('/99999s)');
+    await expect(aiPanel.getByRole('button', { name: 'Mull' })).toBeDisabled();
+    await aiPanel.getByRole('button', { name: 'Cancel' }).click();
   });
 
   test('Mull board progress uses its fixed time limit', async ({ page }) => {
