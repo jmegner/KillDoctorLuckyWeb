@@ -789,12 +789,15 @@ body:has(.info-overlay) {
 .planner-animations {
   margin-top: 12px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: nowrap;
 }
 
 .planner-animations-title {
   margin: 0;
+  flex: 0 0 auto;
   font-family: var(--font-mono);
   font-size: 0.8rem;
   letter-spacing: 0.12em;
@@ -806,6 +809,7 @@ body:has(.info-overlay) {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 0 0 auto;
   flex-wrap: nowrap;
 }
 
