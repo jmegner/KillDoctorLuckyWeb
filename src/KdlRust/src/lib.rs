@@ -519,6 +519,25 @@ fn piece_attack_strength_for_state(
     state.player_strengths[idx] + weapon_bonus
 }
 
+fn attack_history_text_for_state(state: &core::mutable_game_state::MutableGameState) -> String {
+    let mut attacks = Vec::new();
+    let mut current_state = state;
+
+    while let Some(prev_state) = current_state.prev_state.as_deref() {
+        if current_state.attacker_hist.len() > prev_state.attacker_hist.len() {
+            let attacker = prev_state.current_player_id;
+            let player_num = core::common_game_state::CommonGameState::to_player_display_num(attacker);
+            let room_id = current_state.player_room_ids[attacker.0].0;
+            attacks.push(format!("{player_num}@{room_id},T{}", prev_state.turn_id));
+        }
+
+        current_state = prev_state;
+    }
+
+    attacks.reverse();
+    attacks.join("; ")
+}
+
 fn to_preview_json(preview: &TurnPlanPreview) -> String {
     serde_json::to_string(preview).unwrap_or_else(|_| {
         "{\"isValid\":false,\"validationMessage\":\"Preview serialization failed.\",\"nextPlayerPieceId\":\"\",\"hasWinner\":false,\"winnerPieceId\":\"\",\"attackers\":[],\"currentPlayerLoots\":false,\"doctorRoomId\":0,\"movedStrangers\":[]}".to_string()
@@ -719,6 +738,11 @@ impl GameStateHandle {
             return 0;
         };
         piece_attack_strength_for_state(&self.state, player_id)
+    }
+
+    #[wasm_bindgen(js_name = "attackHistoryText")]
+    pub fn attack_history_text(&self) -> String {
+        attack_history_text_for_state(&self.state)
     }
 
     #[wasm_bindgen(js_name = "playerStatsJson")]
@@ -1358,6 +1382,32 @@ mod tests {
         assert_eq!(
             validate_normal_setup(&setup, &common),
             Err("currentPlayerPieceId must be P1 or P3.".to_string())
+        );
+    }
+
+    #[test]
+    fn attack_history_text_includes_attacker_room_and_turn_in_order() {
+        let common = sample_common();
+        let mut turn_8 = core::mutable_game_state::MutableGameState::at_start(common);
+        turn_8.turn_id = 8;
+        turn_8.current_player_id = core::player::PlayerId(0);
+        turn_8.player_room_ids[0] = core::room::RoomId(15);
+
+        let mut turn_9 = turn_8.copy_state();
+        turn_9.prev_state = Some(std::rc::Rc::new(turn_8));
+        turn_9.turn_id = 9;
+        turn_9.current_player_id = core::player::PlayerId(1);
+        turn_9.attacker_hist.push(core::player::PlayerId(0));
+
+        let mut turn_10 = turn_9.copy_state();
+        turn_10.prev_state = Some(std::rc::Rc::new(turn_9));
+        turn_10.turn_id = 10;
+        turn_10.attacker_hist.push(core::player::PlayerId(1));
+        turn_10.player_room_ids[1] = core::room::RoomId(1);
+
+        assert_eq!(
+            attack_history_text_for_state(&turn_10),
+            "1@15,T8; 2@1,T9"
         );
     }
 

@@ -2020,6 +2020,7 @@ function PlayArea() {
     setAnalysisStatusMessage('AI cache cleared.');
   };
   const pieceRooms = gameState ? gameState.piecePositions() : null;
+  const attackHistoryText = gameState ? gameState.attackHistoryText() : '';
   const pieceRoomMap = (() => {
     const map = new Map<PieceId, number>();
     if (!pieceRooms) {
@@ -4678,48 +4679,51 @@ function PlayArea() {
           {playerStatsRows.length === 0 ? (
             <p className="player-stats-empty">Stats unavailable.</p>
           ) : (
-            <table className="player-stats-table" aria-label="Player stats">
-              <thead>
-                <tr>
-                  <th scope="col">P</th>
-                  <th scope="col">D</th>
-                  <th scope="col">S</th>
-                  <th scope="col">M</th>
-                  <th scope="col">W</th>
-                  <th scope="col">F</th>
-                  <th scope="col">C</th>
-                </tr>
-              </thead>
-              <tbody>
-                {playerStatsRows.map((row) => {
-                  const config = pieceConfig[row.pieceId];
-                  const isNormalPlayerRow = row.pieceId === 'player1' || row.pieceId === 'player2';
-                  const numericCellClassName = isNormalPlayerRow ? 'player-stats-cell--bold' : undefined;
-                  return (
-                    <tr
-                      key={`player-stats-${row.pieceId}`}
-                      style={{ backgroundColor: config.color, color: config.textColor }}
-                    >
-                      <th scope="row">{config.label}</th>
-                      <td className={numericCellClassName}>{formatPlayerInteger(row.doctorDistance)}</td>
-                      <td className={numericCellClassName}>{formatPlayerInteger(row.strength)}</td>
-                      <td className={numericCellClassName}>
-                        {isNormalPlayerRow ? formatPlayerStatDecimal(row.moveCards) : ''}
-                      </td>
-                      <td className={numericCellClassName}>
-                        {isNormalPlayerRow ? formatPlayerStatDecimal(row.weaponCards) : ''}
-                      </td>
-                      <td className={numericCellClassName}>
-                        {isNormalPlayerRow ? formatPlayerStatDecimal(row.failureCards) : ''}
-                      </td>
-                      <td className={numericCellClassName}>
-                        {isNormalPlayerRow ? formatPlayerStatDecimal(row.equivalentClovers) : ''}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <>
+              <p className="player-stats-attacks">Attacks: {attackHistoryText || 'none'}</p>
+              <table className="player-stats-table" aria-label="Player stats">
+                <thead>
+                  <tr>
+                    <th scope="col">P</th>
+                    <th scope="col">D</th>
+                    <th scope="col">S</th>
+                    <th scope="col">M</th>
+                    <th scope="col">W</th>
+                    <th scope="col">F</th>
+                    <th scope="col">C</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {playerStatsRows.map((row) => {
+                    const config = pieceConfig[row.pieceId];
+                    const isNormalPlayerRow = row.pieceId === 'player1' || row.pieceId === 'player2';
+                    const numericCellClassName = isNormalPlayerRow ? 'player-stats-cell--bold' : undefined;
+                    return (
+                      <tr
+                        key={`player-stats-${row.pieceId}`}
+                        style={{ backgroundColor: config.color, color: config.textColor }}
+                      >
+                        <th scope="row">{config.label}</th>
+                        <td className={numericCellClassName}>{formatPlayerInteger(row.doctorDistance)}</td>
+                        <td className={numericCellClassName}>{formatPlayerInteger(row.strength)}</td>
+                        <td className={numericCellClassName}>
+                          {isNormalPlayerRow ? formatPlayerStatDecimal(row.moveCards) : ''}
+                        </td>
+                        <td className={numericCellClassName}>
+                          {isNormalPlayerRow ? formatPlayerStatDecimal(row.weaponCards) : ''}
+                        </td>
+                        <td className={numericCellClassName}>
+                          {isNormalPlayerRow ? formatPlayerStatDecimal(row.failureCards) : ''}
+                        </td>
+                        <td className={numericCellClassName}>
+                          {isNormalPlayerRow ? formatPlayerStatDecimal(row.equivalentClovers) : ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
           )}
         </aside>
         <aside className="planner-panel ai-panel">

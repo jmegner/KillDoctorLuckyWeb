@@ -537,6 +537,15 @@
   font-size: 0.78rem;
 }
 
+.player-stats-attacks {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
 .player-stats-panel,
 .player-stats-panel * {
   cursor: help;
