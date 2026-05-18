@@ -2021,6 +2021,7 @@ function PlayArea() {
   };
   const pieceRooms = gameState ? gameState.piecePositions() : null;
   const attackHistoryText = gameState ? gameState.attackHistoryText() : '';
+  const attackHistoryLabel = gameState ? gameState.attackHistoryLabel() : 'Atks0,0';
   const pieceRoomMap = (() => {
     const map = new Map<PieceId, number>();
     if (!pieceRooms) {
@@ -4680,7 +4681,9 @@ function PlayArea() {
             <p className="player-stats-empty">Stats unavailable.</p>
           ) : (
             <>
-              <p className="player-stats-attacks">Attacks: {attackHistoryText || 'none'}</p>
+              <p className="player-stats-attacks">
+                {attackHistoryLabel}: {attackHistoryText || 'none'}
+              </p>
               <table className="player-stats-table" aria-label="Player stats">
                 <thead>
                   <tr>

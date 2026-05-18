@@ -538,6 +538,25 @@ fn attack_history_text_for_state(state: &core::mutable_game_state::MutableGameSt
     attacks.join("; ")
 }
 
+fn attack_history_label_for_state(state: &core::mutable_game_state::MutableGameState) -> String {
+    let mut side_a_attacks = 0;
+    let mut side_b_attacks = 0;
+
+    for attacker in &state.attacker_hist {
+        if *attacker == core::rule_helper::SIDE_A_NORMAL_PLAYER_ID
+            || *attacker == core::rule_helper::STRANGER_PLAYER_ID_SECOND
+        {
+            side_a_attacks += 1;
+        } else if *attacker == core::rule_helper::SIDE_B_NORMAL_PLAYER_ID
+            || *attacker == core::rule_helper::STRANGER_PLAYER_ID_FIRST
+        {
+            side_b_attacks += 1;
+        }
+    }
+
+    format!("Atks{side_a_attacks},{side_b_attacks}")
+}
+
 fn to_preview_json(preview: &TurnPlanPreview) -> String {
     serde_json::to_string(preview).unwrap_or_else(|_| {
         "{\"isValid\":false,\"validationMessage\":\"Preview serialization failed.\",\"nextPlayerPieceId\":\"\",\"hasWinner\":false,\"winnerPieceId\":\"\",\"attackers\":[],\"currentPlayerLoots\":false,\"doctorRoomId\":0,\"movedStrangers\":[]}".to_string()
@@ -743,6 +762,11 @@ impl GameStateHandle {
     #[wasm_bindgen(js_name = "attackHistoryText")]
     pub fn attack_history_text(&self) -> String {
         attack_history_text_for_state(&self.state)
+    }
+
+    #[wasm_bindgen(js_name = "attackHistoryLabel")]
+    pub fn attack_history_label(&self) -> String {
+        attack_history_label_for_state(&self.state)
     }
 
     #[wasm_bindgen(js_name = "playerStatsJson")]
@@ -1409,6 +1433,7 @@ mod tests {
             attack_history_text_for_state(&turn_10),
             "1@15,T8; 2@1,T9"
         );
+        assert_eq!(attack_history_label_for_state(&turn_10), "Atks1,1");
     }
 
     #[test]
