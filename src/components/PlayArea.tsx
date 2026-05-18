@@ -2046,7 +2046,7 @@ function PlayArea() {
     const { top, bottom } = getPieceIndicators(piece.pieceId);
     const centerX = piece.x + piece.size / 2;
     const centerY = piece.y + piece.size / 2;
-    const indicatorSize = Math.min(piece.size * 0.35, labelSize * 0.8, 30);
+    const indicatorSize = Math.min(piece.size * 0.525, labelSize * 1.2, 45);
     const indicatorOffset = piece.size * 0.3;
 
     return (
@@ -4433,8 +4433,8 @@ function PlayArea() {
                       return null;
                     }
                     const rect = getRoomRect(room.coords);
-                    const boxWidth = roomDistanceBoxWidth;
-                    const boxHeight = roomDistanceBoxHeight;
+                    const boxWidth = roomDistanceBoxWidth * 1.5;
+                    const boxHeight = roomDistanceBoxHeight * 1.5;
                     const boxX = rect.x + (rect.width - boxWidth) / 2;
                     const boxY = rect.y + rect.height * roomDistanceBoxTopRatio;
                     const textX = boxX + boxWidth / 2;
