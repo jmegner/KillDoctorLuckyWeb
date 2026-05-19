@@ -12,20 +12,78 @@ const readAiLineValue = async (page: Page, labelText: string) =>
     return null;
   }, labelText);
 
+const noSuggestionText = 'No suggestion yet.';
+const runningStatusPattern = /^(Analyzing|L\d+,)/i;
+
+const readAiStatus = (page: Page) => readAiLineValue(page, 'Status');
+
+const readAiSuggested = (page: Page) => readAiLineValue(page, 'Suggested');
+
 const waitForAnalysisToSettle = async (page: Page) => {
   const aiPanel = page.locator('.ai-panel');
-  await expect(aiPanel.getByRole('button', { name: 'Think', exact: true })).toBeEnabled({ timeout: 20_000 });
+  const thinkButton = aiPanel.getByRole('button', { name: 'Think', exact: true });
+
   await expect
-    .poll(async () => (await readAiLineValue(page, 'Status')) ?? '', { timeout: 20_000 })
-    .not.toMatch(/Analyzing|failed/i);
+    .poll(
+      async () => {
+        const status = (await readAiStatus(page)) ?? '';
+        if (/failed/i.test(status)) {
+          return `failed: ${status}`;
+        }
+        if (!(await thinkButton.isEnabled()) || runningStatusPattern.test(status)) {
+          return 'running';
+        }
+        return (await readAiSuggested(page)) === noSuggestionText ? 'waiting-for-suggestion' : 'settled';
+      },
+      { timeout: 20_000 },
+    )
+    .toBe('settled');
+};
+
+const waitForAiPanelIdle = async (page: Page) => {
+  const aiPanel = page.locator('.ai-panel');
+  const thinkButton = aiPanel.getByRole('button', { name: 'Think', exact: true });
+
+  await expect
+    .poll(
+      async () => {
+        const status = (await readAiStatus(page)) ?? '';
+        return (await thinkButton.isEnabled()) && !runningStatusPattern.test(status);
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(true);
 };
 
 const cancelAiAnalysisIfRunning = async (page: Page) => {
-  const cancelButton = page.locator('.ai-panel').getByRole('button', { name: 'Cancel' });
+  const aiPanel = page.locator('.ai-panel');
+  const cancelButton = aiPanel.getByRole('button', { name: 'Cancel' });
+  const thinkButton = aiPanel.getByRole('button', { name: 'Think', exact: true });
+
+  await expect
+    .poll(
+      async () => {
+        if (await cancelButton.isEnabled()) {
+          return 'running';
+        }
+        return (await thinkButton.isEnabled()) ? 'idle' : 'transitioning';
+      },
+      { timeout: 5_000 },
+    )
+    .not.toBe('transitioning');
+
   if (await cancelButton.isEnabled()) {
     await cancelButton.click();
-    await expect(cancelButton).toBeDisabled({ timeout: 20_000 });
+    await waitForAiPanelIdle(page);
   }
+};
+
+const clickThinkAndWaitForAnalysisToSettle = async (page: Page) => {
+  const thinkButton = page.locator('.ai-panel').getByRole('button', { name: 'Think', exact: true });
+
+  await thinkButton.click();
+  await expect(thinkButton).toBeDisabled({ timeout: 5_000 });
+  await waitForAnalysisToSettle(page);
 };
 
 test.describe('production preview smoke', () => {
@@ -34,24 +92,17 @@ test.describe('production preview smoke', () => {
 
     await waitForAnalysisToSettle(page);
 
-    await expect
-      .poll(() => readAiLineValue(page, 'Suggested'), { timeout: 5_000 })
-      .not.toBe('No suggestion yet.');
+    await expect.poll(() => readAiSuggested(page), { timeout: 5_000 }).not.toBe(noSuggestionText);
   });
 
   test('manual Think completes in preview mode', async ({ page }) => {
     await page.goto('/');
 
-    await cancelAiAnalysisIfRunning(page);
-
-    const aiPanel = page.locator('.ai-panel');
-    await aiPanel.getByRole('button', { name: 'Think', exact: true }).click();
-
     await waitForAnalysisToSettle(page);
 
-    await expect
-      .poll(() => readAiLineValue(page, 'Suggested'), { timeout: 5_000 })
-      .not.toBe('No suggestion yet.');
+    await clickThinkAndWaitForAnalysisToSettle(page);
+
+    await expect.poll(() => readAiSuggested(page), { timeout: 5_000 }).not.toBe(noSuggestionText);
   });
 
   test('analysis can restart offline after the preview app loads', async ({ page }) => {
@@ -60,13 +111,8 @@ test.describe('production preview smoke', () => {
     await cancelAiAnalysisIfRunning(page);
     await page.context().setOffline(true);
 
-    const aiPanel = page.locator('.ai-panel');
-    await aiPanel.getByRole('button', { name: 'Think', exact: true }).click();
+    await clickThinkAndWaitForAnalysisToSettle(page);
 
-    await waitForAnalysisToSettle(page);
-
-    await expect
-      .poll(() => readAiLineValue(page, 'Suggested'), { timeout: 5_000 })
-      .not.toBe('No suggestion yet.');
+    await expect.poll(() => readAiSuggested(page), { timeout: 5_000 }).not.toBe(noSuggestionText);
   });
 });
