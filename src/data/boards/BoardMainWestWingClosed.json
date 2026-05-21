@@ -13,9 +13,9 @@
     "RoomDistanceBoxHeight": 30,
     "RoomDistanceBoxTopRatio": 0.2,
     "ActionDisplayBounds": {
-      "MinXAfterRoomId": 12,
-      "MaxXBeforeRoomId": 11,
-      "MinYBelowRoomId": 3
+      "MinXAfterRoomId": -1,
+      "MaxXBeforeRoomId": -1,
+      "MinYBelowRoomId": -1
     }
   },
   "PlayerStartRoomIds": [1],

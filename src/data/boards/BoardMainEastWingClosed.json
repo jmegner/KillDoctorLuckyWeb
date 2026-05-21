@@ -13,463 +13,148 @@
     "RoomDistanceBoxHeight": 30,
     "RoomDistanceBoxTopRatio": 0.2,
     "ActionDisplayBounds": {
-      "MinXAfterRoomId": 12,
-      "MaxXBeforeRoomId": 11,
-      "MinYBelowRoomId": 3
+      "MinXAfterRoomId": -1,
+      "MaxXBeforeRoomId": -1,
+      "MinYBelowRoomId": -1
     }
   },
-  "PlayerStartRoomIds": [
-    1
-  ],
-  "DoctorStartRoomIds": [
-    15
-  ],
-  "CatStartRoomIds": [
-    10
-  ],
-  "DogStartRoomIds": [
-    6
-  ],
+  "PlayerStartRoomIds": [1],
+  "DoctorStartRoomIds": [15],
+  "CatStartRoomIds": [10],
+  "DogStartRoomIds": [6],
   "Rooms": [
     {
       "Id": "1",
       "Name": "drawing room",
-      "Coords": [
-        774,
-        745,
-        1226,
-        916.5
-      ],
-      "Adjacent": [
-        2,
-        4,
-        6,
-        24
-      ],
-      "Visible": [
-        2,
-        4,
-        6,
-        15,
-        24
-      ]
+      "Coords": [774, 745, 1226, 916.5],
+      "Adjacent": [2, 4, 6, 24],
+      "Visible": [2, 4, 6, 15, 24]
     },
     {
       "Id": "2",
       "Name": "parlor",
-      "Coords": [
-        1233,
-        744.5,
-        1519.5,
-        1020
-      ],
-      "Adjacent": [
-        1,
-        3,
-        4,
-        22
-      ],
-      "Visible": [
-        1,
-        3,
-        6,
-        22
-      ]
+      "Coords": [1233, 744.5, 1519.5, 1020],
+      "Adjacent": [1, 3, 4, 22],
+      "Visible": [1, 3, 6, 22]
     },
     {
       "Id": "3",
       "Name": "billiard room",
-      "Coords": [
-        1233,
-        384,
-        1615,
-        634
-      ],
-      "Adjacent": [
-        2,
-        4,
-        16
-      ],
-      "Visible": [
-        2,
-        4,
-        5
-      ]
+      "Coords": [1233, 384, 1615, 634],
+      "Adjacent": [2, 4, 16],
+      "Visible": [2, 4, 5]
     },
     {
       "Id": "4",
       "Name": "dining hall",
-      "Coords": [
-        772.5,
-        321,
-        1227,
-        738
-      ],
-      "Adjacent": [
-        1,
-        2,
-        3,
-        5,
-        6,
-        8,
-        10,
-        11,
-        12,
-        13,
-        16
-      ],
-      "Visible": [
-        1,
-        3,
-        5,
-        11,
-        15,
-        24
-      ]
+      "Coords": [772.5, 321, 1227, 738],
+      "Adjacent": [1, 2, 3, 5, 6, 8, 10, 11, 12, 13, 16],
+      "Visible": [1, 3, 5, 11, 15, 24]
     },
     {
       "Id": "5",
       "Name": "sitting room",
-      "Coords": [
-        382,
-        376.5,
-        766,
-        647
-      ],
-      "Adjacent": [
-        4,
-        6,
-        8,
-        10,
-        11,
-        12,
-        13
-      ],
-      "Visible": [
-        3,
-        4,
-        6
-      ]
+      "Coords": [382, 376.5, 766, 647],
+      "Adjacent": [4, 6, 8, 10, 11, 12, 13],
+      "Visible": [3, 4, 6]
     },
     {
       "Id": "6",
       "Name": "trophy room",
-      "Coords": [
-        484,
-        746,
-        765,
-        1024
-      ],
-      "Adjacent": [
-        1,
-        4,
-        5,
-        7,
-        8,
-        10,
-        11,
-        12
-      ],
-      "Visible": [
-        1,
-        2,
-        5,
-        7,
-        10
-      ]
+      "Coords": [484, 746, 765, 1024],
+      "Adjacent": [1, 4, 5, 7, 8, 10, 11, 12],
+      "Visible": [1, 2, 5, 7, 10]
     },
     {
       "Id": "7",
       "Name": "green house",
-      "Coords": [
-        482,
-        1029,
-        763,
-        1476
-      ],
-      "Adjacent": [
-        6,
-        8,
-        22,
-        23,
-        24
-      ],
-      "Visible": [
-        6,
-        8,
-        22,
-        23
-      ]
+      "Coords": [482, 1029, 763, 1476],
+      "Adjacent": [6, 8, 22, 23, 24],
+      "Visible": [6, 8, 22, 23]
     },
     {
       "Id": "8",
       "Name": "winter garden",
-      "Coords": [
-        4,
-        1212,
-        478,
-        1481
-      ],
-      "Adjacent": [
-        4,
-        5,
-        6,
-        7,
-        9,
-        10,
-        11,
-        12
-      ],
-      "Visible": [
-        7,
-        9,
-        10,
-        23
-      ]
+      "Coords": [4, 1212, 478, 1481],
+      "Adjacent": [4, 5, 6, 7, 9, 10, 11, 12],
+      "Visible": [7, 9, 10, 23]
     },
     {
       "Id": "9",
       "Name": "wine cellar",
-      "Coords": [
-        4,
-        1031,
-        379.5,
-        1205
-      ],
-      "Adjacent": [
-        8,
-        10
-      ],
-      "Visible": [
-        8,
-        10
-      ]
+      "Coords": [4, 1031, 379.5, 1205],
+      "Adjacent": [8, 10],
+      "Visible": [8, 10]
     },
     {
       "Id": "10",
       "Name": "kitchen",
-      "Coords": [
-        5,
-        748,
-        381,
-        1024
-      ],
-      "Adjacent": [
-        4,
-        5,
-        6,
-        8,
-        9,
-        11,
-        12
-      ],
-      "Visible": [
-        6,
-        8,
-        9,
-        12
-      ]
+      "Coords": [5, 748, 381, 1024],
+      "Adjacent": [4, 5, 6, 8, 9, 11, 12],
+      "Visible": [6, 8, 9, 12]
     },
     {
       "Id": "11",
       "Name": "lancaster room",
-      "Coords": [
-        102,
-        285,
-        376,
-        643
-      ],
-      "Adjacent": [
-        4,
-        5,
-        6,
-        8,
-        10,
-        12,
-        13
-      ],
-      "Visible": [
-        4,
-        12
-      ]
+      "Coords": [102, 285, 376, 643],
+      "Adjacent": [4, 5, 6, 8, 10, 12, 13],
+      "Visible": [4, 12]
     },
     {
       "Id": "12",
       "Name": "master suite",
-      "Coords": [
-        3,
-        8,
-        383,
-        279
-      ],
-      "Adjacent": [
-        4,
-        5,
-        6,
-        8,
-        10,
-        11,
-        13
-      ],
-      "Visible": [
-        10,
-        11,
-        13,
-        15,
-        16
-      ]
+      "Coords": [3, 8, 383, 279],
+      "Adjacent": [4, 5, 6, 8, 10, 11, 13],
+      "Visible": [10, 11, 13, 15, 16]
     },
     {
       "Id": "13",
       "Name": "nursery",
-      "Coords": [
-        479,
-        2,
-        765,
-        283
-      ],
-      "Adjacent": [
-        4,
-        5,
-        11,
-        12,
-        14,
-        15
-      ],
-      "Visible": [
-        12,
-        14,
-        15,
-        16
-      ]
+      "Coords": [479, 2, 765, 283],
+      "Adjacent": [4, 5, 11, 12, 14, 15],
+      "Visible": [12, 14, 15, 16]
     },
     {
       "Id": "14",
       "Name": "armory",
-      "Coords": [
-        769,
-        1,
-        1230,
-        144
-      ],
-      "Adjacent": [
-        13,
-        15,
-        16
-      ],
-      "Visible": [
-        13,
-        15,
-        16
-      ]
+      "Coords": [769, 1, 1230, 144],
+      "Adjacent": [13, 15, 16],
+      "Visible": [13, 15, 16]
     },
     {
       "Id": "15",
       "Name": "gallery",
-      "Coords": [
-        768.5,
-        150,
-        1229,
-        314
-      ],
-      "Adjacent": [
-        13,
-        14,
-        16
-      ],
-      "Visible": [
-        1,
-        4,
-        12,
-        13,
-        14,
-        16,
-        24
-      ]
+      "Coords": [768.5, 150, 1229, 314],
+      "Adjacent": [13, 14, 16],
+      "Visible": [1, 4, 12, 13, 14, 16, 24]
     },
     {
       "Id": "16",
       "Name": "library",
-      "Coords": [
-        1234,
-        1,
-        1521,
-        282
-      ],
-      "Adjacent": [
-        3,
-        4,
-        14,
-        15
-      ],
-      "Visible": [
-        12,
-        13,
-        14,
-        15
-      ]
+      "Coords": [1234, 1, 1521, 282],
+      "Adjacent": [3, 4, 14, 15],
+      "Visible": [12, 13, 14, 15]
     },
     {
       "Id": "22",
       "Name": "carriage house",
-      "Coords": [
-        1229,
-        1026,
-        1519,
-        1483
-      ],
-      "Adjacent": [
-        2,
-        7,
-        23,
-        24
-      ],
-      "Visible": [
-        2,
-        7,
-        23
-      ]
+      "Coords": [1229, 1026, 1519, 1483],
+      "Adjacent": [2, 7, 23, 24],
+      "Visible": [2, 7, 23]
     },
     {
       "Id": "23",
       "Name": "piazza",
-      "Coords": [
-        767,
-        1125,
-        1223,
-        1485
-      ],
-      "Adjacent": [
-        7,
-        22,
-        24
-      ],
-      "Visible": [
-        7,
-        8,
-        22
-      ]
+      "Coords": [767, 1125, 1223, 1485],
+      "Adjacent": [7, 22, 24],
+      "Visible": [7, 8, 22]
     },
     {
       "Id": "24",
       "Name": "foyer",
-      "Coords": [
-        771,
-        923,
-        1224,
-        1028
-      ],
-      "Adjacent": [
-        1,
-        7,
-        22,
-        23
-      ],
-      "Visible": [
-        1,
-        4,
-        15
-      ]
+      "Coords": [771, 923, 1224, 1028],
+      "Adjacent": [1, 7, 22, 23],
+      "Visible": [1, 4, 15]
     }
   ]
 }
