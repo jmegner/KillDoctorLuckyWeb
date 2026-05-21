@@ -6,6 +6,7 @@ import wasmBindgenInit, {
 import TreeSearchWorker from '@/workers/treeSearchWorker?worker';
 import boardAltDownData from '../data/boards/BoardAltDown.json';
 import boardMainWestWingClosedData from '../data/boards/BoardMainWestWingClosed.json';
+import boardMainEastWingClosedData from '../data/boards/BoardMainEastWingClosed.json';
 
 type PieceId = 'doctor' | 'player1' | 'player2' | 'stranger1' | 'stranger2';
 type NormalPlayerPieceId = 'player1' | 'player2';
@@ -294,7 +295,9 @@ type SlotLayout = {
   slots: SlotPosition[];
 };
 
-const boardLayouts = [boardAltDownData, boardMainWestWingClosedData].map((data) => data as BoardLayout);
+const boardLayouts = [boardAltDownData, boardMainWestWingClosedData, boardMainEastWingClosedData].map(
+  (data) => data as BoardLayout,
+);
 const defaultBoardJsonName = 'BoardAltDown';
 const boardLayoutByJsonName = new Map(boardLayouts.map((layout) => [layout.JsonName, layout] as const));
 const getBoardLayout = (boardName: string) =>

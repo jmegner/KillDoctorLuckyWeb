@@ -23,6 +23,10 @@ const EMBEDDED_BOARD_DATA: &[(&str, &str)] = &[
         "MainWestWingClosed",
         include_str!("../../../data/boards/BoardMainWestWingClosed.json"),
     ),
+    (
+        "MainEastWingClosed",
+        include_str!("../../../data/boards/BoardMainEastWingClosed.json"),
+    ),
     ("Tiny", include_str!("boards/Tiny.json")),
 ];
 
