@@ -43,7 +43,12 @@ const seedRedoWithIndicatorChange = async (page: Page): Promise<IndicatorSeed> =
         const isNormalPlayer = pieceId === 'player1' || pieceId === 'player2';
         const texts = [] as string[];
         if (isNormalPlayer) {
-          texts.push(Math.floor(state.pieceMoveCards(pieceId)).toString());
+          const moveCards = state.pieceMoveCards(pieceId);
+          const roundedDownMoveCards = Math.floor(moveCards);
+          const roundedThirdsProgress = ((Math.round(moveCards * 3) % 3) + 3) % 3;
+          const lootActionsAwayFromNextFullMoveCard = (3 - roundedThirdsProgress) % 3;
+          const suffix = lootActionsAwayFromNextFullMoveCard === 1 ? ':' : lootActionsAwayFromNextFullMoveCard === 2 ? '.' : '';
+          texts.push(`${roundedDownMoveCards}${suffix}`);
         }
         texts.push(pieceLabels[pieceId]);
         texts.push(state.pieceAttackStrength(pieceId).toString());

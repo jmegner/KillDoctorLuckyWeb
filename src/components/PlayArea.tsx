@@ -77,8 +77,17 @@ const getLivePieceIndicators = (gameState: GameStateHandle | null, pieceId: Piec
     return { top: null, bottom: null };
   }
   const isNormalPlayer = pieceId === 'player1' || pieceId === 'player2';
+  const getNormalPlayerMoveCardIndicator = () => {
+    const moveCards = gameState.pieceMoveCards(pieceId);
+    const roundedDownMoveCards = Math.floor(moveCards);
+    const roundedThirdsProgress = ((Math.round(moveCards * 3) % 3) + 3) % 3;
+    const lootActionsAwayFromNextFullMoveCard = (3 - roundedThirdsProgress) % 3;
+    const suffix =
+      lootActionsAwayFromNextFullMoveCard === 1 ? ':' : lootActionsAwayFromNextFullMoveCard === 2 ? '.' : '';
+    return `${formatPlayerInteger(roundedDownMoveCards)}${suffix}`;
+  };
   return {
-    top: isNormalPlayer ? formatPlayerInteger(Math.floor(gameState.pieceMoveCards(pieceId))) : null,
+    top: isNormalPlayer ? getNormalPlayerMoveCardIndicator() : null,
     bottom: formatPlayerInteger(gameState.pieceAttackStrength(pieceId)),
   };
 };
@@ -4144,7 +4153,10 @@ function PlayArea() {
         <h4>Piece Indicators</h4>
         <p>The small numbers on the pieces give quick reminders of movement and attack strength.</p>
         <ul>
-          <li>The number above a normal player piece is that player's move cards, rounded down.</li>
+          <li>
+            The number above a normal player piece is that player's move cards, rounded down; a trailing ":" means
+            they are 1 loot action away from the next full move card, and a trailing "." means they are 2 away.
+          </li>
           <li>
             The number below a normal player piece is that player's next attack strength: natural strength plus 2 if
             they have at least 1 weapon card.
