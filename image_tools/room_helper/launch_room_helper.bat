@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-set "IMAGE_PATH=%~dp0..\..\public\BoardMainWest.jpg"
+set "IMAGE_PATH=%~dp0..\..\public\BoardAltUp.jpg"
 
 if not exist "room_helper.py" (
   echo room_helper.py was not found in:
