@@ -77,8 +77,16 @@ const getLivePieceIndicators = (gameState: GameStateHandle | null, pieceId: Piec
     return { top: null, bottom: null };
   }
   const isNormalPlayer = pieceId === 'player1' || pieceId === 'player2';
+  const getNormalPlayerMoveCardIndicator = () => {
+    const moveCards = gameState.pieceMoveCards(pieceId);
+    const moveCardsThirtySeconds = Math.round(moveCards * 32);
+    const roundedDownMoveCards = Math.floor(moveCardsThirtySeconds / 32);
+    const fractionalThirtySeconds = ((moveCardsThirtySeconds % 32) + 32) % 32;
+    const suffix = fractionalThirtySeconds >= 21 ? ':' : fractionalThirtySeconds >= 10 ? '.' : '';
+    return `${formatPlayerInteger(roundedDownMoveCards)}${suffix}`;
+  };
   return {
-    top: isNormalPlayer ? formatPlayerInteger(Math.floor(gameState.pieceMoveCards(pieceId))) : null,
+    top: isNormalPlayer ? getNormalPlayerMoveCardIndicator() : null,
     bottom: formatPlayerInteger(gameState.pieceAttackStrength(pieceId)),
   };
 };
@@ -4086,8 +4094,8 @@ function PlayArea() {
         <p>How to gain and use the cards...</p>
         <ul>
           <li>
-            Every time you loot a room ("draw a card") as your action, you gain 1/3 of a move card, 1/3 of a weapon
-            card, and 1/3 of a failure card. Looting a room is automatic; if you can loot during the action phase of
+            Every time you loot a room ("draw a card") as your action, you gain 11/32 of a move card, 11/32 of a weapon
+            card, and 11/32 of a failure card. Looting a room is automatic; if you can loot during the action phase of
             your turn, then you do.
           </li>
           <li>
@@ -4144,7 +4152,10 @@ function PlayArea() {
         <h4>Piece Indicators</h4>
         <p>The small numbers on the pieces give quick reminders of movement and attack strength.</p>
         <ul>
-          <li>The number above a normal player piece is that player's move cards, rounded down.</li>
+          <li>
+            The number above a normal player piece is that player's move cards, rounded down; a trailing ":" means
+            they have at least 21/32 of the next move card, and a trailing "." means they have at least 10/32.
+          </li>
           <li>
             The number below a normal player piece is that player's next attack strength: natural strength plus 2 if
             they have at least 1 weapon card.
