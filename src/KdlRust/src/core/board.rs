@@ -20,12 +20,12 @@ const EMBEDDED_BOARD_DATA: &[(&str, &str)] = &[
     ("LairSouth", include_str!("boards/LairSouth.json")),
     ("Main", include_str!("boards/Main.json")),
     (
-        "MainWestWingClosed",
-        include_str!("../../../data/boards/BoardMainWestWingClosed.json"),
+        "MainEast",
+        include_str!("../../../data/boards/BoardMainEast.json"),
     ),
     (
-        "MainEastWingClosed",
-        include_str!("../../../data/boards/BoardMainEastWingClosed.json"),
+        "MainWest",
+        include_str!("../../../data/boards/BoardMainWest.json"),
     ),
     ("Tiny", include_str!("boards/Tiny.json")),
 ];

@@ -1,8 +1,8 @@
 {
-  "ImagePath": "/BoardMainWestWingClosed.jpg",
-  "JsonName": "BoardMainWestWingClosed",
-  "Name": "MainWestWingClosed",
-  "Description": "Kill Doctor Lucky Board Main With West Wing Closed",
+  "ImagePath": "/BoardMainEast.jpg",
+  "JsonName": "BoardMainEast",
+  "Name": "MainEast",
+  "Description": "Kill Doctor Lucky Board Main East",
   "UiLayout": {
     "BoardWidth": 1630,
     "BoardHeight": 1490,
