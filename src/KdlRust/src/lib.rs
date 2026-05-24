@@ -519,6 +519,14 @@ fn piece_attack_strength_for_state(
     state.player_strengths[idx] + weapon_bonus
 }
 
+fn display_turn_id_for_state(state: &core::mutable_game_state::MutableGameState) -> i32 {
+    if state.is_normal_turn() {
+        state.ply() + 1
+    } else {
+        state.ply()
+    }
+}
+
 fn attack_history_text_for_state(state: &core::mutable_game_state::MutableGameState) -> String {
     let mut attacks = Vec::new();
     let mut current_state = state;
@@ -528,7 +536,7 @@ fn attack_history_text_for_state(state: &core::mutable_game_state::MutableGameSt
             let attacker = prev_state.current_player_id;
             let player_num = core::common_game_state::CommonGameState::to_player_display_num(attacker);
             let room_id = current_state.player_room_ids[attacker.0].0;
-            attacks.push(format!("{player_num}@{room_id},T{}", prev_state.turn_id));
+            attacks.push(format!("{player_num}@{room_id},T{}", display_turn_id_for_state(prev_state)));
         }
 
         current_state = prev_state;
@@ -1431,7 +1439,7 @@ mod tests {
 
         assert_eq!(
             attack_history_text_for_state(&turn_10),
-            "1@15,T8; 2@1,T9"
+            "1@15,T1; 2@1,T1"
         );
         assert_eq!(attack_history_label_for_state(&turn_10), "Atks1,1");
     }
