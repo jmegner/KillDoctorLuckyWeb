@@ -7,7 +7,7 @@ import json
 import math
 from pathlib import Path
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
@@ -27,6 +27,11 @@ WHEEL_PAN_UNITS = 1
 HQ_RENDER_DELAY_MS = 90
 NUDGE_STEP = 0.5
 MIN_ROOM_SIZE = 0.5
+DEFAULT_IMAGE_DIR = Path(__file__).resolve().parents[2] / "public"
+IMAGE_FILE_TYPES = (
+    ("Image files", "*.png *.jpg *.jpeg *.gif *.bmp *.webp"),
+    ("All files", "*.*"),
+)
 
 
 @dataclass
@@ -874,15 +879,37 @@ class RoomHelperApp:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Capture KDL room rectangle coordinates for a board image.")
-    parser.add_argument("image_path", type=Path, help="Path to the board image to annotate.")
+    parser.add_argument("image_path", type=Path, nargs="?", help="Optional path to the board image to annotate.")
     return parser.parse_args()
+
+
+def choose_image_path(root: tk.Tk, provided_path: Path | None) -> Path | None:
+    if provided_path is not None:
+        return provided_path
+
+    initial_dir = DEFAULT_IMAGE_DIR if DEFAULT_IMAGE_DIR.exists() else Path.cwd()
+    root.withdraw()
+    selected_path = filedialog.askopenfilename(
+        parent=root,
+        title="Open board image",
+        initialdir=str(initial_dir),
+        filetypes=IMAGE_FILE_TYPES,
+    )
+    if not selected_path:
+        root.destroy()
+        return None
+    root.deiconify()
+    return Path(selected_path)
 
 
 def main() -> None:
     args = parse_args()
     root = tk.Tk()
+    image_path = choose_image_path(root, args.image_path)
+    if image_path is None:
+        return
     try:
-        RoomHelperApp(root, args.image_path)
+        RoomHelperApp(root, image_path)
     except Exception as exc:  # noqa: BLE001
         root.withdraw()
         messagebox.showerror("Room Helper Error", str(exc))

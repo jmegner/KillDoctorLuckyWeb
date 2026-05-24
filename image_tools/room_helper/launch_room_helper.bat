@@ -2,8 +2,6 @@
 setlocal
 cd /d "%~dp0"
 
-set "IMAGE_PATH=%~dp0..\..\public\BoardAltUp.jpg"
-
 if not exist "room_helper.py" (
   echo room_helper.py was not found in:
   echo %~dp0
@@ -11,22 +9,15 @@ if not exist "room_helper.py" (
   exit /b 1
 )
 
-if not exist "%IMAGE_PATH%" (
-  echo Board image was not found:
-  echo %IMAGE_PATH%
-  pause
-  exit /b 1
-)
-
 where pyw >nul 2>&1
 if not errorlevel 1 (
-  start "" pyw -3 "room_helper.py" "%IMAGE_PATH%"
+  start "" pyw -3 "room_helper.py"
   exit /b 0
 )
 
 where pythonw >nul 2>&1
 if not errorlevel 1 (
-  start "" pythonw "room_helper.py" "%IMAGE_PATH%"
+  start "" pythonw "room_helper.py"
   exit /b 0
 )
 
@@ -35,6 +26,6 @@ echo This launcher needs pyw.exe or pythonw.exe so it can start without a consol
 echo.
 echo If Python is installed, try reinstalling with the Python Launcher enabled,
 echo or run room_helper.py manually from a terminal:
-echo python room_helper.py "%IMAGE_PATH%"
+echo python room_helper.py
 pause
 exit /b 1
