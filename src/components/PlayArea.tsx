@@ -4570,14 +4570,14 @@ function PlayArea() {
                 onClick={handleDoSuggestedTurn}
                 disabled={!aiCanDoIt || hasWinner}
               >
-                Do
+                AI Do
               </button>
               <button
                 className="planner-button planner-header-ai-button"
                 onClick={handleMull}
                 disabled={mullButtonDisabled}
               >
-                Mull
+                AI Mull
               </button>
               <button
                 type="button"
