@@ -45,8 +45,15 @@ const seedRedoWithIndicatorChange = async (page: Page): Promise<IndicatorSeed> =
         if (isNormalPlayer) {
           const moveCards = state.pieceMoveCards(pieceId);
           const roundedDownMoveCards = Math.floor(moveCards);
-          const roundedThirdsProgress = ((Math.round(moveCards * 3) % 3) + 3) % 3;
-          const lootActionsAwayFromNextFullMoveCard = (3 - roundedThirdsProgress) % 3;
+          const progressThirtySeconds = ((Math.round(moveCards * 32) % 32) + 32) % 32;
+          const lootActionsAwayFromNextFullMoveCard = (() => {
+            for (let lootActions = 0; lootActions < 32; lootActions += 1) {
+              if ((progressThirtySeconds + lootActions * 11) % 32 === 0) {
+                return lootActions;
+              }
+            }
+            return 0;
+          })();
           const suffix = lootActionsAwayFromNextFullMoveCard === 1 ? ':' : lootActionsAwayFromNextFullMoveCard === 2 ? '.' : '';
           texts.push(`${roundedDownMoveCards}${suffix}`);
         }

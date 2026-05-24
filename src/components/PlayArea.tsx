@@ -80,8 +80,15 @@ const getLivePieceIndicators = (gameState: GameStateHandle | null, pieceId: Piec
   const getNormalPlayerMoveCardIndicator = () => {
     const moveCards = gameState.pieceMoveCards(pieceId);
     const roundedDownMoveCards = Math.floor(moveCards);
-    const roundedThirdsProgress = ((Math.round(moveCards * 3) % 3) + 3) % 3;
-    const lootActionsAwayFromNextFullMoveCard = (3 - roundedThirdsProgress) % 3;
+    const progressThirtySeconds = ((Math.round(moveCards * 32) % 32) + 32) % 32;
+    const lootActionsAwayFromNextFullMoveCard = (() => {
+      for (let lootActions = 0; lootActions < 32; lootActions += 1) {
+        if ((progressThirtySeconds + lootActions * 11) % 32 === 0) {
+          return lootActions;
+        }
+      }
+      return 0;
+    })();
     const suffix =
       lootActionsAwayFromNextFullMoveCard === 1 ? ':' : lootActionsAwayFromNextFullMoveCard === 2 ? '.' : '';
     return `${formatPlayerInteger(roundedDownMoveCards)}${suffix}`;
@@ -4095,8 +4102,8 @@ function PlayArea() {
         <p>How to gain and use the cards...</p>
         <ul>
           <li>
-            Every time you loot a room ("draw a card") as your action, you gain 1/3 of a move card, 1/3 of a weapon
-            card, and 1/3 of a failure card. Looting a room is automatic; if you can loot during the action phase of
+            Every time you loot a room ("draw a card") as your action, you gain 11/32 of a move card, 11/32 of a weapon
+            card, and 11/32 of a failure card. Looting a room is automatic; if you can loot during the action phase of
             your turn, then you do.
           </li>
           <li>
