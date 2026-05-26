@@ -787,4 +787,12 @@ mod tests {
 
         assert_eq!(board.json_name, "BoardAltDownVariant");
     }
+
+    #[test]
+    fn embedded_lair_south_uses_lair_south_name() {
+        let board = Board::from_embedded_json("BoardLairSouth").unwrap();
+
+        assert_eq!(board.name, "lairsouth");
+        assert_eq!(board.json_name, "BoardLairSouth");
+    }
 }

@@ -316,20 +316,12 @@ class RoomHelperApp:
         self.root.title("KDL Room Helper")
         self.root.geometry("1200x800")
 
-        self.image_path = image_path.resolve()
-        if not self.image_path.exists():
-            raise FileNotFoundError(f"Image not found: {self.image_path}")
-        self.rooms_path = self.image_path.with_name(f"{self.image_path.stem}_rooms.jsonl")
-
-        self.image_original = Image.open(self.image_path).convert("RGB")
-        self.image_width, self.image_height = self.image_original.size
-
         self.zoom = 1.0
         self.tk_image: ImageTk.PhotoImage | None = None
         self.canvas_image_id: int | None = None
         self.overlay_item_ids: list[int] = []
-        self._scaled_width = self.image_width
-        self._scaled_height = self.image_height
+        self._scaled_width = 1
+        self._scaled_height = 1
         self._hq_render_after_id: str | None = None
         self.edit_preview_target: int | None = None
         self.edit_preview_room: Room | None = None
@@ -338,13 +330,33 @@ class RoomHelperApp:
         self.drag_start: tuple[float, float] | None = None
         self.drag_preview_room: Room | None = None
 
-        self.rooms = self._load_rooms()
-        self.last_created_room_id = self._highest_positive_room_id()
-
         self.status_var = tk.StringVar()
+        self.rooms_path_var = tk.StringVar()
+        self._load_image_and_rooms(image_path)
         self._build_ui()
         self._render_image_and_overlays()
         self._update_status("Ready")
+
+    def _load_image_and_rooms(self, image_path: Path) -> None:
+        resolved_image_path = image_path.resolve()
+        if not resolved_image_path.exists():
+            raise FileNotFoundError(f"Image not found: {resolved_image_path}")
+        rooms_path = resolved_image_path.with_name(f"{resolved_image_path.stem}_rooms.jsonl")
+
+        with Image.open(resolved_image_path) as image:
+            image_original = image.convert("RGB")
+        image_width, image_height = image_original.size
+        rooms = self._load_rooms(rooms_path)
+
+        self.image_path = resolved_image_path
+        self.rooms_path = rooms_path
+        self.rooms_path_var.set(str(self.rooms_path))
+        self.image_original = image_original
+        self.image_width = image_width
+        self.image_height = image_height
+
+        self.rooms = rooms
+        self.last_created_room_id = self._highest_positive_room_id()
 
     def _build_ui(self) -> None:
         self.root.rowconfigure(0, weight=1)
@@ -357,8 +369,9 @@ class RoomHelperApp:
 
         toolbar = ttk.Frame(outer)
         toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        ttk.Button(toolbar, text="Open", command=self._open_image).pack(side="left")
         ttk.Button(toolbar, text="Zoom In", command=lambda: self._zoom_canvas(1.0, 1.0, ZOOM_STEP, relative_to_center=True)).pack(
-            side="left"
+            side="left", padx=(4, 0)
         )
         ttk.Button(
             toolbar,
@@ -367,7 +380,7 @@ class RoomHelperApp:
         ).pack(side="left", padx=(4, 0))
         ttk.Button(toolbar, text="Reset Zoom", command=self._reset_zoom).pack(side="left", padx=(4, 0))
         ttk.Button(toolbar, text="Save", command=self._save_rooms).pack(side="left", padx=(12, 0))
-        ttk.Label(toolbar, text=str(self.rooms_path)).pack(side="left", padx=(12, 0))
+        ttk.Label(toolbar, textvariable=self.rooms_path_var).pack(side="left", padx=(12, 0))
 
         canvas_frame = ttk.Frame(outer)
         canvas_frame.grid(row=1, column=0, sticky="nsew")
@@ -404,12 +417,39 @@ class RoomHelperApp:
 
         self.canvas.focus_set()
 
-    def _load_rooms(self) -> list[Room]:
+    def _open_image(self) -> None:
+        if self.active_edit_dialog is not None:
+            self._update_status("Finish or cancel the current edit before opening another image")
+            return
+
+        image_path = choose_image_path(self.root)
+        if image_path is None:
+            self._update_status("Open canceled")
+            return
+
+        try:
+            self._cancel_deferred_hq_render()
+            self.zoom = 1.0
+            self.edit_preview_target = None
+            self.edit_preview_room = None
+            self.active_edit_preview_target = None
+            self.drag_start = None
+            self.drag_preview_room = None
+            self._load_image_and_rooms(image_path)
+            self._render_image_and_overlays()
+            self.canvas.xview_moveto(0)
+            self.canvas.yview_moveto(0)
+            self._update_status(f"Opened {self.image_path.name}")
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Room Helper Error", str(exc), parent=self.root)
+
+    def _load_rooms(self, rooms_path: Path | None = None) -> list[Room]:
+        path = rooms_path if rooms_path is not None else self.rooms_path
         rooms: list[Room] = []
-        if not self.rooms_path.exists():
+        if not path.exists():
             return rooms
 
-        for line_number, raw_line in enumerate(self.rooms_path.read_text(encoding="utf-8").splitlines(), start=1):
+        for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             line = raw_line.strip()
             if not line:
                 continue
@@ -423,7 +463,7 @@ class RoomHelperApp:
                     raise ValueError("missing id/coords")
                 rooms.append(Room.from_coords(room_id, coords))
             except Exception as exc:  # noqa: BLE001
-                print(f"Skipping invalid line in {self.rooms_path.name}:{line_number}: {exc}")
+                print(f"Skipping invalid line in {path.name}:{line_number}: {exc}")
         return rooms
 
     def _save_rooms(self) -> None:
@@ -883,12 +923,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def choose_image_path(root: tk.Tk, provided_path: Path | None) -> Path | None:
+def choose_image_path(root: tk.Tk, provided_path: Path | None = None, *, hide_root: bool = False) -> Path | None:
     if provided_path is not None:
         return provided_path
 
     initial_dir = DEFAULT_IMAGE_DIR if DEFAULT_IMAGE_DIR.exists() else Path.cwd()
-    root.withdraw()
+    if hide_root:
+        root.withdraw()
     selected_path = filedialog.askopenfilename(
         parent=root,
         title="Open board image",
@@ -896,16 +937,18 @@ def choose_image_path(root: tk.Tk, provided_path: Path | None) -> Path | None:
         filetypes=IMAGE_FILE_TYPES,
     )
     if not selected_path:
-        root.destroy()
+        if hide_root:
+            root.destroy()
         return None
-    root.deiconify()
+    if hide_root:
+        root.deiconify()
     return Path(selected_path)
 
 
 def main() -> None:
     args = parse_args()
     root = tk.Tk()
-    image_path = choose_image_path(root, args.image_path)
+    image_path = choose_image_path(root, args.image_path, hide_root=True)
     if image_path is None:
         return
     try:

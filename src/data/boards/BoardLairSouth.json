@@ -1,0 +1,105 @@
+{
+  "ImagePath": "/BoardLairSouth.jpg",
+  "JsonName": "BoardLairSouth",
+  "Name": "LairSouth",
+  "Description": "Kill Doctor Lucky Board Lair South",
+  "UiLayout": {
+    "BoardWidth": 2550,
+    "BoardHeight": 1743,
+    "BoardOverlayFontSizePx": 27,
+    "PieceSizeTarget": 80,
+    "WinnerOverlayFontSizePx": 52,
+    "RoomDistanceBoxWidth": 30,
+    "RoomDistanceBoxHeight": 30,
+    "RoomDistanceBoxTopRatio": 0.2,
+    "ActionDisplayBounds": {
+      "MinXAfterRoomId": -1,
+      "MaxXBeforeRoomId": -1,
+      "MinYBelowRoomId": -1
+    }
+  },
+  "PlayerStartRoomIds": [18],
+  "DoctorStartRoomIds": [23],
+  "CatStartRoomIds": [19],
+  "DogStartRoomIds": [16],
+  "Wings": [],
+  "Rooms": [
+    {
+      "Id": "14",
+      "Name": "sitting room",
+      "Coords": [1276, 17, 2026, 361],
+      "Adjacent": [15, 17, 19, 23, 24],
+      "Visible": [15, 22, 23]
+    },
+    {
+      "Id": "15",
+      "Name": "lilac room",
+      "Coords": [1648, 367.5, 1997, 882],
+      "Adjacent": [14, 16, 21, 22, 23],
+      "Visible": [14, 16, 21, 22]
+    },
+    {
+      "Id": "16",
+      "Name": "servants quarters",
+      "Coords": [2003.5, 369, 2481, 1034],
+      "Adjacent": [15, 17],
+      "Visible": [15, 17, 21]
+    },
+    {
+      "Id": "17",
+      "Name": "green house",
+      "Coords": [1588.5, 1154.5, 2436, 1585.5],
+      "Adjacent": [14, 16, 18, 19, 24],
+      "Visible": [16, 18, 19]
+    },
+    {
+      "Id": "18",
+      "Name": "foyer",
+      "Coords": [1010.5, 1161, 1567, 1632],
+      "Adjacent": [17, 19, 22],
+      "Visible": [17, 19, 22, 23]
+    },
+    {
+      "Id": "19",
+      "Name": "winter garden",
+      "Coords": [120.5, 1156, 976, 1593.5],
+      "Adjacent": [14, 17, 18, 20, 24],
+      "Visible": [17, 18, 20]
+    },
+    {
+      "Id": "20",
+      "Name": "carriage house",
+      "Coords": [69, 385, 530.5, 1060.5],
+      "Adjacent": [19, 21],
+      "Visible": [19, 21, 23]
+    },
+    {
+      "Id": "21",
+      "Name": "white room",
+      "Coords": [545, 383.5, 900.5, 879.5],
+      "Adjacent": [15, 20, 22, 23, 24],
+      "Visible": [3, 15, 16, 20, 22, 23, 24]
+    },
+    {
+      "Id": "22",
+      "Name": "piazza",
+      "Coords": [549, 899.5, 1993, 1144],
+      "Adjacent": [15, 18, 21, 23],
+      "Visible": [3, 13, 14, 15, 18, 21, 23, 24]
+    },
+    {
+      "Id": "23",
+      "Name": "parlor",
+      "Coords": [910, 375.5, 1629.5, 631],
+      "Adjacent": [14, 15, 21, 22, 24],
+      "Visible": [14, 18, 20, 21, 22, 24]
+    },
+    {
+      "Id": "24",
+      "Name": "drawing room",
+      "Coords": [543.5, 18.5, 1265.5, 363.5],
+      "Adjacent": [14, 17, 19, 21, 23],
+      "Visible": [3, 21, 22, 23]
+    }
+  ]
+}
