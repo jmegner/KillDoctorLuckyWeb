@@ -1574,7 +1574,7 @@ const parseActionSummaries = (summary: string): Array<ActionInfo | null> => {
   });
 };
 
-const buildActionOverlayLayout = (text: string) => {
+const buildActionOverlayLayout = (text: string, options?: { bottomAlignToBoardShell?: boolean }) => {
   const fontSize = currentBoardContext.overlayFontSizePx;
   const paddingX = 16;
   const paddingY = 8;
@@ -1587,9 +1587,13 @@ const buildActionOverlayLayout = (text: string) => {
   const maxWidth = Math.max(120, maxX - minX);
   const boxWidth = Math.min(maxWidth, Math.max(160, estimatedTextWidth + paddingX * 2));
   const desiredX = currentBoardContext.width / 2 - boxWidth / 2;
-  const desiredY = currentBoardContext.height - boxHeight - 12;
+  const desiredY = options?.bottomAlignToBoardShell
+    ? currentBoardContext.height - boxHeight
+    : currentBoardContext.height - boxHeight - 12;
   const clampedX = Math.min(Math.max(desiredX, minX), Math.max(minX, maxX - boxWidth));
-  const clampedY = Math.min(Math.max(desiredY, minY), Math.max(minY, currentBoardContext.height - boxHeight - 6));
+  const clampedY = options?.bottomAlignToBoardShell
+    ? Math.max(desiredY, minY)
+    : Math.min(Math.max(desiredY, minY), Math.max(minY, currentBoardContext.height - boxHeight - 6));
 
   return {
     boxX: clampedX,
@@ -3772,7 +3776,10 @@ function PlayArea() {
   })();
   const aiSuggestionOverlayVisible = Boolean(aiSuggestionBoardText && !animatedPieces && !animationRef.current);
   const boardOverlayText = actionOverlay ?? (aiSuggestionOverlayVisible ? aiSuggestionBoardText : null);
-  const actionOverlayLayout = boardOverlayText ? buildActionOverlayLayout(boardOverlayText) : null;
+  const boardOverlayIsAiSuggestion = actionOverlay === null && aiSuggestionOverlayVisible;
+  const actionOverlayLayout = boardOverlayText
+    ? buildActionOverlayLayout(boardOverlayText, { bottomAlignToBoardShell: boardOverlayIsAiSuggestion })
+    : null;
   const setupDraftBoardContext = getBoardContext(setupPrefsDraft.boardName);
   const setupBoardRooms = setupDraftBoardContext.rooms;
   const aiSuggestionBoardDoButtonVisible =
@@ -3787,9 +3794,12 @@ function PlayArea() {
           const desiredX = actionOverlayLayout.boxX + actionOverlayLayout.boxWidth + gap;
           const maxX = boardWidth - margin - buttonWidth;
           const x = Math.min(Math.max(desiredX, margin), maxX);
-          const desiredY = actionOverlayLayout.boxY + (actionOverlayLayout.boxHeight - buttonHeight) / 2;
-          const maxY = boardHeight - margin - buttonHeight;
-          const y = Math.min(Math.max(desiredY, margin), maxY);
+          const y = boardOverlayIsAiSuggestion
+            ? boardHeight - buttonHeight
+            : Math.min(
+                Math.max(actionOverlayLayout.boxY + (actionOverlayLayout.boxHeight - buttonHeight) / 2, margin),
+                boardHeight - margin - buttonHeight,
+              );
           return {
             x,
             y,
@@ -3799,7 +3809,7 @@ function PlayArea() {
         })()
       : null;
   const actionOverlayBoxClassName =
-    actionOverlay === null && aiSuggestionOverlayVisible
+    boardOverlayIsAiSuggestion
       ? 'action-overlay-box action-overlay-box--ai-suggestion'
       : 'action-overlay-box';
   const winnerOverlayLayout = winnerOverlayText ? buildWinnerOverlayLayout(winnerOverlayText) : null;
@@ -4501,7 +4511,7 @@ function PlayArea() {
                 </g>
               )}
               {boardOverlayText && actionOverlayLayout && (
-                <g className="action-overlay">
+                <g className={boardOverlayIsAiSuggestion ? 'action-overlay action-overlay--board-shell-bottom' : 'action-overlay'}>
                   <rect
                     className={actionOverlayBoxClassName}
                     x={actionOverlayLayout.boxX}
@@ -4521,7 +4531,11 @@ function PlayArea() {
               )}
               {aiSuggestionBoardDoButtonLayout && (
                 <foreignObject
-                  className="action-overlay-action"
+                  className={
+                    boardOverlayIsAiSuggestion
+                      ? 'action-overlay-action action-overlay-action--board-shell-bottom'
+                      : 'action-overlay-action'
+                  }
                   x={aiSuggestionBoardDoButtonLayout.x}
                   y={aiSuggestionBoardDoButtonLayout.y}
                   width={aiSuggestionBoardDoButtonLayout.width}

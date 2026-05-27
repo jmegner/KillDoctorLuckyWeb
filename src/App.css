@@ -76,6 +76,7 @@
 }
 
 .board-shell {
+  --board-shell-bottom-outset: 14px;
   background: var(--paper);
   border: 4px solid var(--line);
   border-radius: 0;
@@ -88,7 +89,7 @@
   width: 100%;
   background: #fdf8f1;
   border-radius: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .board,
@@ -102,6 +103,7 @@
   display: block;
   width: 100%;
   height: auto;
+  overflow: visible;
 }
 
 .room-hit {
@@ -151,6 +153,11 @@
 
 .action-overlay {
   pointer-events: none;
+}
+
+.action-overlay--board-shell-bottom,
+.action-overlay-action--board-shell-bottom {
+  transform: translateY(var(--board-shell-bottom-outset));
 }
 
 .action-overlay-box {
