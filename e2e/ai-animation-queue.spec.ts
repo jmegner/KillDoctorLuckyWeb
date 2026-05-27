@@ -8,6 +8,7 @@ const animationPrefsStorageKey = 'kdl.settings.v1';
 
 type SeededTwoStateCache = {
   initialTurnCount: number;
+  secondSuggestedTurnText: string;
 };
 
 const readNormalTurnCount = async (page: Page) =>
@@ -47,7 +48,7 @@ const cancelAiAnalysisIfRunning = async (page: Page) => {
 
 const seedTwoCachedStates = async (
   page: Page,
-  options: { controlP1: boolean; controlP3: boolean },
+  options: { controlP1: boolean; controlP3: boolean; animationSpeedIndex?: number },
 ): Promise<SeededTwoStateCache> =>
   page.evaluate(
     async ({
@@ -58,6 +59,7 @@ const seedTwoCachedStates = async (
       animationPrefsStorageKeyArg,
       controlP1Arg,
       controlP3Arg,
+      animationSpeedIndexArg,
     }) => {
       const wasm = await import('/src/KdlRust/pkg/kill_doctor_lucky_rust.js');
       await wasm.default();
@@ -88,6 +90,14 @@ const seedTwoCachedStates = async (
 
         const toSuggestedTurnText = (plan: Array<{ pieceId: string; roomId: number }>) =>
           plan.map((entry) => `${entry.pieceId}@R${entry.roomId}`).join(', ');
+        const pieceLabels: Record<string, string> = {
+          player1: 'P1',
+          player2: 'P3',
+          stranger1: 'p2',
+          stranger2: 'p4',
+        };
+        const toSuggestedTurnDisplayText = (plan: Array<{ pieceId: string; roomId: number }>) =>
+          plan.map((entry) => `${pieceLabels[entry.pieceId] ?? entry.pieceId}@R${entry.roomId}`).join(', ');
 
         const snapshot0 = seeded.exportStateJson();
         const firstPlan = findAnyValidPlan();
@@ -173,11 +183,11 @@ const seedTwoCachedStates = async (
           animationPrefsStorageKeyArg,
           JSON.stringify({
             animationEnabled: true,
-            animationSpeedIndex: 1,
+            animationSpeedIndex: animationSpeedIndexArg,
           }),
         );
 
-        return { initialTurnCount };
+        return { initialTurnCount, secondSuggestedTurnText: toSuggestedTurnDisplayText(secondPlan) };
       } finally {
         seeded.free();
       }
@@ -190,6 +200,7 @@ const seedTwoCachedStates = async (
       animationPrefsStorageKeyArg: animationPrefsStorageKey,
       controlP1Arg: options.controlP1,
       controlP3Arg: options.controlP3,
+      animationSpeedIndexArg: options.animationSpeedIndex ?? 1,
     },
   );
 
@@ -214,7 +225,7 @@ test.describe('AI submit waits for animation completion', () => {
     await page.goto('/');
     await cancelAiAnalysisIfRunning(page);
 
-    const seed = await seedTwoCachedStates(page, { controlP1: false, controlP3: false });
+    const seed = await seedTwoCachedStates(page, { controlP1: false, controlP3: false, animationSpeedIndex: 0 });
     await page.reload();
 
     const aiPanel = page.locator('.ai-panel');
@@ -226,8 +237,8 @@ test.describe('AI submit waits for animation completion', () => {
     await doButton.click();
     await expect.poll(() => readNormalTurnCount(page), { timeout: 6000 }).toBe(seed.initialTurnCount + 1);
     await expect
-      .poll(async () => (await readAiLineValue(page, 'Suggested')) !== 'No suggestion yet.', { timeout: 5000 })
-      .toBe(true);
+      .poll(async () => readAiLineValue(page, 'Suggested'), { timeout: 5000 })
+      .toBe(seed.secondSuggestedTurnText);
 
     await doButton.click();
     await expect
