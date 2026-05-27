@@ -1830,6 +1830,7 @@ function PlayArea() {
     : defaultSetupPrefs;
   const persistedSetupPrefs = loadSetupPrefs(currentSetupPrefs, boardContext);
   const [selectedPieceId, setSelectedPieceId] = useState<PieceId | null>(null);
+  const [distancePreviewRoomId, setDistancePreviewRoomId] = useState<number | null>(null);
   const [plannedMoves, setPlannedMoves] = useState<Partial<Record<PieceId, number>>>({});
   const [planOrder, setPlanOrder] = useState<PieceId[]>([]);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
@@ -1950,7 +1951,8 @@ function PlayArea() {
   const canRedo = redoStateStack.length > 0;
   const canUndoAll = canUndo;
   const canRedoAll = canRedo;
-  const canCancelTurnPlan = selectedPieceId !== null || planOrder.length > 0 || validationMessage !== null;
+  const canCancelTurnPlan =
+    selectedPieceId !== null || distancePreviewRoomId !== null || planOrder.length > 0 || validationMessage !== null;
   const winnerPieceIdRaw = gameState ? gameState.winnerPieceId() : '';
   const winnerPieceId =
     winnerPieceIdRaw === 'player1' || winnerPieceIdRaw === 'player2' ? (winnerPieceIdRaw as PieceId) : null;
@@ -2236,6 +2238,7 @@ function PlayArea() {
 
   const submitCurrentPlayerMoveToRoom = (roomId: number) => {
     clearPendingAutoSelectedRoomPiece();
+    setDistancePreviewRoomId(null);
     if (!currentPlayerPieceId) {
       setValidationMessage('No current player available.');
       return;
@@ -2272,6 +2275,7 @@ function PlayArea() {
         clearPlannedMoveForPiece(selectedPieceId);
       }
       setSelectedPieceId(null);
+      setDistancePreviewRoomId(null);
       setValidationMessage(null);
       return true;
     }
@@ -2279,6 +2283,7 @@ function PlayArea() {
     setPlannedMoves((prev) => ({ ...prev, [selectedPieceId]: roomId }));
     setPlanOrder((prev) => (prev.includes(selectedPieceId) ? prev : [...prev, selectedPieceId]));
     setSelectedPieceId(null);
+    setDistancePreviewRoomId(null);
     setValidationMessage(null);
     return true;
   };
@@ -2307,11 +2312,13 @@ function PlayArea() {
 
     if (selectedPieceId === pieceId) {
       setSelectedPieceId(null);
+      setDistancePreviewRoomId(pieceRoomId);
       setValidationMessage(null);
       return;
     }
 
     setSelectedPieceId(pieceId);
+    setDistancePreviewRoomId(null);
     setValidationMessage(null);
   };
 
@@ -2342,11 +2349,13 @@ function PlayArea() {
       if (preferredPiece) {
         pendingAutoSelectedRoomPieceRef.current = { roomId, pieceId: preferredPiece };
         setSelectedPieceId(preferredPiece);
+        setDistancePreviewRoomId(null);
         setValidationMessage(null);
         return;
       }
       clearPendingAutoSelectedRoomPiece();
-      setValidationMessage('Select a piece, then choose a destination room.');
+      setDistancePreviewRoomId((prev) => (prev === roomId ? null : roomId));
+      setValidationMessage(null);
       return;
     }
     handleSelectedPieceDestination(roomId);
@@ -2463,6 +2472,7 @@ function PlayArea() {
     setPlannedMoves({});
     setPlanOrder([]);
     setSelectedPieceId(null);
+    setDistancePreviewRoomId(null);
     setValidationMessage(null);
     if (analysisIsRunningRef.current) {
       analysisRunIdRef.current += 1;
@@ -3122,6 +3132,7 @@ function PlayArea() {
     setPlannedMoves({});
     setPlanOrder([]);
     setSelectedPieceId(null);
+    setDistancePreviewRoomId(null);
     setValidationMessage(options?.validationMessage ?? null);
     resetAiOutputs();
     saveGameStateSnapshot(gameState);
@@ -3309,6 +3320,7 @@ function PlayArea() {
     setPlannedMoves({});
     setPlanOrder([]);
     setSelectedPieceId(null);
+    setDistancePreviewRoomId(null);
     setValidationMessage(null);
     resetAiOutputs();
     setRedoStateStack([]);
@@ -3566,6 +3578,7 @@ function PlayArea() {
     setPlannedMoves({});
     setPlanOrder([]);
     setSelectedPieceId(null);
+    setDistancePreviewRoomId(null);
     setValidationMessage(null);
     setSetupPopupOpen(false);
     setSetupError(null);
@@ -3589,6 +3602,7 @@ function PlayArea() {
     setPlannedMoves({});
     setPlanOrder([]);
     setSelectedPieceId(null);
+    setDistancePreviewRoomId(null);
     setValidationMessage(null);
   };
 
@@ -3615,12 +3629,14 @@ function PlayArea() {
         clearPlannedMoveForPiece(selectedPieceId);
       }
       setSelectedPieceId(null);
+      setDistancePreviewRoomId(null);
       setValidationMessage(null);
       return;
     }
     const nextMoves = { ...plannedMoves, [selectedPieceId]: roomId };
     const nextOrder = planOrder.includes(selectedPieceId) ? planOrder : [...planOrder, selectedPieceId];
     setSelectedPieceId(null);
+    setDistancePreviewRoomId(null);
     submitPlan(nextMoves, nextOrder);
   };
 
@@ -3641,6 +3657,7 @@ function PlayArea() {
     }
     if (selectedPieceId) {
       setSelectedPieceId(null);
+      setDistancePreviewRoomId(null);
     }
     submitCurrentPlayerMoveToRoom(roomId);
   };
@@ -3748,7 +3765,8 @@ function PlayArea() {
   const selectedLabel = selectedPieceId ? pieceConfig[selectedPieceId].label : 'None';
   const selectedSuffix = selectedPieceId && plannedMoves[selectedPieceId] !== undefined ? ' (update)' : '';
   const selectedRoomId = selectedPieceId ? pieceRoomMap.get(selectedPieceId) : undefined;
-  const distanceByRoom = selectedRoomId !== undefined ? buildRoomDistanceMap(selectedRoomId) : null;
+  const distanceOriginRoomId = selectedRoomId ?? distancePreviewRoomId ?? undefined;
+  const distanceByRoom = distanceOriginRoomId !== undefined ? buildRoomDistanceMap(distanceOriginRoomId) : null;
   const movePossibleByRoom = (() => {
     if (!selectedPieceId || selectedRoomId === undefined || !distanceByRoom || !gameState) {
       return null;
@@ -4474,13 +4492,13 @@ function PlayArea() {
                     );
                   })}
               </g>
-              {distanceByRoom && selectedRoomId !== undefined && (
+              {distanceByRoom && distanceOriginRoomId !== undefined && (
                 <g className="room-distance-layer">
                   {boardRooms.map((room) => {
                     if (room.coords.length !== 4) {
                       return null;
                     }
-                    if (room.id === selectedRoomId) {
+                    if (room.id === distanceOriginRoomId) {
                       return null;
                     }
                     const distance = distanceByRoom.get(room.id);
