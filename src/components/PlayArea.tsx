@@ -1703,6 +1703,117 @@ const toPreviewDisplay = (rawPreview: string, invalidMessage: string): PreviewDi
   };
 };
 
+function FittingPreviewValue({
+  display,
+  keyPrefix,
+}: {
+  display: PreviewDisplay;
+  keyPrefix: string;
+}) {
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const frameRef = useRef<number | null>(null);
+
+  const fitPreviewValue = (element: HTMLSpanElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    if (!element) {
+      return;
+    }
+
+    const observedElement = element.parentElement ?? element;
+    let lastObservedWidth = observedElement.clientWidth;
+    const fit = (force = false) => {
+      const observedWidth = observedElement.clientWidth;
+      if (!force && observedWidth === lastObservedWidth) {
+        return;
+      }
+      lastObservedWidth = observedWidth;
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+      }
+      frameRef.current = window.requestAnimationFrame(() => {
+        element.style.fontSize = '';
+        const availableWidth = element.clientWidth;
+        const requiredWidth = element.scrollWidth;
+        if (availableWidth <= 0 || requiredWidth <= availableWidth) {
+          return;
+        }
+
+        const defaultFontSize = Number.parseFloat(window.getComputedStyle(element).fontSize);
+        if (!Number.isFinite(defaultFontSize) || defaultFontSize <= 0) {
+          return;
+        }
+
+        const nextFontSize = Math.max(8, defaultFontSize * (availableWidth / requiredWidth));
+        element.style.fontSize = `${nextFontSize.toFixed(2)}px`;
+      });
+    };
+
+    fit(true);
+    observerRef.current = new ResizeObserver(() => fit());
+    observerRef.current.observe(observedElement);
+  };
+
+  return (
+    <span className="planner-value planner-value--preview" ref={fitPreviewValue}>
+      {display.message
+        ? display.message
+        : display.tokens.map((token, index) => {
+            if (token.kind === 'winner') {
+              const winnerPieceStyle = token.winnerPieceId
+                ? {
+                    backgroundColor: pieceConfig[token.winnerPieceId].color,
+                    color: pieceConfig[token.winnerPieceId].textColor,
+                  }
+                : undefined;
+              return (
+                <span key={`${keyPrefix}-preview-token-win-${token.winnerText}-${index}`}>
+                  {index > 0 && <span className="planner-preview-sep">|</span>}
+                  <span className="planner-preview-token planner-preview-token--badge planner-preview-token--win">
+                    WIN:
+                  </span>
+                  <span
+                    className={
+                      token.winnerPieceId
+                        ? 'planner-preview-token planner-preview-token--badge'
+                        : 'planner-preview-token'
+                    }
+                    style={winnerPieceStyle}
+                  >
+                    {token.winnerText}
+                  </span>
+                </span>
+              );
+            }
+            const colorPieceId = token.colorPieceId;
+            const previewTokenStyle = colorPieceId
+              ? {
+                  backgroundColor: pieceConfig[colorPieceId].color,
+                  color: pieceConfig[colorPieceId].textColor,
+                }
+              : undefined;
+            return (
+              <span key={`${keyPrefix}-preview-token-text-${token.text}-${index}`}>
+                {index > 0 && <span className="planner-preview-sep">|</span>}
+                <span
+                  className={
+                    colorPieceId ? 'planner-preview-token planner-preview-token--badge' : 'planner-preview-token'
+                  }
+                  style={previewTokenStyle}
+                >
+                  {token.text}
+                </span>
+              </span>
+            );
+          })}
+    </span>
+  );
+}
+
 const formatElapsedTime = (elapsedMs: number) => {
   if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
     return '0ms';
@@ -4672,60 +4783,7 @@ function PlayArea() {
           </div>
           <div className="planner-line">
             <span className="planner-label planner-label--small">Preview</span>
-            <span className="planner-value planner-value--preview">
-              {previewDisplay.message
-                ? previewDisplay.message
-                : previewDisplay.tokens.map((token, index) => {
-                    if (token.kind === 'winner') {
-                      const winnerPieceStyle = token.winnerPieceId
-                        ? {
-                            backgroundColor: pieceConfig[token.winnerPieceId].color,
-                            color: pieceConfig[token.winnerPieceId].textColor,
-                          }
-                        : undefined;
-                      return (
-                        <span key={`preview-token-win-${token.winnerText}-${index}`}>
-                          {index > 0 && <span className="planner-preview-sep">|</span>}
-                          <span className="planner-preview-token planner-preview-token--badge planner-preview-token--win">
-                            WIN:
-                          </span>
-                          <span
-                            className={
-                              token.winnerPieceId
-                                ? 'planner-preview-token planner-preview-token--badge'
-                                : 'planner-preview-token'
-                            }
-                            style={winnerPieceStyle}
-                          >
-                            {token.winnerText}
-                          </span>
-                        </span>
-                      );
-                    }
-                    const colorPieceId = token.colorPieceId;
-                    const previewTokenStyle = colorPieceId
-                      ? {
-                          backgroundColor: pieceConfig[colorPieceId].color,
-                          color: pieceConfig[colorPieceId].textColor,
-                        }
-                      : undefined;
-                    return (
-                      <span key={`preview-token-text-${token.text}-${index}`}>
-                        {index > 0 && <span className="planner-preview-sep">|</span>}
-                        <span
-                          className={
-                            colorPieceId
-                              ? 'planner-preview-token planner-preview-token--badge'
-                              : 'planner-preview-token'
-                          }
-                          style={previewTokenStyle}
-                        >
-                          {token.text}
-                        </span>
-                      </span>
-                    );
-                  })}
-            </span>
+            <FittingPreviewValue display={previewDisplay} keyPrefix="turn" />
           </div>
           <div className="planner-actions planner-actions--turn">
             <button className="planner-button planner-button--primary" onClick={handleSubmit} disabled={hasWinner}>
@@ -4898,7 +4956,7 @@ function PlayArea() {
             </span>
           </div>
           <div className="planner-line">
-            <span className="planner-label">Show On Board</span>
+            <span className="planner-label">ShowOnBoard</span>
             <span className="planner-value ai-control-value">
               <label className="ai-control-option">
                 <input
@@ -4922,7 +4980,7 @@ function PlayArea() {
           </div>
           <div className="planner-line ai-level-line">
             <label className="planner-label" htmlFor="analysis-min-level">
-              Min Turn Depth
+              MinTurnDepth
             </label>
             {/* Firefox Android hides native number spinners; explicit steppers keep increment/decrement available on mobile. */}
             <div className="number-stepper">
@@ -4958,7 +5016,7 @@ function PlayArea() {
           </div>
           <div className="planner-line ai-level-line">
             <label className="planner-label" htmlFor="analysis-max-level">
-              Max Turn Depth
+              MaxTurnDepth
             </label>
             <div className="number-stepper">
               <input
@@ -4993,7 +5051,7 @@ function PlayArea() {
           </div>
           <div className="planner-line ai-level-line">
             <label className="planner-label" htmlFor="analysis-max-time">
-              Max Time
+              MaxTime
             </label>
             <div className="number-stepper">
               <select
@@ -5031,7 +5089,7 @@ function PlayArea() {
           </div>
           <div className="planner-line">
             <span className="planner-label">Status</span>
-            <span className="planner-value">{aiStatusText}</span>
+            <span className="planner-value ai-status-value">{aiStatusText}</span>
           </div>
           <div className="planner-line">
             <span className="planner-label">Suggested</span>
@@ -5043,60 +5101,7 @@ function PlayArea() {
           </div>
           <div className="planner-line">
             <span className="planner-label">Preview</span>
-            <span className="planner-value planner-value--preview">
-              {aiPreviewDisplay.message
-                ? aiPreviewDisplay.message
-                : aiPreviewDisplay.tokens.map((token, index) => {
-                    if (token.kind === 'winner') {
-                      const winnerPieceStyle = token.winnerPieceId
-                        ? {
-                            backgroundColor: pieceConfig[token.winnerPieceId].color,
-                            color: pieceConfig[token.winnerPieceId].textColor,
-                          }
-                        : undefined;
-                      return (
-                        <span key={`ai-preview-token-win-${token.winnerText}-${index}`}>
-                          {index > 0 && <span className="planner-preview-sep">|</span>}
-                          <span className="planner-preview-token planner-preview-token--badge planner-preview-token--win">
-                            WIN:
-                          </span>
-                          <span
-                            className={
-                              token.winnerPieceId
-                                ? 'planner-preview-token planner-preview-token--badge'
-                                : 'planner-preview-token'
-                            }
-                            style={winnerPieceStyle}
-                          >
-                            {token.winnerText}
-                          </span>
-                        </span>
-                      );
-                    }
-                    const colorPieceId = token.colorPieceId;
-                    const previewTokenStyle = colorPieceId
-                      ? {
-                          backgroundColor: pieceConfig[colorPieceId].color,
-                          color: pieceConfig[colorPieceId].textColor,
-                        }
-                      : undefined;
-                    return (
-                      <span key={`ai-preview-token-text-${token.text}-${index}`}>
-                        {index > 0 && <span className="planner-preview-sep">|</span>}
-                        <span
-                          className={
-                            colorPieceId
-                              ? 'planner-preview-token planner-preview-token--badge'
-                              : 'planner-preview-token'
-                          }
-                          style={previewTokenStyle}
-                        >
-                          {token.text}
-                        </span>
-                      </span>
-                    );
-                  })}
-            </span>
+            <FittingPreviewValue display={aiPreviewDisplay} keyPrefix="ai" />
           </div>
           {aiStaleMessage && <p className="ai-note">{aiStaleMessage}</p>}
           <div className="planner-actions ai-actions ai-actions--footer">

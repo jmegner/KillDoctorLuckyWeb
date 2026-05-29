@@ -377,25 +377,34 @@
 }
 
 .planner-label {
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--ink-muted);
 }
 
 .planner-label--small {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
 }
 
 .planner-value {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
   text-align: right;
   font-weight: 600;
 }
 
 .planner-value--preview {
-  font-size: 0.8rem;
+  flex: 1 1 auto;
+  white-space: nowrap;
+  font-size: 0.76rem;
   line-height: 1.12;
+}
+
+.ai-status-value {
+  font-family: var(--font-mono);
 }
 
 .planner-preview-token--badge {
@@ -451,8 +460,8 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
   color: var(--ink);
   cursor: pointer;
 }
@@ -467,13 +476,13 @@
   width: 4.1rem;
   min-width: 0;
   text-align: right;
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
 }
 
 .ai-max-time-select {
   width: 5.4rem;
   min-width: 5.4rem;
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   text-align: right;
 }
 
