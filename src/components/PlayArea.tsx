@@ -1846,6 +1846,8 @@ function PlayArea() {
   const [redoStateStack, setRedoStateStack] = useState<string[]>(() =>
     gameState ? loadRedoStateStack(boardContext.jsonName) : [],
   );
+  const redoStateStackRef = useRef(redoStateStack);
+  redoStateStackRef.current = redoStateStack;
   const [turnCounter, setTurnCounter] = useState(0);
   const turnCounterRef = useRef(turnCounter);
   turnCounterRef.current = turnCounter;
@@ -1882,6 +1884,8 @@ function PlayArea() {
   const [analysisRunKind, setAnalysisRunKind] = useState<AnalysisRunKind | null>(null);
   const [analysisStatusMessage, setAnalysisStatusMessage] = useState<string | null>(null);
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null);
+  const aiSuggestionRef = useRef<AiSuggestion | null>(aiSuggestion);
+  aiSuggestionRef.current = aiSuggestion;
   const aiResultsCacheRef = useRef<AiResultsCacheStore>(loadAiResultsCacheStore());
   const analysisTimerRef = useRef<number | null>(null);
   const analysisDeadlineTimerRef = useRef<number | null>(null);
@@ -2465,9 +2469,10 @@ function PlayArea() {
       return;
     }
     const nextStateSnapshot = gameState.exportStateJson();
+    const currentRedoStateStack = redoStateStackRef.current;
     const nextRedoStateStack =
-      redoStateStack.length > 0 && redoStateStack[redoStateStack.length - 1] === nextStateSnapshot
-        ? redoStateStack.slice(0, -1)
+      currentRedoStateStack.length > 0 && currentRedoStateStack[currentRedoStateStack.length - 1] === nextStateSnapshot
+        ? currentRedoStateStack.slice(0, -1)
         : [];
     setPlannedMoves({});
     setPlanOrder([]);
@@ -2479,6 +2484,7 @@ function PlayArea() {
       stopAnalysisRun('Analysis stopped because the position changed.');
     }
     resetAiOutputs();
+    redoStateStackRef.current = nextRedoStateStack;
     setRedoStateStack(nextRedoStateStack);
     saveRedoStateStack(nextRedoStateStack);
     saveGameStateSnapshot(gameState);
@@ -3126,6 +3132,7 @@ function PlayArea() {
     if (!gameState) {
       return;
     }
+    redoStateStackRef.current = nextRedoStateStack;
     setRedoStateStack(nextRedoStateStack);
     saveRedoStateStack(nextRedoStateStack);
     stopAnimation();
@@ -3323,6 +3330,7 @@ function PlayArea() {
     setDistancePreviewRoomId(null);
     setValidationMessage(null);
     resetAiOutputs();
+    redoStateStackRef.current = [];
     setRedoStateStack([]);
     saveRedoStateStack([]);
     saveGameStateSnapshot(gameState);
@@ -3588,6 +3596,7 @@ function PlayArea() {
     saveSetupPrefs(setupToStart, setupBoardContext);
     setSetupPrefsDraft(toSetupPrefsDraft(setupToStart));
     setSetupAdvanced(shouldUseAdvancedSetup(setupToStart, setupDefaults));
+    redoStateStackRef.current = [];
     setRedoStateStack([]);
     saveRedoStateStack([], setupToStart.boardName);
     saveGameStateSnapshot(gameState, setupToStart.boardName);
@@ -3848,6 +3857,25 @@ function PlayArea() {
     setActionOverlay(null);
     setActionHighlightPieceId(null);
     if (!queuedAutoSubmit) {
+      const completedDuringAiControlledTurn =
+        options?.executeQueuedAutoSubmit &&
+        gameState &&
+        !gameState.hasWinner() &&
+        (gameState.currentPlayerPieceId() === 'player1'
+          ? aiControlP1Ref.current
+          : gameState.currentPlayerPieceId() === 'player2'
+            ? aiControlP3Ref.current
+            : false);
+      const currentSuggestion = aiSuggestionRef.current;
+      if (
+        completedDuringAiControlledTurn &&
+        currentSuggestion &&
+        currentSuggestion.sourceTurnCounter === turnCounterRef.current &&
+        currentSuggestion.bestTurn.isValid
+      ) {
+        const planned = entriesToMovesAndOrder(currentSuggestion.bestTurn.suggestedTurn);
+        submitPlan(planned.moves, planned.order, { animateFromCurrentState: true });
+      }
       return;
     }
     if (queuedAutoSubmit.sourceTurnCounter !== turnCounterRef.current) {

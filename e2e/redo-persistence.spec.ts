@@ -4,6 +4,7 @@ const gameStateStorageKey = 'kdl.gameState.v1';
 const redoStateStackStorageKey = 'kdl.redoStack.v1';
 const sanityStorageKey = 'kdl.playwright.sanity';
 const aiPrefsStorageKey = 'kdl.ai.v1';
+const aiResultsCacheStorageKey = 'kdl.aiResultsCache.v1';
 
 const readNormalTurnCount = async (page: Page) =>
   page.evaluate((storageKey) => {
@@ -118,9 +119,12 @@ const seedStateWithTurns = async (
   );
 };
 
-const seedManualRedoScenario = async (page: Page): Promise<{ redoRoomName: string }> =>
+const seedManualRedoScenario = async (
+  page: Page,
+  options?: { seedAiSuggestionForTopRedo?: boolean },
+): Promise<{ redoRoomName: string }> =>
   page.evaluate(
-    async ({ gameStateStorageKeyArg, redoStateStackStorageKeyArg }) => {
+    async ({ gameStateStorageKeyArg, redoStateStackStorageKeyArg, aiPrefsStorageKeyArg, aiResultsCacheStorageKeyArg, seedAiSuggestionForTopRedoArg }) => {
       const wasm = await import('/src/KdlRust/pkg/kill_doctor_lucky_rust.js');
       await wasm.default();
       const seededState = wasm.newDefaultGameState();
@@ -147,7 +151,12 @@ const seedManualRedoScenario = async (page: Page): Promise<{ redoRoomName: strin
           }
         }
         const roomIds = Array.from(roomNameById.keys()).sort((a, b) => a - b);
-        const appliedTurns: Array<{ roomId: number; roomName: string; snapshot: string }> = [];
+        const appliedTurns: Array<{
+          pieceId: string;
+          roomId: number;
+          roomName: string;
+          snapshot: string;
+        }> = [];
 
         for (let turnIndex = 0; turnIndex < 3; turnIndex += 1) {
           const currentPlayerPieceId = seededState.currentPlayerPieceId();
@@ -177,6 +186,7 @@ const seedManualRedoScenario = async (page: Page): Promise<{ redoRoomName: strin
               continue;
             }
             appliedTurns.push({
+              pieceId: currentPlayerPieceId,
               roomId,
               roomName,
               snapshot: seededState.exportStateJson(),
@@ -195,6 +205,47 @@ const seedManualRedoScenario = async (page: Page): Promise<{ redoRoomName: strin
           redoStateStackStorageKeyArg,
           JSON.stringify([appliedTurns[2].snapshot, appliedTurns[1].snapshot]),
         );
+        if (seedAiSuggestionForTopRedoArg) {
+          window.localStorage.setItem(
+            aiPrefsStorageKeyArg,
+            JSON.stringify({
+              minAnalysisLevel: 0,
+              maxAnalysisLevel: 1,
+              analysisMaxTimeIndex: 1,
+              controlP1: false,
+              controlP3: false,
+              showOnBoardP1: false,
+              showOnBoardP3: false,
+            }),
+          );
+          window.localStorage.setItem(
+            aiResultsCacheStorageKeyArg,
+            JSON.stringify({
+              version: 1,
+              entries: [
+                {
+                  stateJson: appliedTurns[0].snapshot,
+                  analysisLevel: 1,
+                  bestTurn: {
+                    isValid: true,
+                    validationMessage: '',
+                    suggestedTurnText: `${appliedTurns[1].pieceId}->${appliedTurns[1].roomName}`,
+                    suggestedTurn: [{ pieceId: appliedTurns[1].pieceId, roomId: appliedTurns[1].roomId }],
+                    heuristicScore: 0,
+                    numStatesVisited: 1,
+                    elapsedMs: 1,
+                  },
+                  previewRaw: '',
+                  elapsedMs: 1,
+                  levelElapsedMs: 1,
+                  lastUsedAtMs: 1700000000000,
+                },
+              ],
+            }),
+          );
+        } else {
+          window.localStorage.removeItem(aiResultsCacheStorageKeyArg);
+        }
         return {
           redoRoomName: appliedTurns[1].roomName,
         };
@@ -205,6 +256,9 @@ const seedManualRedoScenario = async (page: Page): Promise<{ redoRoomName: strin
     {
       gameStateStorageKeyArg: gameStateStorageKey,
       redoStateStackStorageKeyArg: redoStateStackStorageKey,
+      aiPrefsStorageKeyArg: aiPrefsStorageKey,
+      aiResultsCacheStorageKeyArg: aiResultsCacheStorageKey,
+      seedAiSuggestionForTopRedoArg: options?.seedAiSuggestionForTopRedo ?? false,
     },
   );
 
@@ -506,4 +560,33 @@ test('manually replaying the top redo turn preserves deeper redo history', async
   await expect(turnPlannerTitle).toContainText('Turn 4: P3');
   await expect(turnPlannerTitle).not.toContainText('/');
   await expect(page.locator('.planner-line').filter({ hasText: 'Planned' }).first()).toContainText('No moves planned.');
+});
+
+test('AI Do replaying the top redo turn preserves deeper redo history', async ({ page }) => {
+  await page.goto('/');
+
+  await seedManualRedoScenario(page, { seedAiSuggestionForTopRedo: true });
+  await page.reload();
+
+  const aiPanel = page.locator('.ai-panel');
+  const redoButton = page.getByRole('button', { name: 'Redo', exact: true });
+  const aiDoButton = aiPanel.getByRole('button', { name: 'Do' });
+  const turnPlannerTitle = page.locator('.planner-panel .planner-title').first();
+
+  await expect.poll(() => readRedoStackLength(page)).toBe(2);
+  await expect(redoButton).toBeEnabled();
+  await expect(aiDoButton).toBeEnabled();
+
+  await aiDoButton.click();
+
+  await expect.poll(() => readNormalTurnCount(page)).toBe(3);
+  await expect(turnPlannerTitle).toContainText('Turn 3/4');
+  await expect(redoButton).toBeEnabled();
+  await expect.poll(() => readRedoStackLength(page)).toBe(1);
+
+  await redoButton.click();
+
+  await expect.poll(() => readNormalTurnCount(page)).toBe(4);
+  await expect(redoButton).toBeDisabled();
+  await expect.poll(() => readRedoStackLength(page)).toBe(0);
 });

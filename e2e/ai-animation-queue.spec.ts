@@ -48,7 +48,14 @@ const cancelAiAnalysisIfRunning = async (page: Page) => {
 
 const seedTwoCachedStates = async (
   page: Page,
-  options: { controlP1: boolean; controlP3: boolean; animationSpeedIndex?: number },
+  options: {
+    controlP1: boolean;
+    controlP3: boolean;
+    animationSpeedIndex?: number;
+    analysisMaxTimeIndex?: number;
+    cachedAnalysisLevel?: number;
+    cachedLevelElapsedMs?: number;
+  },
 ): Promise<SeededTwoStateCache> =>
   page.evaluate(
     async ({
@@ -60,6 +67,9 @@ const seedTwoCachedStates = async (
       controlP1Arg,
       controlP3Arg,
       animationSpeedIndexArg,
+      analysisMaxTimeIndexArg,
+      cachedAnalysisLevelArg,
+      cachedLevelElapsedMsArg,
     }) => {
       const wasm = await import('/src/KdlRust/pkg/kill_doctor_lucky_rust.js');
       await wasm.default();
@@ -130,7 +140,7 @@ const seedTwoCachedStates = async (
           JSON.stringify({
             minAnalysisLevel: 0,
             maxAnalysisLevel: 5,
-            analysisMaxTimeIndex: 3,
+            analysisMaxTimeIndex: analysisMaxTimeIndexArg,
             controlP1: controlP1Arg,
             controlP3: controlP3Arg,
             showOnBoardP1: false,
@@ -144,7 +154,7 @@ const seedTwoCachedStates = async (
             entries: [
               {
                 stateJson: snapshot0,
-                analysisLevel: 20,
+                analysisLevel: cachedAnalysisLevelArg,
                 bestTurn: {
                   isValid: true,
                   validationMessage: '',
@@ -155,13 +165,13 @@ const seedTwoCachedStates = async (
                   elapsedMs: 0,
                 },
                 previewRaw: '',
-                elapsedMs: 0,
-                levelElapsedMs: 1,
+                elapsedMs: cachedLevelElapsedMsArg,
+                levelElapsedMs: cachedLevelElapsedMsArg,
                 lastUsedAtMs: Date.now() - 1000,
               },
               {
                 stateJson: snapshot1,
-                analysisLevel: 20,
+                analysisLevel: cachedAnalysisLevelArg,
                 bestTurn: {
                   isValid: true,
                   validationMessage: '',
@@ -172,8 +182,8 @@ const seedTwoCachedStates = async (
                   elapsedMs: 0,
                 },
                 previewRaw: '',
-                elapsedMs: 0,
-                levelElapsedMs: 1,
+                elapsedMs: cachedLevelElapsedMsArg,
+                levelElapsedMs: cachedLevelElapsedMsArg,
                 lastUsedAtMs: Date.now() - 1000,
               },
             ],
@@ -201,6 +211,9 @@ const seedTwoCachedStates = async (
       controlP1Arg: options.controlP1,
       controlP3Arg: options.controlP3,
       animationSpeedIndexArg: options.animationSpeedIndex ?? 1,
+      analysisMaxTimeIndexArg: options.analysisMaxTimeIndex ?? 3,
+      cachedAnalysisLevelArg: options.cachedAnalysisLevel ?? 20,
+      cachedLevelElapsedMsArg: options.cachedLevelElapsedMs ?? 1,
     },
   );
 
@@ -210,6 +223,28 @@ test.describe('AI submit waits for animation completion', () => {
     await cancelAiAnalysisIfRunning(page);
 
     const seed = await seedTwoCachedStates(page, { controlP1: true, controlP3: true });
+    await page.reload();
+
+    await expect.poll(() => readNormalTurnCount(page), { timeout: 6000 }).toBe(seed.initialTurnCount + 1);
+    await expect
+      .poll(async () => (await readAiLineValue(page, 'Status'))?.includes('queued') ?? false, { timeout: 10000 })
+      .toBe(true);
+    await page.waitForTimeout(350);
+    await expect.poll(() => readNormalTurnCount(page), { timeout: 1200 }).toBe(seed.initialTurnCount + 1);
+    await expect.poll(() => readNormalTurnCount(page), { timeout: 25000 }).toBe(seed.initialTurnCount + 2);
+  });
+
+  test('auto-control queues smart-stopped cached follow-up turn until current animation finishes', async ({ page }) => {
+    await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
+
+    const seed = await seedTwoCachedStates(page, {
+      controlP1: true,
+      controlP3: true,
+      analysisMaxTimeIndex: 1,
+      cachedAnalysisLevel: 1,
+      cachedLevelElapsedMs: 200,
+    });
     await page.reload();
 
     await expect.poll(() => readNormalTurnCount(page), { timeout: 6000 }).toBe(seed.initialTurnCount + 1);
