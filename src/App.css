@@ -875,6 +875,7 @@ body:has(.info-overlay) {
 
 .play-area-summary {
   grid-column: 1 / -1;
+  font-size: 0.9rem;
 }
 
 .game-summary {
@@ -884,7 +885,7 @@ body:has(.info-overlay) {
   border-radius: 0;
   border: 1px solid var(--line);
   font-family: var(--font-mono);
-  font-size: 0.85rem;
+  font-size: 0.85em;
   text-align: left;
   white-space: pre-wrap;
 }

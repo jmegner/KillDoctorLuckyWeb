@@ -123,6 +123,8 @@ const getPlayerStatsRows = (gameState: GameStateHandle | null) => {
   }));
 };
 
+const removeTwoSpaceLineIndent = (text: string) => text.replace(/^ {2}/gm, '');
+
 const touchRoomDoubleTapThresholdMs = 500;
 
 type BestTurnResponse = {
@@ -2045,7 +2047,7 @@ function PlayArea() {
   const lastRoomPointerTypeRef = useRef<string | null>(null);
   const animationSpeed = animationSpeeds[animationSpeedIndex];
   const summary = gameState ? gameState.summary(0) : 'Failed to create game state.';
-  const prevTurnSummary = gameState ? gameState.prevTurnSummaryVerbose() : '';
+  const prevTurnSummary = gameState ? removeTwoSpaceLineIndent(gameState.prevTurnSummaryVerbose()) : '';
   const history = gameState ? gameState.normalTurnHistory() : '';
   const currentPlayerPieceId = gameState ? (gameState.currentPlayerPieceId() as PieceId) : null;
   const currentNormalTurnCount = gameState
