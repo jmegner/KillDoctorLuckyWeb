@@ -3725,7 +3725,9 @@ function PlayArea() {
     currentPlayerPieceId === 'player1' ? aiShowOnBoardP1 : currentPlayerPieceId === 'player2' ? aiShowOnBoardP3 : false;
   const analysisMaxTimeMs = getAnalysisMaxTimeMs(analysisMaxTimeIndex);
   const aiAnalysisDisabled = analysisMaxTimeMs === null;
-  const mullButtonDisabled = hasWinner || analysisRunKind === 'mull';
+  const aiIsMulling = analysisIsRunning && analysisRunKind === 'mull';
+  const mullButtonDisabled = hasWinner || aiIsMulling;
+  const plannerMullButtonLabel = aiIsMulling ? 'Cancel' : 'Mull';
   const displayedAnalysisMaxTimeMs = analysisIsRunning ? analysisRunMaxTimeMs : (analysisMaxTimeMs ?? 0);
   const aiSuggestionBoardText = (() => {
     if (hasWinner || !aiShowOnBoardEnabledForCurrentPlayer) {
@@ -4616,10 +4618,10 @@ function PlayArea() {
               </button>
               <button
                 className="planner-button planner-header-ai-button"
-                onClick={handleMull}
-                disabled={mullButtonDisabled}
+                onClick={aiIsMulling ? handleAnalysisCancel : handleMull}
+                disabled={!aiIsMulling && hasWinner}
               >
-                AI Mull
+                {plannerMullButtonLabel}
               </button>
               <button
                 type="button"
