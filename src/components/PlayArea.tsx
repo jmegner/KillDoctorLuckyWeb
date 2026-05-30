@@ -6,6 +6,8 @@ import wasmBindgenInit, {
 import TreeSearchWorker from '@/workers/treeSearchWorker?worker';
 import boardAltDownData from '../data/boards/BoardAltDown.json';
 import boardAltUpData from '../data/boards/BoardAltUp.json';
+import boardHauntedDownData from '../data/boards/BoardHauntedDown.json';
+import boardHauntedUpData from '../data/boards/BoardHauntedUp.json';
 import boardLairNorthData from '../data/boards/BoardLairNorth.json';
 import boardLairSouthData from '../data/boards/BoardLairSouth.json';
 import boardMainEastData from '../data/boards/BoardMainEast.json';
@@ -313,6 +315,8 @@ const boardLayouts = [
   boardAltUpData,
   boardMainEastData,
   boardMainWestData,
+  boardHauntedDownData,
+  boardHauntedUpData,
   boardLairNorthData,
   boardLairSouthData,
 ].map(

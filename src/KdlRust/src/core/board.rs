@@ -15,6 +15,14 @@ const EMBEDDED_BOARD_DATA: &[(&str, &str)] = &[
     ("AltFull", include_str!("boards/AltFull.json")),
     ("AltUp", include_str!("boards/AltUp.json")),
     ("Haunted", include_str!("boards/Haunted.json")),
+    (
+        "HauntedDown",
+        include_str!("../../../data/boards/BoardHauntedDown.json"),
+    ),
+    (
+        "HauntedUp",
+        include_str!("../../../data/boards/BoardHauntedUp.json"),
+    ),
     ("LairFull", include_str!("boards/LairFull.json")),
     ("LairNorth", include_str!("boards/LairNorth.json")),
     ("LairSouth", include_str!("boards/LairSouth.json")),
@@ -794,5 +802,21 @@ mod tests {
 
         assert_eq!(board.name, "lairsouth");
         assert_eq!(board.json_name, "BoardLairSouth");
+    }
+
+    #[test]
+    fn embedded_haunted_split_boards_use_generated_json_names() {
+        let down = Board::from_embedded_json("BoardHauntedDown").unwrap();
+        let up = Board::from_embedded_json("BoardHauntedUp").unwrap();
+
+        assert_eq!(down.name, "HauntedDown");
+        assert_eq!(down.json_name, "BoardHauntedDown");
+        assert_eq!(down.player_start_room_id, RoomId(1));
+        assert_eq!(down.doctor_start_room_id, RoomId(3));
+
+        assert_eq!(up.name, "HauntedUp");
+        assert_eq!(up.json_name, "BoardHauntedUp");
+        assert_eq!(up.player_start_room_id, RoomId(24));
+        assert_eq!(up.doctor_start_room_id, RoomId(11));
     }
 }

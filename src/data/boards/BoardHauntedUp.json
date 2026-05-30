@@ -1,0 +1,302 @@
+{
+  "ImagePath": "/BoardHauntedUp.jpg",
+  "JsonName": "BoardHauntedUp",
+  "Name": "HauntedUp",
+  "Description": "Kill Doctor Lucky Board Haunted Upstairs",
+  "UiLayout": {
+    "BoardWidth": 1480,
+    "BoardHeight": 975,
+    "BoardOverlayFontSizePx": 27,
+    "PieceSizeTarget": 80,
+    "WinnerOverlayFontSizePx": 52,
+    "RoomDistanceBoxWidth": 30,
+    "RoomDistanceBoxHeight": 30,
+    "RoomDistanceBoxTopRatio": 0.2,
+    "ActionDisplayBounds": {
+      "MinXAfterRoomId": -1,
+      "MaxXBeforeRoomId": -1,
+      "MinYBelowRoomId": -1
+    }
+  },
+  "PlayerStartRoomIds": [
+    1,
+    24
+  ],
+  "DoctorStartRoomIds": [
+    11,
+    3
+  ],
+  "CatStartRoomIds": [
+    22,
+    17
+  ],
+  "DogStartRoomIds": [
+    7,
+    14
+  ],
+  "Wings": [],
+  "Rooms": [
+    {
+      "Id": "10",
+      "Name": "trophy room",
+      "Coords": [
+        86,
+        729,
+        368,
+        968
+      ],
+      "Adjacent": [
+        11,
+        24
+      ],
+      "Visible": [
+        11,
+        24
+      ]
+    },
+    {
+      "Id": "11",
+      "Name": "master suite",
+      "Coords": [
+        86,
+        382,
+        367,
+        720
+      ],
+      "Adjacent": [
+        10,
+        12,
+        18,
+        19
+      ],
+      "Visible": [
+        10,
+        12,
+        18,
+        19
+      ]
+    },
+    {
+      "Id": "12",
+      "Name": "white room",
+      "Coords": [
+        84,
+        177,
+        366,
+        375
+      ],
+      "Adjacent": [
+        11,
+        13
+      ],
+      "Visible": [
+        11,
+        13
+      ]
+    },
+    {
+      "Id": "13",
+      "Name": "lilac room",
+      "Coords": [
+        372,
+        170,
+        623,
+        375
+      ],
+      "Adjacent": [
+        12,
+        14,
+        18
+      ],
+      "Visible": [
+        12,
+        14,
+        18
+      ]
+    },
+    {
+      "Id": "14",
+      "Name": "armory",
+      "Coords": [
+        631,
+        169,
+        1026,
+        374.5
+      ],
+      "Adjacent": [
+        13,
+        15,
+        18
+      ],
+      "Visible": [
+        13,
+        15,
+        18
+      ]
+    },
+    {
+      "Id": "15",
+      "Name": "lancaster room",
+      "Coords": [
+        1032,
+        169,
+        1278,
+        376.5
+      ],
+      "Adjacent": [
+        14,
+        16,
+        17
+      ],
+      "Visible": [
+        14,
+        16,
+        17
+      ]
+    },
+    {
+      "Id": "16",
+      "Name": "parlor",
+      "Coords": [
+        1283.5,
+        169,
+        1466,
+        377
+      ],
+      "Adjacent": [
+        15,
+        17
+      ],
+      "Visible": [
+        15,
+        17
+      ]
+    },
+    {
+      "Id": "17",
+      "Name": "nursery",
+      "Coords": [
+        1035,
+        384,
+        1448,
+        563
+      ],
+      "Adjacent": [
+        15,
+        16,
+        18,
+        20
+      ],
+      "Visible": [
+        15,
+        16,
+        18,
+        20
+      ]
+    },
+    {
+      "Id": "18",
+      "Name": "library",
+      "Coords": [
+        371.5,
+        382,
+        1027,
+        561
+      ],
+      "Adjacent": [
+        11,
+        13,
+        14,
+        17,
+        19
+      ],
+      "Visible": [
+        11,
+        13,
+        14,
+        17,
+        19
+      ]
+    },
+    {
+      "Id": "19",
+      "Name": "gallery",
+      "Coords": [
+        371,
+        566,
+        1025,
+        730
+      ],
+      "Adjacent": [
+        11,
+        18,
+        20,
+        24
+      ],
+      "Visible": [
+        11,
+        18,
+        20,
+        24
+      ]
+    },
+    {
+      "Id": "20",
+      "Name": "tennessee room",
+      "Coords": [
+        1031,
+        567,
+        1436,
+        725
+      ],
+      "Adjacent": [
+        17,
+        19,
+        21
+      ],
+      "Visible": [
+        17,
+        19,
+        21
+      ]
+    },
+    {
+      "Id": "21",
+      "Name": "billiard room",
+      "Coords": [
+        1034,
+        732,
+        1434,
+        965
+      ],
+      "Adjacent": [
+        20,
+        24
+      ],
+      "Visible": [
+        20,
+        24
+      ]
+    },
+    {
+      "Id": "24",
+      "Name": "dining hall",
+      "Coords": [
+        373.5,
+        734.5,
+        1027.5,
+        965.5
+      ],
+      "Adjacent": [
+        10,
+        19,
+        21
+      ],
+      "Visible": [
+        10,
+        19,
+        21
+      ]
+    }
+  ]
+}
