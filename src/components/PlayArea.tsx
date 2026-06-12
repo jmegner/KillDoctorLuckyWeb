@@ -77,21 +77,21 @@ type PieceIndicators = {
 
 type AnimatedPieceIndicators = Partial<Record<PieceId, PieceIndicators>>;
 
+const getMoveCardIndicatorText = (moveCards: number) => {
+  const moveCardsThirtySeconds = Math.round(moveCards * 32);
+  const roundedDownMoveCards = Math.floor(moveCardsThirtySeconds / 32);
+  const fractionalThirtySeconds = ((moveCardsThirtySeconds % 32) + 32) % 32;
+  const suffix = fractionalThirtySeconds >= 21 ? ':' : fractionalThirtySeconds >= 10 ? '.' : '';
+  return `${formatPlayerInteger(roundedDownMoveCards)}${suffix}`;
+};
+
 const getLivePieceIndicators = (gameState: GameStateHandle | null, pieceId: PieceId): PieceIndicators => {
   if (!gameState || pieceId === 'doctor') {
     return { top: null, bottom: null };
   }
   const isNormalPlayer = pieceId === 'player1' || pieceId === 'player2';
-  const getNormalPlayerMoveCardIndicator = () => {
-    const moveCards = gameState.pieceMoveCards(pieceId);
-    const moveCardsThirtySeconds = Math.round(moveCards * 32);
-    const roundedDownMoveCards = Math.floor(moveCardsThirtySeconds / 32);
-    const fractionalThirtySeconds = ((moveCardsThirtySeconds % 32) + 32) % 32;
-    const suffix = fractionalThirtySeconds >= 21 ? ':' : fractionalThirtySeconds >= 10 ? '.' : '';
-    return `${formatPlayerInteger(roundedDownMoveCards)}${suffix}`;
-  };
   return {
-    top: isNormalPlayer ? getNormalPlayerMoveCardIndicator() : null,
+    top: isNormalPlayer ? getMoveCardIndicatorText(gameState.pieceMoveCards(pieceId)) : null,
     bottom: formatPlayerInteger(gameState.pieceAttackStrength(pieceId)),
   };
 };
@@ -2558,7 +2558,6 @@ function PlayArea() {
     if (!gameState || gameState.hasWinner()) {
       return;
     }
-    const initialPieceIndicatorsForAnimation = capturePieceIndicators(gameState);
     const initialRoomsForAnimation = options?.animateFromCurrentState
       ? Array.from(gameState.piecePositions(), (value) => Number(value))
       : null;
@@ -2577,6 +2576,56 @@ function PlayArea() {
       setPlanOrder(order);
       setValidationMessage(validation);
       return;
+    }
+    const initialPieceIndicatorsForAnimation = capturePieceIndicators(gameState);
+    const currentPlayerPieceIdForSpend = gameState.currentPlayerPieceId() as PieceId;
+    if (isNormalPlayerPieceId(currentPlayerPieceIdForSpend) && initialPieceIndicatorsForAnimation) {
+      const currentPieceRooms = Array.from(gameState.piecePositions(), (value) => Number(value));
+      const distanceBetweenRooms = (sourceRoomId: number, destRoomId: number) => {
+        const distances = new Map<number, number>();
+        const queue = [sourceRoomId];
+        distances.set(sourceRoomId, 0);
+
+        while (queue.length > 0) {
+          const current = queue.shift();
+          if (current === undefined) {
+            continue;
+          }
+          const currentDistance = distances.get(current);
+          if (currentDistance === undefined) {
+            continue;
+          }
+          if (current === destRoomId) {
+            return currentDistance;
+          }
+          boardRoomById.get(current)?.adjacent.forEach((neighbor) => {
+            if (distances.has(neighbor)) {
+              return;
+            }
+            distances.set(neighbor, currentDistance + 1);
+            queue.push(neighbor);
+          });
+        }
+
+        return 0;
+      };
+      const totalDistance = planEntries.reduce((sum, entry) => {
+        const pieceIndex = pieceOrder.indexOf(entry.pieceId);
+        const sourceRoomId = currentPieceRooms[pieceIndex];
+        if (sourceRoomId === undefined) {
+          return sum;
+        }
+        return sum + distanceBetweenRooms(sourceRoomId, entry.roomId);
+      }, 0);
+      const moveCardsUsed = Math.max(0, totalDistance - 1);
+      const currentPlayerIndicators = initialPieceIndicatorsForAnimation[currentPlayerPieceIdForSpend] ?? {
+        top: null,
+        bottom: null,
+      };
+      initialPieceIndicatorsForAnimation[currentPlayerPieceIdForSpend] = {
+        ...currentPlayerIndicators,
+        top: getMoveCardIndicatorText(gameState.pieceMoveCards(currentPlayerPieceIdForSpend) - moveCardsUsed),
+      };
     }
     const applyError = gameState.applyTurnPlan(JSON.stringify(planEntries));
     if (applyError) {
