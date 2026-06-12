@@ -81,7 +81,7 @@ const getMoveCardIndicatorText = (moveCards: number) => {
   const moveCardsThirtySeconds = Math.round(moveCards * 32);
   const roundedDownMoveCards = Math.floor(moveCardsThirtySeconds / 32);
   const fractionalThirtySeconds = ((moveCardsThirtySeconds % 32) + 32) % 32;
-  const suffix = fractionalThirtySeconds >= 21 ? ':' : fractionalThirtySeconds >= 10 ? '.' : '';
+  const suffix = fractionalThirtySeconds >= 21 ? ':' : fractionalThirtySeconds >= 10 ? '•' : '';
   return `${formatPlayerInteger(roundedDownMoveCards)}${suffix}`;
 };
 
