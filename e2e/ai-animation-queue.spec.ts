@@ -55,6 +55,7 @@ const seedTwoCachedStates = async (
     analysisMaxTimeIndex?: number;
     cachedAnalysisLevel?: number;
     cachedLevelElapsedMs?: number;
+    redoFirstTurn?: boolean;
   },
 ): Promise<SeededTwoStateCache> =>
   page.evaluate(
@@ -70,6 +71,7 @@ const seedTwoCachedStates = async (
       analysisMaxTimeIndexArg,
       cachedAnalysisLevelArg,
       cachedLevelElapsedMsArg,
+      redoFirstTurnArg,
     }) => {
       const wasm = await import('/src/KdlRust/pkg/kill_doctor_lucky_rust.js');
       await wasm.default();
@@ -134,7 +136,11 @@ const seedTwoCachedStates = async (
         const initialTurnCount = turns0 ? turns0.length : -1;
 
         window.localStorage.setItem(gameStateStorageKeyArg, snapshot0);
-        window.localStorage.removeItem(redoStateStackStorageKeyArg);
+        if (redoFirstTurnArg) {
+          window.localStorage.setItem(redoStateStackStorageKeyArg, JSON.stringify([snapshot1]));
+        } else {
+          window.localStorage.removeItem(redoStateStackStorageKeyArg);
+        }
         window.localStorage.setItem(
           aiPrefsStorageKeyArg,
           JSON.stringify({
@@ -214,6 +220,7 @@ const seedTwoCachedStates = async (
       analysisMaxTimeIndexArg: options.analysisMaxTimeIndex ?? 3,
       cachedAnalysisLevelArg: options.cachedAnalysisLevel ?? 20,
       cachedLevelElapsedMsArg: options.cachedLevelElapsedMs ?? 1,
+      redoFirstTurnArg: options.redoFirstTurn ?? false,
     },
   );
 
@@ -246,6 +253,29 @@ test.describe('AI submit waits for animation completion', () => {
       cachedLevelElapsedMs: 200,
     });
     await page.reload();
+
+    await expect.poll(() => readNormalTurnCount(page), { timeout: 6000 }).toBe(seed.initialTurnCount + 1);
+    await expect
+      .poll(async () => (await readAiLineValue(page, 'Status'))?.includes('queued') ?? false, { timeout: 10000 })
+      .toBe(true);
+    await page.waitForTimeout(350);
+    await expect.poll(() => readNormalTurnCount(page), { timeout: 1200 }).toBe(seed.initialTurnCount + 1);
+    await expect.poll(() => readNormalTurnCount(page), { timeout: 25000 }).toBe(seed.initialTurnCount + 2);
+  });
+
+  test('Ani Redo queues cached AI follow-up until redo animation finishes', async ({ page }) => {
+    await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
+
+    const seed = await seedTwoCachedStates(page, {
+      controlP1: false,
+      controlP3: true,
+      redoFirstTurn: true,
+    });
+    await page.reload();
+
+    await expect.poll(() => readNormalTurnCount(page), { timeout: 6000 }).toBe(seed.initialTurnCount);
+    await page.getByRole('button', { name: 'Ani Redo' }).click();
 
     await expect.poll(() => readNormalTurnCount(page), { timeout: 6000 }).toBe(seed.initialTurnCount + 1);
     await expect

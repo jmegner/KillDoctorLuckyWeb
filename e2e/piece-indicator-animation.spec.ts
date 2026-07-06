@@ -70,7 +70,7 @@ const seedRedoWithIndicatorChange = async (page: Page): Promise<IndicatorSeed> =
           const moveCardsThirtySeconds = Math.round(moveCards * 32);
           const roundedDownMoveCards = Math.floor(moveCardsThirtySeconds / 32);
           const fractionalThirtySeconds = ((moveCardsThirtySeconds % 32) + 32) % 32;
-          const suffix = fractionalThirtySeconds >= 21 ? ':' : fractionalThirtySeconds >= 10 ? '.' : '';
+          const suffix = fractionalThirtySeconds >= 21 ? ':' : fractionalThirtySeconds >= 10 ? '\u2022' : '';
           texts.push(`${roundedDownMoveCards}${suffix}`);
         }
         texts.push(pieceLabels[pieceId]);
@@ -169,7 +169,7 @@ const seedSubmitMoveCardSpendBeforeLoot = async (page: Page): Promise<SubmitSpen
         const moveCardsThirtySeconds = Math.round(moveCards * 32);
         const roundedDownMoveCards = Math.floor(moveCardsThirtySeconds / 32);
         const fractionalThirtySeconds = ((moveCardsThirtySeconds % 32) + 32) % 32;
-        const suffix = fractionalThirtySeconds >= 21 ? ':' : fractionalThirtySeconds >= 10 ? '.' : '';
+        const suffix = fractionalThirtySeconds >= 21 ? ':' : fractionalThirtySeconds >= 10 ? '\u2022' : '';
         return `${roundedDownMoveCards}${suffix}`;
       };
 

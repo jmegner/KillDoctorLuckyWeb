@@ -3310,14 +3310,14 @@ function PlayArea() {
     resetAiOutputs();
     saveGameStateSnapshot(gameState);
     const nextTurnCounter = advanceTurnCounter();
-    if (!gameState.hasWinner()) {
-      startBestTurnAnalysis(false, nextTurnCounter);
-    }
     if (options?.animateFromRooms) {
       startAnimationFromState(options.animateFromRooms, {
         force: true,
         indicators: options.animateIndicators ?? null,
       });
+    }
+    if (!gameState.hasWinner()) {
+      startBestTurnAnalysis(false, nextTurnCounter);
     }
   };
 
