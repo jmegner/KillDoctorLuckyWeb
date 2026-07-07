@@ -8,6 +8,7 @@ import boardAltDownData from '../data/boards/BoardAltDown.json';
 import boardAltUpData from '../data/boards/BoardAltUp.json';
 import boardHauntedDownData from '../data/boards/BoardHauntedDown.json';
 import boardHauntedUpData from '../data/boards/BoardHauntedUp.json';
+import boardJacob1Data from '../data/boards/BoardJacob1.json';
 import boardLairNorthData from '../data/boards/BoardLairNorth.json';
 import boardLairSouthData from '../data/boards/BoardLairSouth.json';
 import boardMainEastData from '../data/boards/BoardMainEast.json';
@@ -317,6 +318,7 @@ const boardLayouts = [
   boardMainWestData,
   boardHauntedDownData,
   boardHauntedUpData,
+  boardJacob1Data,
   boardLairNorthData,
   boardLairSouthData,
 ].map(
@@ -1879,6 +1881,41 @@ const formatDebugSeconds = (elapsedMs: number) => {
   return `${(elapsedMs / 1000).toFixed(1)}s`;
 };
 
+type AnalysisStopDebugInfo = {
+  runKind: AnalysisRunKind;
+  minAnalysisLevel: number;
+  maxAnalysisLevel: number | null;
+  maxTimeMs: number;
+  runElapsedMs?: number | null;
+  remainingMs?: number | null;
+  currentLevel?: number | null;
+  currentLevelElapsedMs?: number | null;
+  lastCompletedLevel?: number | null;
+  lastCompletedLevelElapsedMs?: number | null;
+};
+
+const formatOptionalDebugSeconds = (elapsedMs: number | null | undefined) =>
+  typeof elapsedMs === 'number' && Number.isFinite(elapsedMs) ? formatDebugSeconds(elapsedMs) : '?';
+
+const formatAnalysisStopDebugInfo = (info: AnalysisStopDebugInfo) => {
+  const maxLevelText = info.maxAnalysisLevel === null ? 'none' : `L${info.maxAnalysisLevel}`;
+  const currentLevelText = info.currentLevel === null || info.currentLevel === undefined ? '?' : `L${info.currentLevel}`;
+  const lastCompletedLevelText =
+    info.lastCompletedLevel === null || info.lastCompletedLevel === undefined ? '?' : `L${info.lastCompletedLevel}`;
+  return [
+    `kind=${info.runKind}`,
+    `min=L${info.minAnalysisLevel}`,
+    `max=${maxLevelText}`,
+    `maxTime=${formatDebugSeconds(info.maxTimeMs)}`,
+    `elapsed=${formatOptionalDebugSeconds(info.runElapsedMs)}`,
+    `remaining=${formatOptionalDebugSeconds(info.remainingMs)}`,
+    `current=${currentLevelText}`,
+    `currentElapsed=${formatOptionalDebugSeconds(info.currentLevelElapsedMs)}`,
+    `lastCompleted=${lastCompletedLevelText}`,
+    `lastCompletedElapsed=${formatOptionalDebugSeconds(info.lastCompletedLevelElapsedMs)}`,
+  ].join(', ');
+};
+
 const formatAnalysisLevelDebugLine = (
   turnNumber: number,
   analysisLevel: number,
@@ -2746,13 +2783,30 @@ function PlayArea() {
     const sourceStateJson = gameState.exportStateJson();
     const sourceNormalTurnCount = parseNormalTurnCountFromSnapshotJson(sourceStateJson) ?? currentNormalTurnCount;
     let loggedStopReason = false;
-    const debugAnalysisStopReason = (stoppedLevel: number | null, reason: string) => {
+    const buildAnalysisStopDebugInfo = (
+      overrides?: Partial<Omit<AnalysisStopDebugInfo, 'runKind' | 'minAnalysisLevel' | 'maxAnalysisLevel' | 'maxTimeMs'>>,
+    ): AnalysisStopDebugInfo => {
+      const runLimits = analysisRunLimitsRef.current ?? initialRunLimits;
+      return {
+        runKind: runLimits.kind,
+        minAnalysisLevel: runLimits.minAnalysisLevel,
+        maxAnalysisLevel: runLimits.maxAnalysisLevel,
+        maxTimeMs: runLimits.maxTimeMs,
+        ...overrides,
+      };
+    };
+    const debugAnalysisStopReason = (
+      stoppedLevel: number | null,
+      reason: string,
+      details?: AnalysisStopDebugInfo,
+    ) => {
       if (loggedStopReason) {
         return;
       }
       loggedStopReason = true;
       const levelText = stoppedLevel === null ? '?' : `${stoppedLevel}`;
-      emitAnalysisDebugLog(`T${sourceNormalTurnCount}, stopped at L${levelText} cuz ${reason}`);
+      const detailsText = `; ${formatAnalysisStopDebugInfo(details ?? buildAnalysisStopDebugInfo())}`;
+      emitAnalysisDebugLog(`AI analysis stopped: T${sourceNormalTurnCount}, L${levelText}, reason=${reason}${detailsText}`);
     };
     const sourceCurrentPlayerPieceIdRaw = gameState.currentPlayerPieceId();
     const sourceCurrentPlayerPieceId = isPieceId(sourceCurrentPlayerPieceIdRaw) ? sourceCurrentPlayerPieceIdRaw : null;
@@ -2799,6 +2853,12 @@ function PlayArea() {
       debugAnalysisStopReason(
         Math.min(cachedSuggestion.analysisLevel, effectiveMaxAnalysisLevel),
         `max turn depth is L${effectiveMaxAnalysisLevel}`,
+        buildAnalysisStopDebugInfo({
+          runElapsedMs: cachedSuggestion.elapsedMs,
+          remainingMs: Math.max(0, maxTimeMs - cachedSuggestion.elapsedMs),
+          lastCompletedLevel: cachedSuggestion.analysisLevel,
+          lastCompletedLevelElapsedMs: cachedSuggestion.levelElapsedMs,
+        }),
       );
       setAiSuggestion(cachedSuggestion);
       setAnalysisRunningState(false);
@@ -2839,6 +2899,12 @@ function PlayArea() {
       debugAnalysisStopReason(
         cachedSuggestion.analysisLevel,
         `${cachedTerminalOutcomeText} was found from cache at L${cachedSuggestion.analysisLevel}`,
+        buildAnalysisStopDebugInfo({
+          runElapsedMs: cachedSuggestion.elapsedMs,
+          remainingMs: Math.max(0, maxTimeMs - cachedSuggestion.elapsedMs),
+          lastCompletedLevel: cachedSuggestion.analysisLevel,
+          lastCompletedLevelElapsedMs: cachedSuggestion.levelElapsedMs,
+        }),
       );
       setAiSuggestion(cachedSuggestion);
       setAnalysisRunningState(false);
@@ -2924,7 +2990,23 @@ function PlayArea() {
       const terminateWorker = options?.terminateWorker ?? false;
       const stopLevel =
         options?.stopLevel ?? deepestCompletedSuggestion?.analysisLevel ?? analysisRunningLevelRef.current;
-      debugAnalysisStopReason(stopLevel, debugReason);
+      const activeRunLimits = getActiveRunLimits();
+      const now = performance.now();
+      const runElapsedMs = Math.max(0, now - timerStart);
+      const timing = analysisTimingRef.current;
+      const currentLevelElapsedMs = timing ? Math.max(0, now - timing.levelStartMs) : null;
+      debugAnalysisStopReason(
+        stopLevel,
+        debugReason,
+        buildAnalysisStopDebugInfo({
+          runElapsedMs,
+          remainingMs: Math.max(0, activeRunLimits.maxTimeMs - runElapsedMs),
+          currentLevel,
+          currentLevelElapsedMs,
+          lastCompletedLevel: deepestCompletedSuggestion?.analysisLevel ?? null,
+          lastCompletedLevelElapsedMs: mostRecentCompletedLevelElapsedMs,
+        }),
+      );
       if (!shouldAutoSubmitAtThisMoment()) {
         stopAnalysisRun(completionMessage, { terminateWorker });
         return;
