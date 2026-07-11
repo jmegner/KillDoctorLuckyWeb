@@ -364,6 +364,28 @@ test.describe('AI results cache', () => {
     await aiPanel.getByRole('button', { name: 'Cancel' }).click();
   });
 
+  test('Mull board progress ignores ShowOnBoard setting', async ({ page }) => {
+    await page.goto('/');
+    await cancelAiAnalysisIfRunning(page);
+
+    await seedDefaultStateAndAiSetup(page, {
+      minAnalysisLevel: 2,
+      maxAnalysisLevel: 15,
+      analysisMaxTimeIndex: 4,
+      showOnBoardP1: false,
+    });
+    await page.reload();
+    await cancelAiAnalysisIfRunning(page);
+
+    const aiPanel = page.locator('.ai-panel');
+    await expect.poll(() => readBoardOverlayText(page)).toBeNull();
+
+    await aiPanel.getByRole('button', { name: 'Mull' }).click();
+
+    await expect.poll(() => readBoardOverlayText(page), { timeout: 5000 }).toContain('/99999s)');
+    await aiPanel.getByRole('button', { name: 'Cancel' }).click();
+  });
+
   test('stops immediately when cached result already meets max turn depth', async ({ page }) => {
     await page.goto('/');
     await cancelAiAnalysisIfRunning(page);

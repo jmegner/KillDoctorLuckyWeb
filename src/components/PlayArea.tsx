@@ -3993,7 +3993,7 @@ function PlayArea() {
   const plannerMullButtonLabel = aiIsMulling ? 'Cancel' : 'Mull';
   const displayedAnalysisMaxTimeMs = analysisIsRunning ? analysisRunMaxTimeMs : (analysisMaxTimeMs ?? 0);
   const aiSuggestionBoardText = (() => {
-    if (hasWinner || !aiShowOnBoardEnabledForCurrentPlayer) {
+    if (hasWinner || (!aiIsMulling && !aiShowOnBoardEnabledForCurrentPlayer)) {
       return null;
     }
     const runningTimeText = `(${formatWholeSeconds(analysisElapsedMs)}/${formatWholeSeconds(displayedAnalysisMaxTimeMs)})`;
