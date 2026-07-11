@@ -1,0 +1,119 @@
+{
+  "ImagePath": "/BoardAltUpNoWarp.jpg",
+  "JsonName": "BoardAltUpNoWarp",
+  "Name": "AltUpNoWarp",
+  "Description": "Kill Doctor Lucky Board Alternate Upstairs Without Warp From Stairs",
+  "UiLayout": {
+    "BoardWidth": 1487,
+    "BoardHeight": 983,
+    "BoardOverlayFontSizePx": 27,
+    "PieceSizeTarget": 80,
+    "WinnerOverlayFontSizePx": 52,
+    "RoomDistanceBoxWidth": 30,
+    "RoomDistanceBoxHeight": 30,
+    "RoomDistanceBoxTopRatio": 0.2,
+    "ActionDisplayBounds": {
+      "MinXAfterRoomId": -1,
+      "MaxXBeforeRoomId": -1,
+      "MinYBelowRoomId": -1
+    }
+  },
+  "PlayerStartRoomIds": [17],
+  "DoctorStartRoomIds": [23],
+  "CatStartRoomIds": [26],
+  "DogStartRoomIds": [20],
+  "Wings": [],
+  "Rooms": [
+    {
+      "Id": "16",
+      "Name": "nursery",
+      "Coords": [371.5, 310.5, 631.5, 569],
+      "Adjacent": [17, 18, 20, 21, 22, 23, 24, 25, 27],
+      "Visible": [17, 20, 22, 23]
+    },
+    {
+      "Id": "17",
+      "Name": "trophy room",
+      "Coords": [635, 205, 889, 569],
+      "Adjacent": [16, 18],
+      "Visible": [16, 18]
+    },
+    {
+      "Id": "18",
+      "Name": "library",
+      "Coords": [893, 307, 1125, 569],
+      "Adjacent": [16, 17, 19, 21, 22, 23, 24, 25, 27, 28],
+      "Visible": [17, 19, 25, 28]
+    },
+    {
+      "Id": "19",
+      "Name": "armory",
+      "Coords": [894, 2, 1227, 301],
+      "Adjacent": [18, 20, 28],
+      "Visible": [18, 20, 28]
+    },
+    {
+      "Id": "20",
+      "Name": "servants quarters",
+      "Coords": [379, 1, 889, 202],
+      "Adjacent": [16, 19, 21],
+      "Visible": [16, 19, 21, 23]
+    },
+    {
+      "Id": "21",
+      "Name": "rose suite",
+      "Coords": [0, 1, 373, 305],
+      "Adjacent": [16, 18, 20, 22, 23, 24, 25, 27],
+      "Visible": [20, 22]
+    },
+    {
+      "Id": "22",
+      "Name": "gallery",
+      "Coords": [0, 311, 280, 665],
+      "Adjacent": [16, 18, 21, 23, 24, 25, 27],
+      "Visible": [16, 21, 23, 27]
+    },
+    {
+      "Id": "23",
+      "Name": "master suite",
+      "Coords": [0, 671, 504, 973],
+      "Adjacent": [16, 18, 21, 22, 24, 25, 27],
+      "Visible": [16, 20, 22, 24]
+    },
+    {
+      "Id": "24",
+      "Name": "lilac room",
+      "Coords": [508, 670, 791, 973],
+      "Adjacent": [16, 18, 21, 22, 23, 25, 27],
+      "Visible": [23, 25]
+    },
+    {
+      "Id": "25",
+      "Name": "tennessee room",
+      "Coords": [891, 669, 1226, 973],
+      "Adjacent": [16, 18, 21, 22, 23, 24, 26, 27],
+      "Visible": [18, 24, 26]
+    },
+    {
+      "Id": "26",
+      "Name": "white room",
+      "Coords": [1229, 669, 1477, 972],
+      "Adjacent": [25, 27],
+      "Visible": [25, 27]
+    },
+    {
+      "Id": "27",
+      "Name": "skippers rest",
+      "Coords": [1223, 410, 1479, 663],
+      "Adjacent": [16, 18, 21, 22, 23, 24, 25, 26, 28],
+      "Visible": [22, 26, 28]
+    },
+    {
+      "Id": "28",
+      "Name": "lancaster room",
+      "Coords": [1230, 8, 1480, 405],
+      "Adjacent": [18, 19, 27],
+      "Visible": [18, 19, 27]
+    }
+  ]
+}

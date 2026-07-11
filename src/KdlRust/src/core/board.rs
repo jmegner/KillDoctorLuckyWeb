@@ -12,8 +12,16 @@ use std::{
 
 const EMBEDDED_BOARD_DATA: &[(&str, &str)] = &[
     ("AltDown", include_str!("boards/AltDown.json")),
+    (
+        "AltDownNoWarp",
+        include_str!("../../../data/boards/BoardAltDownNoWarp.json"),
+    ),
     ("AltFull", include_str!("boards/AltFull.json")),
     ("AltUp", include_str!("boards/AltUp.json")),
+    (
+        "AltUpNoWarp",
+        include_str!("../../../data/boards/BoardAltUpNoWarp.json"),
+    ),
     ("Haunted", include_str!("boards/Haunted.json")),
     (
         "HauntedDown",
@@ -805,6 +813,28 @@ mod tests {
     }
 
     #[test]
+    fn embedded_alt_down_no_warp_uses_generated_json_name() {
+        let board = Board::from_embedded_json("BoardAltDownNoWarp").unwrap();
+
+        assert_eq!(board.name, "AltDownNoWarp");
+        assert_eq!(board.json_name, "BoardAltDownNoWarp");
+        assert_eq!(board.player_start_room_id, RoomId(6));
+        assert_eq!(board.doctor_start_room_id, RoomId(9));
+        assert!(board.is_valid().is_ok());
+    }
+
+    #[test]
+    fn embedded_alt_up_no_warp_uses_generated_json_name() {
+        let board = Board::from_embedded_json("BoardAltUpNoWarp").unwrap();
+
+        assert_eq!(board.name, "AltUpNoWarp");
+        assert_eq!(board.json_name, "BoardAltUpNoWarp");
+        assert_eq!(board.player_start_room_id, RoomId(17));
+        assert_eq!(board.doctor_start_room_id, RoomId(23));
+        assert!(board.is_valid().is_ok());
+    }
+
+    #[test]
     fn embedded_lair_south_uses_lair_south_name() {
         let board = Board::from_embedded_json("BoardLairSouth").unwrap();
 
@@ -846,7 +876,7 @@ mod tests {
         assert_eq!(board.name, "Jacob1B");
         assert_eq!(board.json_name, "BoardJacob1B");
         assert_eq!(board.player_start_room_id, RoomId(1));
-        assert_eq!(board.doctor_start_room_id, RoomId(1));
+        assert_eq!(board.doctor_start_room_id, RoomId(15));
         assert!(board.is_valid().is_ok());
     }
 }

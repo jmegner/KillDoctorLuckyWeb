@@ -5,7 +5,9 @@ import wasmBindgenInit, {
 } from '@/KdlRust/pkg/kill_doctor_lucky_rust';
 import TreeSearchWorker from '@/workers/treeSearchWorker?worker';
 import boardAltDownData from '../data/boards/BoardAltDown.json';
+import boardAltDownNoWarpData from '../data/boards/BoardAltDownNoWarp.json';
 import boardAltUpData from '../data/boards/BoardAltUp.json';
+import boardAltUpNoWarpData from '../data/boards/BoardAltUpNoWarp.json';
 import boardHauntedDownData from '../data/boards/BoardHauntedDown.json';
 import boardHauntedUpData from '../data/boards/BoardHauntedUp.json';
 import boardJacob1Data from '../data/boards/BoardJacob1.json';
@@ -314,7 +316,9 @@ type SlotLayout = {
 
 const boardLayouts = [
   boardAltDownData,
+  boardAltDownNoWarpData,
   boardAltUpData,
+  boardAltUpNoWarpData,
   boardMainEastData,
   boardMainWestData,
   boardHauntedDownData,

@@ -1,6 +1,20 @@
 import { expect, test } from '@playwright/test';
 
-const jacobBoardCases = [
+const boardCases = [
+  {
+    label: 'AltDownNoWarp',
+    boardName: 'BoardAltDownNoWarp',
+    imagePath: /BoardAltDownNoWarp\.jpg$/,
+    doctorRoomId: 9,
+    player1RoomId: 6,
+  },
+  {
+    label: 'AltUpNoWarp',
+    boardName: 'BoardAltUpNoWarp',
+    imagePath: /BoardAltUpNoWarp\.jpg$/,
+    doctorRoomId: 23,
+    player1RoomId: 17,
+  },
   {
     label: 'Jacob1',
     boardName: 'BoardJacob1',
@@ -12,13 +26,14 @@ const jacobBoardCases = [
     label: 'Jacob1B',
     boardName: 'BoardJacob1B',
     imagePath: /BoardJacob1B\.png$/,
-    doctorRoomId: 1,
+    doctorRoomId: 15,
     player1RoomId: 1,
   },
 ] as const;
 
-for (const boardCase of jacobBoardCases) {
+for (const boardCase of boardCases) {
   test(`${boardCase.label} can be selected and started from setup`, async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.clear());
     await page.goto('/');
     await page.getByRole('button', { name: 'Setup' }).click();
 
