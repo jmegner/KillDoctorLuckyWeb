@@ -27,6 +27,10 @@ const EMBEDDED_BOARD_DATA: &[(&str, &str)] = &[
         "Jacob1",
         include_str!("../../../data/boards/BoardJacob1.json"),
     ),
+    (
+        "Jacob1B",
+        include_str!("../../../data/boards/BoardJacob1B.json"),
+    ),
     ("LairFull", include_str!("boards/LairFull.json")),
     ("LairNorth", include_str!("boards/LairNorth.json")),
     ("LairSouth", include_str!("boards/LairSouth.json")),
@@ -832,6 +836,17 @@ mod tests {
         assert_eq!(board.json_name, "BoardJacob1");
         assert_eq!(board.player_start_room_id, RoomId(1));
         assert_eq!(board.doctor_start_room_id, RoomId(15));
+        assert!(board.is_valid().is_ok());
+    }
+
+    #[test]
+    fn embedded_jacob1b_uses_generated_json_name() {
+        let board = Board::from_embedded_json("BoardJacob1B").unwrap();
+
+        assert_eq!(board.name, "Jacob1B");
+        assert_eq!(board.json_name, "BoardJacob1B");
+        assert_eq!(board.player_start_room_id, RoomId(1));
+        assert_eq!(board.doctor_start_room_id, RoomId(1));
         assert!(board.is_valid().is_ok());
     }
 }

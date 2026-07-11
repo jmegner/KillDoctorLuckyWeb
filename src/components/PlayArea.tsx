@@ -9,6 +9,7 @@ import boardAltUpData from '../data/boards/BoardAltUp.json';
 import boardHauntedDownData from '../data/boards/BoardHauntedDown.json';
 import boardHauntedUpData from '../data/boards/BoardHauntedUp.json';
 import boardJacob1Data from '../data/boards/BoardJacob1.json';
+import boardJacob1BData from '../data/boards/BoardJacob1B.json';
 import boardLairNorthData from '../data/boards/BoardLairNorth.json';
 import boardLairSouthData from '../data/boards/BoardLairSouth.json';
 import boardMainEastData from '../data/boards/BoardMainEast.json';
@@ -319,6 +320,7 @@ const boardLayouts = [
   boardHauntedDownData,
   boardHauntedUpData,
   boardJacob1Data,
+  boardJacob1BData,
   boardLairNorthData,
   boardLairSouthData,
 ].map(
