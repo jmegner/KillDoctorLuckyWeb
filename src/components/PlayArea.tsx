@@ -443,12 +443,12 @@ const defaultSetupPrefsForBoard = (boardContext: BoardContext): SetupPrefs => {
     roomIds.find((roomId) => boardContext.roomById.has(Number(roomId))) ?? defaultSetupRoomId;
   return {
     boardName: boardContext.jsonName,
-    moveCards: 2,
+    moveCards: 1,
     weaponCards: 2,
-    failureCards: 4,
-    player2MoveCards: 2,
+    failureCards: 6,
+    player2MoveCards: 1,
     player2WeaponCards: 2,
-    player2FailureCards: 4,
+    player2FailureCards: 6,
     doctorRoomId: firstOpenStartRoom(boardContext.layout.DoctorStartRoomIds),
     player1RoomId: firstOpenStartRoom(boardContext.layout.PlayerStartRoomIds),
     stranger1RoomId: firstOpenStartRoom(boardContext.layout.PlayerStartRoomIds),
@@ -3778,6 +3778,32 @@ function PlayArea() {
     handleSetupDraftChange(field, nextRoom.id.toString());
   };
 
+  const handleRandomSetupRooms = () => {
+    if (setupBoardRooms.length === 0) {
+      return;
+    }
+    const randomRoomId = () => {
+      const index = Math.min(setupBoardRooms.length - 1, Math.floor(Math.random() * setupBoardRooms.length));
+      return setupBoardRooms[index].id.toString();
+    };
+    const doctorRoomId = randomRoomId();
+    const playerRoomId = randomRoomId();
+    const nextDraft = {
+      ...setupPrefsDraft,
+      doctorRoomId,
+      player1RoomId: playerRoomId,
+      stranger1RoomId: playerRoomId,
+      player2RoomId: playerRoomId,
+      stranger2RoomId: playerRoomId,
+    };
+    setSetupPrefsDraft(nextDraft);
+    setSetupError(null);
+    const nextPrefs = parseSetupPrefsDraft(nextDraft);
+    if (nextPrefs) {
+      saveSetupPrefs(nextPrefs);
+    }
+  };
+
   const handleRestoreSetupDefaults = () => {
     const setupBoardContext = getBoardContext(setupPrefsDraft.boardName);
     const setupDefaults = defaultSetupPrefsForBoard(setupBoardContext);
@@ -5469,6 +5495,11 @@ function PlayArea() {
                     </div>
                   </label>
                   <p className="setup-popup-note">Card amounts entered in hundredths snap to the nearest 1/32 on start.</p>
+                  <div className="setup-popup-command-row">
+                    <button type="button" className="planner-button" onClick={handleRandomSetupRooms}>
+                      Random Rooms
+                    </button>
+                  </div>
                   <label className="setup-popup-row">
                     <span>Dr</span>
                     <div className="number-stepper">

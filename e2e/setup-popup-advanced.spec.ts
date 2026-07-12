@@ -185,14 +185,14 @@ test('advanced setup +/- buttons move card quantities by 1', async ({ page }) =>
   const p1MoveCards = page.getByRole('spinbutton', { name: 'P1 move cards' });
   const p3MoveCards = page.getByRole('spinbutton', { name: 'P3 move cards' });
 
-  await expect(p1MoveCards).toHaveValue('2');
-  await expect(p3MoveCards).toHaveValue('2');
+  await expect(p1MoveCards).toHaveValue('1');
+  await expect(p3MoveCards).toHaveValue('1');
 
   await page.getByRole('button', { name: 'Increase move cards' }).click();
   await page.getByRole('button', { name: 'Decrease P3 move cards' }).click();
 
-  await expect(p1MoveCards).toHaveValue('3');
-  await expect(p3MoveCards).toHaveValue('1');
+  await expect(p1MoveCards).toHaveValue('2');
+  await expect(p3MoveCards).toHaveValue('0');
 
   await p1MoveCards.fill('0.02');
   await page.getByRole('button', { name: 'Increase move cards' }).click();
@@ -213,6 +213,25 @@ test('advanced setup +/- buttons move card quantities by 1', async ({ page }) =>
   await p1MoveCards.fill('2.9');
   await page.getByRole('button', { name: 'Decrease move cards' }).click();
   await expect(p1MoveCards).toHaveValue('2');
+});
+
+test('setup defaults use revised starting card counts', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Setup' }).click();
+
+  await expect(page.getByRole('spinbutton', { name: 'Normal move cards' })).toHaveValue('1');
+  await expect(page.getByRole('spinbutton', { name: 'Normal weapon cards' })).toHaveValue('2');
+  await expect(page.getByRole('spinbutton', { name: 'Normal failure cards' })).toHaveValue('6');
+
+  await page.getByRole('checkbox', { name: 'Advanced' }).check();
+
+  await expect(page.getByRole('spinbutton', { name: 'P1 move cards' })).toHaveValue('1');
+  await expect(page.getByRole('spinbutton', { name: 'P1 weapon cards' })).toHaveValue('2');
+  await expect(page.getByRole('spinbutton', { name: 'P1 failure cards' })).toHaveValue('6');
+  await expect(page.getByRole('spinbutton', { name: 'P3 move cards' })).toHaveValue('1');
+  await expect(page.getByRole('spinbutton', { name: 'P3 weapon cards' })).toHaveValue('2');
+  await expect(page.getByRole('spinbutton', { name: 'P3 failure cards' })).toHaveValue('6');
 });
 
 test('advanced setup +/- buttons step room dropdown options', async ({ page }) => {
@@ -262,6 +281,36 @@ test('advanced setup +/- buttons step room dropdown options', async ({ page }) =
     await page.getByRole('button', { name: nextName }).click();
     await expect(roomSelect).toHaveValue(firstRoom);
   }
+});
+
+test('advanced setup Random Rooms chooses one doctor room and one shared player room', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Setup' }).click();
+  await page.getByRole('checkbox', { name: 'Advanced' }).check();
+
+  const rooms = await page.getByLabel('Doctor room').evaluate((select) =>
+    Array.from((select as HTMLSelectElement).options, (option) => option.value),
+  );
+  expect(rooms.length).toBeGreaterThan(2);
+  const expectedDoctorRoom = rooms[Math.floor(0.15 * rooms.length)];
+  const expectedPlayerRoom = rooms[Math.floor(0.65 * rooms.length)];
+  if (!expectedDoctorRoom || !expectedPlayerRoom) {
+    throw new Error('Expected random setup room choices.');
+  }
+
+  await page.evaluate(() => {
+    const randomValues = [0.15, 0.65];
+    const originalRandom = Math.random.bind(Math);
+    Math.random = () => randomValues.shift() ?? originalRandom();
+  });
+  await page.getByRole('button', { name: 'Random Rooms' }).click();
+
+  await expect(page.getByLabel('Doctor room')).toHaveValue(expectedDoctorRoom);
+  await expect(page.getByLabel('P1 room')).toHaveValue(expectedPlayerRoom);
+  await expect(page.getByLabel('p2 room')).toHaveValue(expectedPlayerRoom);
+  await expect(page.getByLabel('P3 room')).toHaveValue(expectedPlayerRoom);
+  await expect(page.getByLabel('p4 room')).toHaveValue(expectedPlayerRoom);
 });
 
 test('fractional shared card quantities do not force advanced setup when reopening', async ({ page }) => {

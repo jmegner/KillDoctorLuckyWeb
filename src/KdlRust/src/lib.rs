@@ -1076,7 +1076,7 @@ impl GameStateHandle {
     pub fn default_normal_setup_json(&self) -> String {
         let setup = normalize_normal_setup(&default_normal_setup(), &self.state.common);
         serde_json::to_string(&setup).unwrap_or_else(|_| {
-            "{\"boardName\":\"BoardAltDown\",\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
+            "{\"boardName\":\"BoardAltDown\",\"moveCards\":1,\"weaponCards\":2,\"failureCards\":6,\"player2MoveCards\":1,\"player2WeaponCards\":2,\"player2FailureCards\":6,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
         })
     }
 
@@ -1084,7 +1084,7 @@ impl GameStateHandle {
     pub fn current_normal_setup_json(&self) -> String {
         let setup = normalize_normal_setup(&self.normal_setup, &self.state.common);
         serde_json::to_string(&setup).unwrap_or_else(|_| {
-            "{\"boardName\":\"BoardAltDown\",\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
+            "{\"boardName\":\"BoardAltDown\",\"moveCards\":1,\"weaponCards\":2,\"failureCards\":6,\"player2MoveCards\":1,\"player2WeaponCards\":2,\"player2FailureCards\":6,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"}".to_string()
         })
     }
 
@@ -1154,7 +1154,7 @@ impl GameStateHandle {
         };
 
         serde_json::to_string(&snapshot).unwrap_or_else(|_| {
-            "{\"version\":1,\"boardName\":\"BoardAltDown\",\"normalSetup\":{\"boardName\":\"BoardAltDown\",\"moveCards\":2,\"weaponCards\":2,\"failureCards\":4,\"player2MoveCards\":2,\"player2WeaponCards\":2,\"player2FailureCards\":4,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"},\"normalTurns\":[]}".to_string()
+            "{\"version\":1,\"boardName\":\"BoardAltDown\",\"normalSetup\":{\"boardName\":\"BoardAltDown\",\"moveCards\":1,\"weaponCards\":2,\"failureCards\":6,\"player2MoveCards\":1,\"player2WeaponCards\":2,\"player2FailureCards\":6,\"doctorRoomId\":0,\"player1RoomId\":0,\"stranger1RoomId\":0,\"player2RoomId\":0,\"stranger2RoomId\":0,\"player1Strength\":1,\"stranger1Strength\":1,\"player2Strength\":1,\"stranger2Strength\":1,\"turnId\":1,\"currentPlayerPieceId\":\"player1\"},\"normalTurns\":[]}".to_string()
         })
     }
 

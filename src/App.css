@@ -772,6 +772,11 @@ body:has(.info-overlay) {
   font-size: 0.92rem;
 }
 
+.setup-popup-command-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .setup-popup-fieldset {
   margin: 0;
   padding: 10px 12px;

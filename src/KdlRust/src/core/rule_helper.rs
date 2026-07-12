@@ -3,7 +3,7 @@ use crate::core::player::PlayerId;
 pub mod simple {
     pub const JUST_OVER_ONE_THIRD: f64 = 11.0 / 32.0;
 
-    pub const PLAYER_STARTING_MOVE_CARDS: f64 = 2.0;
+    pub const PLAYER_STARTING_MOVE_CARDS: f64 = 1.0;
     pub const MOVE_CARDS_PER_LOOT: f64 = JUST_OVER_ONE_THIRD;
     pub const CLOVERS_PER_MOVE_CARD: f64 = 1.0;
 
@@ -12,7 +12,7 @@ pub mod simple {
     pub const STRENGTH_PER_WEAPON: f64 = 2.0; //53.0 / 24.0;
     pub const CLOVERS_PER_WEAPON: f64 = 1.0;
 
-    pub const PLAYER_STARTING_FAILURES: f64 = 4.0;
+    pub const PLAYER_STARTING_FAILURES: f64 = 6.0;
     pub const FAILURES_PER_LOOT: f64 = JUST_OVER_ONE_THIRD;
     pub const CLOVERS_PER_FAILURE: f64 = 2.0; //50.0 / 24.0;
 
