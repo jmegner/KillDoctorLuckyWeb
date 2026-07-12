@@ -2085,6 +2085,7 @@ function PlayArea() {
     order: PieceId[];
     sourceTurnCounter: number;
   } | null>(null);
+  const deferredAutoSubmitRafRef = useRef<number | null>(null);
   const pendingAutoSelectedRoomPieceRef = useRef<PendingAutoSelectedRoomPiece | null>(null);
   const lastTouchRoomTapRef = useRef<{
     roomId: number;
@@ -4125,6 +4126,10 @@ function PlayArea() {
   const showWinnerOverlay = hasWinner && !animatedPieces;
 
   const stopAnimation = (options?: { executeQueuedAutoSubmit?: boolean }) => {
+    if (deferredAutoSubmitRafRef.current !== null) {
+      cancelAnimationFrame(deferredAutoSubmitRafRef.current);
+      deferredAutoSubmitRafRef.current = null;
+    }
     const queuedAutoSubmit = options?.executeQueuedAutoSubmit ? queuedAutoSubmitRef.current : null;
     queuedAutoSubmitRef.current = null;
     const current = animationRef.current;
@@ -4136,7 +4141,8 @@ function PlayArea() {
     setAnimatedPieceIndicators(null);
     setActionOverlay(null);
     setActionHighlightPieceId(null);
-    if (!queuedAutoSubmit) {
+    let autoSubmitAfterAnimation = queuedAutoSubmit;
+    if (!autoSubmitAfterAnimation) {
       const completedDuringAiControlledTurn =
         options?.executeQueuedAutoSubmit &&
         gameState &&
@@ -4154,14 +4160,23 @@ function PlayArea() {
         currentSuggestion.bestTurn.isValid
       ) {
         const planned = entriesToMovesAndOrder(currentSuggestion.bestTurn.suggestedTurn);
-        submitPlan(planned.moves, planned.order, { animateFromCurrentState: true });
+        autoSubmitAfterAnimation = {
+          moves: planned.moves,
+          order: planned.order,
+          sourceTurnCounter: currentSuggestion.sourceTurnCounter,
+        };
       }
+    }
+    if (!autoSubmitAfterAnimation || autoSubmitAfterAnimation.sourceTurnCounter !== turnCounterRef.current) {
       return;
     }
-    if (queuedAutoSubmit.sourceTurnCounter !== turnCounterRef.current) {
-      return;
-    }
-    submitPlan(queuedAutoSubmit.moves, queuedAutoSubmit.order, { animateFromCurrentState: true });
+    deferredAutoSubmitRafRef.current = requestAnimationFrame(() => {
+      deferredAutoSubmitRafRef.current = null;
+      if (autoSubmitAfterAnimation.sourceTurnCounter !== turnCounterRef.current || animationRef.current) {
+        return;
+      }
+      submitPlan(autoSubmitAfterAnimation.moves, autoSubmitAfterAnimation.order, { animateFromCurrentState: true });
+    });
   };
 
   const buildPositionsForRooms = (roomIds: number[]) => {

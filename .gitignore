@@ -28,3 +28,4 @@ test-results/
 # rust-wasm stuff
 target/
 pkg/
+~$*.xlsx

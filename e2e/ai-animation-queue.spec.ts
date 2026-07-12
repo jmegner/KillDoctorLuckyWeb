@@ -38,6 +38,62 @@ const readAiLineValue = async (page: Page, labelText: string) =>
     return null;
   }, labelText);
 
+const waitForCommittedTurnBetweenAnimations = async (page: Page, expectedNormalTurnCount: number) =>
+  page.evaluate(
+    ({ gameStateStorageKeyArg, expectedNormalTurnCountArg }) =>
+      new Promise<boolean>((resolve) => {
+        const boardShell = document.querySelector<HTMLElement>('.board-shell');
+        if (!boardShell) {
+          resolve(false);
+          return;
+        }
+
+        let settled = false;
+        const finish = (result: boolean) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          observer.disconnect();
+          window.clearTimeout(timeoutId);
+          resolve(result);
+        };
+        const inspect = () => {
+          const raw = window.localStorage.getItem(gameStateStorageKeyArg);
+          if (!raw) {
+            return;
+          }
+          const parsed = JSON.parse(raw) as { normalTurns?: unknown; normal_turns?: unknown };
+          const turns = Array.isArray(parsed.normalTurns)
+            ? parsed.normalTurns
+            : Array.isArray(parsed.normal_turns)
+              ? parsed.normal_turns
+              : null;
+          if (!turns) {
+            return;
+          }
+          const animationIsRendered = boardShell.style.borderColor === 'rgb(140, 140, 140)';
+          if (turns.length === expectedNormalTurnCountArg && !animationIsRendered) {
+            finish(true);
+          } else if (turns.length > expectedNormalTurnCountArg) {
+            finish(false);
+          }
+        };
+        const observer = new MutationObserver(inspect);
+        observer.observe(document.querySelector('.play-area') ?? document.body, {
+          attributes: true,
+          childList: true,
+          subtree: true,
+        });
+        const timeoutId = window.setTimeout(() => finish(false), 15_000);
+        inspect();
+      }),
+    {
+      gameStateStorageKeyArg: gameStateStorageKey,
+      expectedNormalTurnCountArg: expectedNormalTurnCount,
+    },
+  );
+
 const cancelAiAnalysisIfRunning = async (page: Page) => {
   const aiPanel = page.locator('.ai-panel');
   const cancelButton = aiPanel.getByRole('button', { name: 'Cancel' });
@@ -126,6 +182,11 @@ const seedTwoCachedStates = async (
         if (!secondPlan) {
           throw new Error('Failed to find valid plan for second state.');
         }
+        const secondApplyError = seeded.applyTurnPlan(JSON.stringify(secondPlan));
+        if (secondApplyError) {
+          throw new Error(`Failed to apply second seed plan: ${secondApplyError}`);
+        }
+        const snapshot2 = seeded.exportStateJson();
 
         const parsedSnapshot0 = JSON.parse(snapshot0) as { normalTurns?: unknown; normal_turns?: unknown };
         const turns0 = Array.isArray(parsedSnapshot0.normalTurns)
@@ -137,7 +198,7 @@ const seedTwoCachedStates = async (
 
         window.localStorage.setItem(gameStateStorageKeyArg, snapshot0);
         if (redoFirstTurnArg) {
-          window.localStorage.setItem(redoStateStackStorageKeyArg, JSON.stringify([snapshot1]));
+          window.localStorage.setItem(redoStateStackStorageKeyArg, JSON.stringify([snapshot2, snapshot1]));
         } else {
           window.localStorage.removeItem(redoStateStackStorageKeyArg);
         }
@@ -270,6 +331,7 @@ test.describe('AI submit waits for animation completion', () => {
     const seed = await seedTwoCachedStates(page, {
       controlP1: false,
       controlP3: true,
+      animationSpeedIndex: 3,
       redoFirstTurn: true,
     });
     await page.reload();
@@ -283,6 +345,7 @@ test.describe('AI submit waits for animation completion', () => {
       .toBe(true);
     await page.waitForTimeout(350);
     await expect.poll(() => readNormalTurnCount(page), { timeout: 1200 }).toBe(seed.initialTurnCount + 1);
+    await expect(waitForCommittedTurnBetweenAnimations(page, seed.initialTurnCount + 1)).resolves.toBe(true);
     await expect.poll(() => readNormalTurnCount(page), { timeout: 25000 }).toBe(seed.initialTurnCount + 2);
   });
 
