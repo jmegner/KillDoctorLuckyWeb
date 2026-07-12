@@ -880,10 +880,13 @@ body:has(.info-overlay) {
 
 .play-area-summary {
   grid-column: 1 / -1;
+  min-width: 0;
   font-size: 0.9rem;
 }
 
 .game-summary {
+  width: 100%;
+  min-width: 0;
   margin: 0;
   padding: 16px;
   background: rgba(255, 255, 255, 0.65);
@@ -893,6 +896,7 @@ body:has(.info-overlay) {
   font-size: 0.85em;
   text-align: left;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .game-summary--history {
@@ -907,7 +911,7 @@ body:has(.info-overlay) {
 
 @media (max-width: 980px) {
   .play-area {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     padding-inline: 0;
   }
 
